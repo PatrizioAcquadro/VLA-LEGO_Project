@@ -1,6 +1,6 @@
 # Git Workflow & Branching Strategy
 
-This document describes the Git workflow and branching strategy for the WorldSim project.
+This document describes the Git workflow and branching strategy for the VLA-LEGO project.
 
 ## Branch Structure
 

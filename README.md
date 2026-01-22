@@ -1,8 +1,8 @@
 <div align="center">
 
-# WorldSim
+# VLA-LEGO
 
-**A PyTorch framework for training world simulation models with Transformer architectures**
+**Vision-Language-Action System for Bimanual Robotic LEGO Assembly**
 
 [![CI](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/actions/workflows/ci.yml/badge.svg)](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -17,15 +17,24 @@
 
 ## Overview
 
-WorldSim is a modular training framework designed for world simulation models. It leverages Transformer architectures for sequence modeling of continuous state vectors, enabling next-state prediction in simulated environments.
+VLA-LEGO is a Master's thesis research project developing a **Vision-Language-Action (VLA) system** for robotic bimanual manipulation. The project replicates and extends the [EO-1 model](https://arxiv.org/abs/2508.21112) architecture for coordinated two-arm assembly tasks on the **Unitree H1 humanoid robot**.
 
-Built with **configuration-first principles** using [Hydra](https://hydra.cc/), WorldSim supports seamless transitions between local development and HPC cluster training (Purdue Gilbreth).
+This research is conducted as part of an exchange program between **Politecnico di Milano** and **Purdue University**, under the supervision of Prof. Eugenio Culurciello and Prof. Marcello Restelli.
+
+### Research Goals
+
+- Replicate the EO-1 Vision-Language-Action architecture
+- Extend the model for bimanual manipulation tasks
+- Evaluate on LIBERO benchmark (Spatial, Object, Goal, Long subsets)
+- Deploy on Unitree H1 humanoid robot for LEGO assembly
 
 ## Features
 
-- **Transformer Architecture** — State-of-the-art sequence modeling for continuous state prediction
+- **EO-1 Architecture** — Unified decoder-only transformer with Qwen 2.5 VL backbone (3B parameters), combining discrete autoregressive decoding with continuous flow matching
+- **Bimanual Manipulation** — Coordinated two-arm control for assembly tasks on Unitree H1
+- **LIBERO Evaluation** — Comprehensive benchmark evaluation across spatial, object, goal, and long-horizon tasks
 - **Hydra Configuration** — Hierarchical, composable configs with CLI overrides
-- **Distributed Training** — PyTorch DDP with NCCL backend, DeepSpeed integration ready
+- **Distributed Training** — PyTorch DDP with NCCL backend, optimized for 8x A100 GPUs
 - **HPC Ready** — Pre-configured for Slurm clusters with container support (Docker + Apptainer)
 - **Experiment Tracking** — Weights & Biases integration for logging and visualization
 - **Reproducible** — Deterministic training with seed control and checkpoint management
@@ -33,23 +42,22 @@ Built with **configuration-first principles** using [Hydra](https://hydra.cc/), 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         WorldSim Pipeline                        │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│   ┌──────────┐    ┌──────────────┐    ┌──────────────────────┐  │
-│   │  Config  │───▶│   Trainer    │───▶│   TransformerModel   │  │
-│   │  (Hydra) │    │              │    │                      │  │
-│   └──────────┘    │  • DDP Setup │    │  • Input Projection  │  │
-│                   │  • Optimizer │    │  • Positional Enc    │  │
-│   ┌──────────┐    │  • Scheduler │    │  • Encoder Layers    │  │
-│   │ Dataset  │───▶│  • Ckpt Mgmt │    │  • Output Projection │  │
-│   │          │    └──────────────┘    └──────────────────────┘  │
-│   └──────────┘                                                   │
-│                                                                  │
-│   Input: [batch, seq_len, 256] ──▶ Output: [batch, seq_len, 256]│
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        VLA-LEGO Pipeline (EO-1)                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│   ┌─────────────┐    ┌─────────────────┐    ┌─────────────────────┐    │
+│   │   Vision    │    │    Language     │    │      Action         │    │
+│   │   Encoder   │───▶│    Reasoning    │───▶│    Generation       │    │
+│   │             │    │                 │    │                     │    │
+│   │  Qwen 2.5   │    │  Interleaved    │    │  Autoregressive +   │    │
+│   │  VL (3B)    │    │  Vision-Text    │    │  Flow Matching      │    │
+│   └─────────────┘    └─────────────────┘    └─────────────────────┘    │
+│                                                                         │
+│   Input: RGB Images + Language Instructions                             │
+│   Output: Continuous Action Trajectories (Bimanual)                     │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Installation
@@ -112,7 +120,7 @@ python -m train.trainer \
 
 ## Configuration
 
-WorldSim uses [Hydra](https://hydra.cc/) for configuration management. All configs are in `configs/`:
+VLA-LEGO uses [Hydra](https://hydra.cc/) for configuration management. All configs are in `configs/`:
 
 | Config Group | Options | Description |
 |-------------|---------|-------------|
@@ -212,7 +220,7 @@ sbatch scripts/train.sh
 sinteractive -A <account> -n 1 -g 1 -t 4:00:00
 
 # Load container and run
-apptainer exec --nv worldsim.sif python -m train.trainer cluster=gilbreth
+apptainer exec --nv vla-lego.sif python -m train.trainer cluster=gilbreth
 ```
 
 See [docs/git-workflow.md](docs/git-workflow.md) for detailed cluster instructions.
@@ -221,16 +229,17 @@ See [docs/git-workflow.md](docs/git-workflow.md) for detailed cluster instructio
 
 | Document | Description |
 |----------|-------------|
-| [CLAUDE.md](CLAUDE.md) | Development guidelines for AI assistants |
 | [docs/git-workflow.md](docs/git-workflow.md) | Git branching and workflow guide |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines |
 
 ## Roadmap
 
-- [ ] Data pipeline implementation
-- [ ] Advanced model architectures (Flow Matching)
-- [ ] Multi-GPU scaling optimization
-- [ ] Evaluation benchmarks
+- [ ] EO-1 architecture implementation (Qwen 2.5 VL backbone)
+- [ ] Data pipeline for LIBERO benchmark
+- [ ] Flow matching action head integration
+- [ ] Bimanual action space extension
+- [ ] LIBERO benchmark evaluation
+- [ ] Unitree H1 deployment
 
 ## Contributing
 
@@ -248,12 +257,26 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 
 ## Acknowledgments
 
-- Built with [PyTorch](https://pytorch.org/)
-- Configuration powered by [Hydra](https://hydra.cc/)
-- Experiment tracking with [Weights & Biases](https://wandb.ai/)
+### Academic Institutions
+- **Politecnico di Milano** — Primary institution
+- **Purdue University** — Exchange program host
+
+### Advisors
+- **Prof. Eugenio Culurciello** — Purdue University
+- **Prof. Marcello Restelli** — Politecnico di Milano
+
+### Technical Foundations
+- [EO-1: A Unified Model for Embodied AI](https://arxiv.org/abs/2508.21112) — Base architecture
+- [Lerobot](https://github.com/huggingface/lerobot) — Training framework
+- [LIBERO](https://libero-project.github.io/) — Evaluation benchmark
+- [PyTorch](https://pytorch.org/) — Deep learning framework
+- [Hydra](https://hydra.cc/) — Configuration management
+- [Weights & Biases](https://wandb.ai/) — Experiment tracking
 
 ---
 
 <div align="center">
-  <sub>Built with care at Purdue University</sub>
+  <sub>Master's Thesis Research — Politecnico di Milano / Purdue University</sub>
+  <br>
+  <sub>Author: Patrizio Acquadro</sub>
 </div>

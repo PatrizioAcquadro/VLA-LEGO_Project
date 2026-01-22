@@ -1,6 +1,6 @@
-# Contributing to WorldSim
+# Contributing to VLA-LEGO
 
-Thank you for your interest in contributing to WorldSim! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to VLA-LEGO! This document provides guidelines and information for contributors.
 
 ## Table of Contents
 
@@ -16,7 +16,7 @@ Thank you for your interest in contributing to WorldSim! This document provides 
 
 ## Code of Conduct
 
-This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to the project maintainers.
+By participating in this project, you are expected to uphold a respectful and inclusive environment. Please report unacceptable behavior to the project maintainers.
 
 ## Getting Started
 
