@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "worldsim"
+name = "vla-lego"
 version = "0.1.0"
-description = "World Simulation Model Training"
+description = "Vision-Language-Action System for Bimanual Robotic LEGO Assembly"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
@@ -46,11 +46,11 @@ dev = [
 ]
 
 [project.scripts]
-worldsim-train = "train.trainer:main"
-worldsim-eval = "eval.evaluate:main"
+vla-train = "train.trainer:main"
+vla-eval = "eval.evaluate:main"
 
 [project.urls]
-Repository = "https://github.com/YOUR_USERNAME/worldsim"
+Repository = "https://github.com/PatrizioAcquadro/VLA-LEGO_Project"
 
 [tool.setuptools.packages.find]
 where = ["."]
