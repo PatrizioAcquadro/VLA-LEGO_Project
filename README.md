@@ -1,5 +1,7 @@
 # WorldSim
 
+[![CI](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/actions/workflows/ci.yml/badge.svg)](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/actions/workflows/ci.yml)
+
 World Simulation Model Training
 
 ## Quick Start
