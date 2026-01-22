@@ -1,0 +1,94 @@
+# ============================================================================
+# Apptainer Definition File for WorldSim
+# Use on HPC clusters like Gilbreth that support Apptainer/Singularity
+#
+# Build:
+#   apptainer build worldsim.sif apptainer.def
+#
+# Or pull from GitHub Container Registry:
+#   apptainer pull worldsim.sif docker://ghcr.io/YOUR_USERNAME/worldsim:latest
+# ============================================================================
+
+Bootstrap: docker
+From: nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+
+%labels
+    Author Patrizio Acquadro
+    Email pacquadr@purdue.edu
+    Version 0.1.0
+    Description World Simulation Model Training Environment
+
+%post
+    # Update and install system dependencies
+    apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        cmake \
+        git \
+        curl \
+        wget \
+        ca-certificates \
+        python3.10 \
+        python3.10-dev \
+        python3.10-venv \
+        python3-pip \
+        && rm -rf /var/lib/apt/lists/*
+
+    # Set Python 3.10 as default
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+
+    # Upgrade pip
+    python -m pip install --upgrade pip setuptools wheel
+
+    # Install PyTorch with CUDA support
+    pip install --no-cache-dir \
+        torch==2.2.0 \
+        torchvision==0.17.0 \
+        torchaudio==2.2.0 \
+        --index-url https://download.pytorch.org/whl/cu121
+
+    # Install dependencies
+    pip install --no-cache-dir \
+        numpy>=1.24.0 \
+        hydra-core>=1.3.0 \
+        omegaconf>=2.3.0 \
+        wandb>=0.15.0 \
+        tqdm>=4.65.0 \
+        einops>=0.6.0 \
+        safetensors>=0.3.0 \
+        accelerate>=0.20.0 \
+        deepspeed>=0.10.0 \
+        pytest>=7.0.0
+
+    # Clean up
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+    pip cache purge
+
+%environment
+    export PYTHONUNBUFFERED=1
+    export PYTHONDONTWRITEBYTECODE=1
+    export CUDA_DEVICE_ORDER=PCI_BUS_ID
+    export LC_ALL=C
+
+%runscript
+    exec python "$@"
+
+%test
+    python -c "import torch; print(f'PyTorch {torch.__version__}')"
+    python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+
+%help
+    WorldSim Training Container
+    
+    Usage on Gilbreth:
+        # Interactive shell
+        apptainer shell --nv worldsim.sif
+        
+        # Run training
+        apptainer exec --nv worldsim.sif python -m train.trainer
+        
+        # Bind project directory
+        apptainer exec --nv -B /scratch/gilbreth/$USER/worldsim:/app worldsim.sif python -m train.trainer
+    
+    The --nv flag enables NVIDIA GPU support.
