@@ -82,12 +82,12 @@ datasets/
 *.parquet
 *.arrow
 
-# Checkpoints and logs
-checkpoints/
-logs/
-outputs/
-wandb/
-mlruns/
+# Checkpoints and logs (no trailing slash to match symlinks too)
+checkpoints
+logs
+outputs
+wandb
+mlruns
 
 # Hydra outputs
 .hydra/
@@ -119,3 +119,29 @@ secrets.yaml
 secrets.json
 *.pem
 *.key
+credentials.json
+*.token
+
+# ============================================================================
+# Claude Code (private - never commit)
+# ============================================================================
+CLAUDE.md
+.claude/
+
+# ============================================================================
+# Artifact Symlinks (point to SCRATCH on cluster)
+# ============================================================================
+# Note: patterns without trailing slash match both files and symlinks
+runs
+cache
+renders
+
+# ============================================================================
+# Additional Large Files
+# ============================================================================
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+!configs/**/*.bin
