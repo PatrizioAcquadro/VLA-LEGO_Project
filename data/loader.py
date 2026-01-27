@@ -28,7 +28,7 @@ def create_dataloader(
     dl_cfg = cfg.data.dataloader
 
     # Sampler for distributed training
-    sampler = None
+    sampler: DistributedSampler | None = None
     shuffle = dl_cfg.shuffle_train if is_train else dl_cfg.shuffle_val
 
     if distributed:

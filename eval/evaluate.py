@@ -4,6 +4,7 @@ import logging
 
 import torch
 from omegaconf import DictConfig, OmegaConf
+from torch.nn import Module
 from tqdm import tqdm
 
 log = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ class Evaluator:
         else:
             self.device = torch.device("cpu")
 
-        self.model = None
+        self.model: Module | None = None
 
     def setup(self, checkpoint_path: str) -> None:
         """Load model from checkpoint."""
@@ -45,6 +46,8 @@ class Evaluator:
 
     def evaluate(self, test_loader) -> dict[str, float]:
         """Run evaluation on test set."""
+        assert self.model is not None, "Model not loaded. Call setup() first."
+
         total_loss = 0.0
         num_batches = 0
 

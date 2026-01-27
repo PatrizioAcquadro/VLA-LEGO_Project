@@ -8,6 +8,10 @@ import hydra
 import torch
 import torch.distributed as dist
 from omegaconf import DictConfig, OmegaConf
+from torch.nn import Module
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import LRScheduler
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
 log = logging.getLogger(__name__)
@@ -46,11 +50,11 @@ class Trainer:
         self._set_seed(cfg.experiment.seed)
 
         # Initialize components
-        self.model = None
-        self.optimizer = None
-        self.scheduler = None
-        self.train_loader = None
-        self.val_loader = None
+        self.model: Module | None = None
+        self.optimizer: Optimizer | None = None
+        self.scheduler: LRScheduler | None = None
+        self.train_loader: DataLoader | None = None
+        self.val_loader: DataLoader | None = None
 
         # Training state
         self.global_step = 0
@@ -116,6 +120,8 @@ class Trainer:
 
     def _create_optimizer(self) -> None:
         """Create optimizer from config."""
+        assert self.model is not None, "Model must be created before optimizer."
+
         opt_cfg = self.cfg.trainer.optimizer
 
         if opt_cfg.name.lower() == "adamw":
@@ -151,6 +157,9 @@ class Trainer:
 
         data_cfg = self.cfg.data
         dataset_name = data_cfg.dataset.get("name", "dummy")
+
+        train_dataset: Dataset
+        val_dataset: Dataset
 
         if dataset_name == "dummy":
             dummy_cfg = data_cfg.dataset.get("dummy", {})
@@ -196,6 +205,10 @@ class Trainer:
 
     def train(self) -> None:
         """Main training loop."""
+        assert self.model is not None, "Model not initialized. Call setup() first."
+        assert self.optimizer is not None, "Optimizer not initialized. Call setup() first."
+        assert self.train_loader is not None, "Train loader not initialized. Call setup() first."
+
         if self.rank == 0:
             log.info("Starting training...")
 
@@ -278,6 +291,9 @@ class Trainer:
 
     def _validate(self) -> float:
         """Run validation."""
+        assert self.model is not None, "Model not initialized. Call setup() first."
+        assert self.val_loader is not None, "Val loader not initialized. Call setup() first."
+
         self.model.eval()
         total_loss = 0.0
         num_batches = 0
@@ -313,6 +329,9 @@ class Trainer:
         if self.rank != 0:
             return
 
+        assert self.model is not None, "Model not initialized."
+        assert self.optimizer is not None, "Optimizer not initialized."
+
         ckpt_dir = Path(self.cfg.paths.checkpoints)
         ckpt_dir.mkdir(parents=True, exist_ok=True)
 
@@ -342,6 +361,9 @@ class Trainer:
 
     def _load_checkpoint(self, path: str) -> None:
         """Load checkpoint to resume training."""
+        assert self.model is not None, "Model not initialized."
+        assert self.optimizer is not None, "Optimizer not initialized."
+
         if path == "latest":
             # Find latest checkpoint
             ckpt_dir = Path(self.cfg.paths.checkpoints)
