@@ -29,25 +29,75 @@ export DATA_DIR="${PROJECT_ROOT}/datasets"
 export CHECKPOINT_DIR="${PROJECT_ROOT}/checkpoints"
 export LOG_DIR="${PROJECT_ROOT}/logs"
 export CACHE_DIR="${PROJECT_ROOT}/cache"
+export RUNS_DIR="${PROJECT_ROOT}/runs"
+export WANDB_DIR="${PROJECT_ROOT}/wandb"
+export RENDERS_DIR="${PROJECT_ROOT}/renders"
 
 # HuggingFace cache (important for transformers/datasets)
 export HF_HOME="${CACHE_DIR}/huggingface"
 export HF_DATASETS_CACHE="${HF_HOME}/datasets"
 export TRANSFORMERS_CACHE="${HF_HOME}/transformers"
 
-# Create directories
-echo "Creating project directories..."
+# Create all artifact directories on SCRATCH
+echo "Creating project directories on SCRATCH..."
 mkdir -p "${PROJECT_ROOT}"
 mkdir -p "${DATA_DIR}"
 mkdir -p "${CHECKPOINT_DIR}"
 mkdir -p "${LOG_DIR}"
 mkdir -p "${CACHE_DIR}"
+mkdir -p "${RUNS_DIR}"
+mkdir -p "${WANDB_DIR}"
+mkdir -p "${RENDERS_DIR}"
 mkdir -p "${HF_HOME}"
 
 echo "  PROJECT_ROOT: ${PROJECT_ROOT}"
 echo "  DATA_DIR: ${DATA_DIR}"
 echo "  CHECKPOINT_DIR: ${CHECKPOINT_DIR}"
 echo "  LOG_DIR: ${LOG_DIR}"
+echo "  RUNS_DIR: ${RUNS_DIR}"
+echo "  WANDB_DIR: ${WANDB_DIR}"
+echo "  RENDERS_DIR: ${RENDERS_DIR}"
+
+#-------------------------------------------------------------------------------
+# 1b. Create Repo Symlinks (if repo root provided)
+#-------------------------------------------------------------------------------
+# This section creates symlinks from the repo root to SCRATCH directories
+# Set REPO_ROOT to your VLA-LEGO_Project location to enable this
+REPO_ROOT="${REPO_ROOT:-}"
+
+if [ -n "${REPO_ROOT}" ] && [ -d "${REPO_ROOT}" ]; then
+    echo ""
+    echo "=== 1b. Creating repo-root symlinks ==="
+
+    SYMLINKS=(
+        "datasets:${DATA_DIR}"
+        "checkpoints:${CHECKPOINT_DIR}"
+        "logs:${LOG_DIR}"
+        "cache:${CACHE_DIR}"
+        "runs:${RUNS_DIR}"
+        "wandb:${WANDB_DIR}"
+        "renders:${RENDERS_DIR}"
+    )
+
+    for entry in "${SYMLINKS[@]}"; do
+        name="${entry%%:*}"
+        target="${entry##*:}"
+        link_path="${REPO_ROOT}/${name}"
+
+        if [ -L "${link_path}" ]; then
+            echo "  ${name}: symlink exists -> $(readlink ${link_path})"
+        elif [ -e "${link_path}" ]; then
+            echo "  WARNING: ${link_path} exists but is not a symlink, skipping"
+        else
+            ln -s "${target}" "${link_path}"
+            echo "  ${name}: created -> ${target}"
+        fi
+    done
+else
+    echo ""
+    echo "  Note: Set REPO_ROOT to create symlinks in your repo directory"
+    echo "  Example: REPO_ROOT=/home/\${USER}/VLA-LEGO_Project source 01_setup_env.sh"
+fi
 
 #-------------------------------------------------------------------------------
 # 2. Load Modules (Version Pinning)
