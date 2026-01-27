@@ -1,5 +1,5 @@
 # ============================================================================
-# Dockerfile for WorldSim Training
+# Dockerfile for VLA-LEGO Training
 # Multi-stage build for smaller final image
 # ============================================================================
 
@@ -101,8 +101,8 @@ ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 
 # Labels
-LABEL org.opencontainers.image.title="WorldSim Training"
-LABEL org.opencontainers.image.description="Training environment for World Simulation Model"
+LABEL org.opencontainers.image.title="VLA-LEGO Training"
+LABEL org.opencontainers.image.description="Training environment for VLA-LEGO Model"
 LABEL org.opencontainers.image.revision="${GIT_COMMIT}"
 LABEL org.opencontainers.image.created="${BUILD_DATE}"
 

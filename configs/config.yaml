@@ -19,7 +19,7 @@ defaults:
 # Project Paths (override via environment or config)
 # ============================================================================
 paths:
-  root: ${oc.env:PROJECT_ROOT,${oc.env:HOME,/tmp}/worldsim}
+  root: ${oc.env:PROJECT_ROOT,${oc.env:HOME,/tmp}/vla-lego}
   data: ${paths.root}/datasets
   checkpoints: ${paths.root}/checkpoints
   logs: ${paths.root}/logs
