@@ -48,6 +48,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
+          cache-dependency-path: pyproject.toml
 
       - name: Install linting tools
         run: |
@@ -79,12 +80,12 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
+          cache-dependency-path: pyproject.toml
 
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install mypy
-          pip install -e ".[dev]" --no-deps || pip install torch numpy hydra-core omegaconf
+          pip install -e ".[ci]" --no-deps || pip install torch numpy hydra-core omegaconf
 
       - name: Run mypy
         run: mypy sim models train eval --ignore-missing-imports
@@ -104,11 +105,12 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
+          cache-dependency-path: pyproject.toml
 
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[ci]"
 
       - name: Run unit tests
         run: |
@@ -132,11 +134,12 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
+          cache-dependency-path: pyproject.toml
 
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[ci]"
 
       - name: Test imports
         run: |
@@ -184,6 +187,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
+          cache-dependency-path: pyproject.toml
 
       - name: Install dependencies
         run: |
