@@ -363,9 +363,17 @@ class ExperimentTracker:
         config = config or self.config
 
         try:
-            import yaml
-
             import wandb
+
+        except ImportError as e:
+            warnings.warn(f"wandb not installed: {e}. Cannot log config artifact.", stacklevel=2)
+            return
+
+        try:
+            import yaml
+        except ImportError as e:
+            warnings.warn(f"pyyaml not installed: {e}. Cannot log config artifact.", stacklevel=2)
+            return
 
             # Create artifact
             artifact = wandb.Artifact(
