@@ -53,7 +53,7 @@ jobs:
       - name: Install linting tools
         run: |
           pip install --upgrade pip
-          pip install ruff black isort
+          pip install "ruff==0.14.14" black isort
 
       - name: Run Ruff (linting)
         run: ruff check . --output-format=github
