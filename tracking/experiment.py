@@ -89,9 +89,7 @@ class ExperimentTracker:
         self._active = enabled and self._is_main
 
         # Initialize trackers
-        self._throughput = ThroughputTracker(
-            world_size=self._get_world_size()
-        )
+        self._throughput = ThroughputTracker(world_size=self._get_world_size())
         self._gpu_monitor = GPUMonitor() if self._active else None
 
         if not self._active:
@@ -217,10 +215,7 @@ class ExperimentTracker:
                     )
                     self._run = wandb.init(mode="offline", **init_kwargs)
                     self._offline_mode = True
-                    print(
-                        "[ExperimentTracker] Offline mode. "
-                        "Run 'wandb sync' to upload later."
-                    )
+                    print("[ExperimentTracker] Offline mode. Run 'wandb sync' to upload later.")
 
             self._run_id = self._run.id
 
@@ -240,6 +235,7 @@ class ExperimentTracker:
         """Get distributed world size."""
         try:
             import torch.distributed as dist
+
             if dist.is_initialized():
                 return dist.get_world_size()
         except ImportError:
@@ -272,6 +268,7 @@ class ExperimentTracker:
         if filtered and self._run is not None:
             try:
                 import wandb
+
                 wandb.log(filtered, step=step, commit=commit)
             except Exception as e:
                 warnings.warn(f"Failed to log metrics: {e}", stacklevel=2)
@@ -311,8 +308,8 @@ class ExperimentTracker:
         self._throughput.step(batch_size=batch_size)
 
         # Check if we should log this step
-        should_log_metrics = (step % self.log_interval == 0)
-        should_log_gpu = (step % self.gpu_stats_interval == 0)
+        should_log_metrics = step % self.log_interval == 0
+        should_log_gpu = step % self.gpu_stats_interval == 0
 
         if not should_log_metrics and not should_log_gpu:
             return
@@ -321,9 +318,7 @@ class ExperimentTracker:
 
         if should_log_metrics:
             # Loss components
-            loss_metrics = extract_loss_components(
-                loss, loss_ar=loss_ar, loss_fm=loss_fm
-            )
+            loss_metrics = extract_loss_components(loss, loss_ar=loss_ar, loss_fm=loss_fm)
             metrics.update(loss_metrics)
 
             # Learning rate
@@ -380,9 +375,7 @@ class ExperimentTracker:
             )
 
             # Write config to temp file
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".yaml", delete=False
-            ) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
                 yaml.dump(config, f, default_flow_style=False)
                 temp_path = f.name
 
@@ -518,8 +511,7 @@ class ExperimentTracker:
         # Safety: check for symlink loops before processing
         if self._has_symlink_loop(checkpoint_path):
             warnings.warn(
-                f"Symlink loop detected in checkpoint path, skipping artifact: "
-                f"{checkpoint_path}",
+                f"Symlink loop detected in checkpoint path, skipping artifact: {checkpoint_path}",
                 stacklevel=2,
             )
             return
@@ -668,8 +660,6 @@ def create_tracker(
         mode=tracking_config.get("mode", "online"),
         entity=tracking_config.get("entity"),
         log_interval=tracking_config.get("log_interval", 10),
-        gpu_stats_interval=tracking_config.get("metrics", {}).get(
-            "gpu_stats_interval", 50
-        ),
+        gpu_stats_interval=tracking_config.get("metrics", {}).get("gpu_stats_interval", 50),
         enabled=enabled and tracking_config.get("enabled", True),
     )
