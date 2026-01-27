@@ -1,12 +1,12 @@
 # ============================================================================
-# Apptainer Definition File for WorldSim
+# Apptainer Definition File for VLA-LEGO
 # Use on HPC clusters like Gilbreth that support Apptainer/Singularity
 #
 # Build:
-#   apptainer build worldsim.sif apptainer.def
+#   apptainer build vla-lego.sif apptainer.def
 #
 # Or pull from GitHub Container Registry:
-#   apptainer pull worldsim.sif docker://ghcr.io/YOUR_USERNAME/worldsim:latest
+#   apptainer pull vla-lego.sif docker://ghcr.io/YOUR_USERNAME/vla-lego:latest
 # ============================================================================
 
 Bootstrap: docker
@@ -16,7 +16,7 @@ From: nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
     Author Patrizio Acquadro
     Email pacquadr@purdue.edu
     Version 0.1.0
-    Description World Simulation Model Training Environment
+    Description VLA-LEGO Model Training Environment
 
 %post
     # Update and install system dependencies
@@ -79,16 +79,16 @@ From: nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
     python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
 
 %help
-    WorldSim Training Container
-    
+    VLA-LEGO Training Container
+
     Usage on Gilbreth:
         # Interactive shell
-        apptainer shell --nv worldsim.sif
-        
+        apptainer shell --nv vla-lego.sif
+
         # Run training
-        apptainer exec --nv worldsim.sif python -m train.trainer
-        
+        apptainer exec --nv vla-lego.sif python -m train.trainer
+
         # Bind project directory
-        apptainer exec --nv -B /scratch/gilbreth/$USER/worldsim:/app worldsim.sif python -m train.trainer
-    
+        apptainer exec --nv -B /scratch/gilbreth/$USER/vla-lego:/app vla-lego.sif python -m train.trainer
+
     The --nv flag enables NVIDIA GPU support.

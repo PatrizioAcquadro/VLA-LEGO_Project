@@ -17,7 +17,7 @@ echo "=============================================="
 echo ""
 echo "=== 1. Setting up standard paths ==="
 
-export PROJECT_NAME="worldsim"
+export PROJECT_NAME="vla-lego"
 export USER_NAME=$(whoami)
 
 # Base directories
@@ -279,13 +279,13 @@ ACTIVATE_SCRIPT="${PROJECT_ROOT}/activate_env.sh"
 cat > ${ACTIVATE_SCRIPT} << 'ACTIVATE_EOF'
 #!/bin/bash
 # Quick activation script - source this to set up environment
-# Usage: source /scratch/gilbreth/$USER/worldsim/activate_env.sh
+# Usage: source /scratch/gilbreth/$USER/vla-lego/activate_env.sh
 
 module purge
 module load external
 module load cuda/12.1.1 anaconda/2024.10-py312
 
-export PROJECT_ROOT="/scratch/gilbreth/$(whoami)/worldsim"
+export PROJECT_ROOT="/scratch/gilbreth/$(whoami)/vla-lego"
 export DATA_DIR="${PROJECT_ROOT}/datasets"
 export CHECKPOINT_DIR="${PROJECT_ROOT}/checkpoints"
 export LOG_DIR="${PROJECT_ROOT}/logs"
@@ -296,9 +296,9 @@ export NCCL_DEBUG=WARN
 export NCCL_IB_DISABLE=0
 export NCCL_SOCKET_IFNAME=ibp161s0
 
-conda activate worldsim_env
+conda activate vla_lego_env
 
-echo "Environment activated: worldsim_env"
+echo "Environment activated: vla_lego_env"
 echo "PROJECT_ROOT: ${PROJECT_ROOT}"
 ACTIVATE_EOF
 

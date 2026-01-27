@@ -58,10 +58,10 @@ tracker.finish()
 
 ## Installation
 
-The tracking module requires `wandb` which is already installed in the `worldsim_env` conda environment:
+The tracking module requires `wandb` which is already installed in the `vla_lego_env` conda environment:
 
 ```bash
-source /scratch/gilbreth/$USER/worldsim/activate_env.sh
+source /scratch/gilbreth/$USER/vla-lego/activate_env.sh
 ```
 
 To log in to W&B (one-time setup):

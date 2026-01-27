@@ -4,7 +4,7 @@ name: wandb
 
 wandb:
   enabled: true
-  project: "worldsim"
+  project: "vla-lego"
   entity: null  # Your W&B username or team
   
   # Run naming
