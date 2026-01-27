@@ -13,19 +13,19 @@ import os
 import tempfile
 import warnings
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
+from .gpu_monitor import GPUMonitor, get_all_gpu_stats
 from .metadata import get_metadata, is_main_process
-from .naming import generate_run_name, generate_tags_dict, get_run_group
-from .gpu_monitor import get_all_gpu_stats, GPUMonitor
 from .metrics import (
     ThroughputTracker,
     compute_grad_norm,
     extract_loss_components,
     filter_metrics,
-    get_learning_rate,
     get_amp_scale,
+    get_learning_rate,
 )
+from .naming import generate_run_name, generate_tags_dict, get_run_group
 
 
 class ExperimentTracker:
@@ -43,17 +43,17 @@ class ExperimentTracker:
     def __init__(
         self,
         project: str = "vla-lego",
-        config: Optional[Dict[str, Any]] = None,
-        tags: Optional[Dict[str, str]] = None,
-        name: Optional[str] = None,
-        group: Optional[str] = None,
-        resume_id: Optional[str] = None,
+        config: dict[str, Any] | None = None,
+        tags: dict[str, str] | None = None,
+        name: str | None = None,
+        group: str | None = None,
+        resume_id: str | None = None,
         mode: str = "online",
-        entity: Optional[str] = None,
+        entity: str | None = None,
         log_interval: int = 1,
         gpu_stats_interval: int = 50,
         enabled: bool = True,
-        dir: Optional[str] = None,
+        dir: str | None = None,
     ):
         """
         Initialize the experiment tracker.
@@ -81,7 +81,7 @@ class ExperimentTracker:
         self.enabled = enabled
         self._offline_mode = False
         self._run = None
-        self._run_id: Optional[str] = None
+        self._run_id: str | None = None
         self._step_counter = 0
 
         # Check if we should be active
@@ -143,8 +143,8 @@ class ExperimentTracker:
         project: str,
         name: str,
         group: str,
-        tags: List[str],
-        resume_id: Optional[str],
+        tags: list[str],
+        resume_id: str | None,
         mode: str,
         dir: str,
     ) -> None:
@@ -154,7 +154,8 @@ class ExperimentTracker:
         except ImportError:
             warnings.warn(
                 "wandb not installed. Experiment tracking disabled. "
-                "Install with: pip install wandb"
+                "Install with: pip install wandb",
+                stacklevel=2,
             )
             self._active = False
             return
@@ -211,7 +212,8 @@ class ExperimentTracker:
                 except (wandb.errors.CommError, Exception) as e:
                     # Fallback to offline mode
                     warnings.warn(
-                        f"W&B online mode failed ({e}). Falling back to offline mode."
+                        f"W&B online mode failed ({e}). Falling back to offline mode.",
+                        stacklevel=2,
                     )
                     self._run = wandb.init(mode="offline", **init_kwargs)
                     self._offline_mode = True
@@ -223,10 +225,10 @@ class ExperimentTracker:
             self._run_id = self._run.id
 
         except Exception as e:
-            warnings.warn(f"W&B initialization failed: {e}. Tracking disabled.")
+            warnings.warn(f"W&B initialization failed: {e}. Tracking disabled.", stacklevel=2)
             self._active = False
 
-    def _generate_tags_list(self) -> List[str]:
+    def _generate_tags_list(self) -> list[str]:
         """Generate W&B tags list from tags dictionary."""
         tags_list = []
         for key, value in self.tags.items():
@@ -246,8 +248,8 @@ class ExperimentTracker:
 
     def log_metrics(
         self,
-        metrics: Dict[str, Any],
-        step: Optional[int] = None,
+        metrics: dict[str, Any],
+        step: int | None = None,
         commit: bool = True,
     ) -> None:
         """
@@ -272,19 +274,19 @@ class ExperimentTracker:
                 import wandb
                 wandb.log(filtered, step=step, commit=commit)
             except Exception as e:
-                warnings.warn(f"Failed to log metrics: {e}")
+                warnings.warn(f"Failed to log metrics: {e}", stacklevel=2)
 
     def log_training_step(
         self,
-        loss: Union[float, Dict[str, Any]],
+        loss: float | dict[str, Any],
         step: int,
         batch_size: int = 0,
-        optimizer: Optional[Any] = None,
-        model: Optional[Any] = None,
-        scaler: Optional[Any] = None,
-        loss_ar: Optional[float] = None,
-        loss_fm: Optional[float] = None,
-        extra_metrics: Optional[Dict[str, Any]] = None,
+        optimizer: Any | None = None,
+        model: Any | None = None,
+        scaler: Any | None = None,
+        loss_ar: float | None = None,
+        loss_fm: float | None = None,
+        extra_metrics: dict[str, Any] | None = None,
     ) -> None:
         """
         Log a complete training step with all standard metrics.
@@ -353,7 +355,7 @@ class ExperimentTracker:
 
         self.log_metrics(metrics, step=step)
 
-    def log_config(self, config: Optional[Dict[str, Any]] = None) -> None:
+    def log_config(self, config: dict[str, Any] | None = None) -> None:
         """
         Save configuration as a W&B artifact.
 
@@ -366,8 +368,9 @@ class ExperimentTracker:
         config = config or self.config
 
         try:
-            import wandb
             import yaml
+
+            import wandb
 
             # Create artifact
             artifact = wandb.Artifact(
@@ -389,12 +392,12 @@ class ExperimentTracker:
             # Clean up
             os.unlink(temp_path)
 
-            print(f"[ExperimentTracker] Config artifact saved.")
+            print("[ExperimentTracker] Config artifact saved.")
 
         except Exception as e:
-            warnings.warn(f"Failed to log config artifact: {e}")
+            warnings.warn(f"Failed to log config artifact: {e}", stacklevel=2)
 
-    def _has_symlink_loop(self, path: Path, visited: Optional[set] = None) -> bool:
+    def _has_symlink_loop(self, path: Path, visited: set | None = None) -> bool:
         """
         Check if path contains self-referential symlinks.
 
@@ -475,9 +478,9 @@ class ExperimentTracker:
 
     def log_checkpoint(
         self,
-        checkpoint_path: Union[str, Path],
-        aliases: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        checkpoint_path: str | Path,
+        aliases: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
         force: bool = False,
     ) -> None:
         """
@@ -516,7 +519,8 @@ class ExperimentTracker:
         if self._has_symlink_loop(checkpoint_path):
             warnings.warn(
                 f"Symlink loop detected in checkpoint path, skipping artifact: "
-                f"{checkpoint_path}"
+                f"{checkpoint_path}",
+                stacklevel=2,
             )
             return
 
@@ -555,9 +559,9 @@ class ExperimentTracker:
             print(f"[ExperimentTracker] Checkpoint artifact saved: {aliases}")
 
         except Exception as e:
-            warnings.warn(f"Failed to log checkpoint artifact: {e}")
+            warnings.warn(f"Failed to log checkpoint artifact: {e}", stacklevel=2)
 
-    def get_run_id(self) -> Optional[str]:
+    def get_run_id(self) -> str | None:
         """
         Get the W&B run ID for checkpoint storage.
 
@@ -566,7 +570,7 @@ class ExperimentTracker:
         """
         return self._run_id
 
-    def get_run_url(self) -> Optional[str]:
+    def get_run_url(self) -> str | None:
         """
         Get the W&B run URL.
 
@@ -602,7 +606,6 @@ class ExperimentTracker:
             return
 
         try:
-            import wandb
             self._run.finish()
 
             if self._offline_mode:
@@ -615,7 +618,7 @@ class ExperimentTracker:
                 print(f"\n[ExperimentTracker] Run completed: {self.get_run_url()}\n")
 
         except Exception as e:
-            warnings.warn(f"Error finishing W&B run: {e}")
+            warnings.warn(f"Error finishing W&B run: {e}", stacklevel=2)
 
     def __enter__(self) -> "ExperimentTracker":
         """Context manager entry."""
@@ -628,9 +631,9 @@ class ExperimentTracker:
 
 
 def create_tracker(
-    config: Dict[str, Any],
+    config: dict[str, Any],
     enabled: bool = True,
-    resume_checkpoint: Optional[Dict[str, Any]] = None,
+    resume_checkpoint: dict[str, Any] | None = None,
 ) -> ExperimentTracker:
     """
     Factory function to create an ExperimentTracker from config.

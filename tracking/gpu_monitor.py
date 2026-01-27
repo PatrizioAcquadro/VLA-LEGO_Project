@@ -6,7 +6,7 @@ Uses torch.cuda and optionally pynvml for detailed metrics.
 """
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 def get_gpu_count() -> int:
@@ -25,7 +25,7 @@ def get_gpu_count() -> int:
     return 0
 
 
-def get_gpu_memory_stats(device: Optional[int] = None) -> Dict[str, float]:
+def get_gpu_memory_stats(device: int | None = None) -> dict[str, float]:
     """
     Get GPU memory statistics using torch.cuda.
 
@@ -71,7 +71,7 @@ def get_gpu_memory_stats(device: Optional[int] = None) -> Dict[str, float]:
     return stats
 
 
-def reset_peak_memory_stats(device: Optional[int] = None) -> None:
+def reset_peak_memory_stats(device: int | None = None) -> None:
     """
     Reset peak memory statistics for a device.
 
@@ -86,7 +86,7 @@ def reset_peak_memory_stats(device: Optional[int] = None) -> None:
         pass
 
 
-def get_gpu_utilization(device: int = 0) -> Dict[str, Any]:
+def get_gpu_utilization(device: int = 0) -> dict[str, Any]:
     """
     Get GPU utilization metrics using pynvml.
 
@@ -157,7 +157,7 @@ def get_gpu_utilization(device: int = 0) -> Dict[str, Any]:
     return stats
 
 
-def get_all_gpu_stats(local_rank: Optional[int] = None) -> Dict[str, Any]:
+def get_all_gpu_stats(local_rank: int | None = None) -> dict[str, Any]:
     """
     Get comprehensive GPU statistics for the current device.
 
@@ -205,7 +205,7 @@ class GPUMonitor:
     Tracks GPU metrics over time and provides aggregated statistics.
     """
 
-    def __init__(self, device: Optional[int] = None):
+    def __init__(self, device: int | None = None):
         """
         Initialize the GPU monitor.
 
@@ -215,9 +215,9 @@ class GPUMonitor:
         if device is None:
             device = int(os.environ.get("LOCAL_RANK", 0))
         self.device = device
-        self._history: List[Dict[str, float]] = []
+        self._history: list[dict[str, float]] = []
 
-    def sample(self) -> Dict[str, Any]:
+    def sample(self) -> dict[str, Any]:
         """
         Take a sample of current GPU metrics.
 
@@ -228,7 +228,7 @@ class GPUMonitor:
         self._history.append(stats)
         return stats
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """
         Get summary statistics from all samples.
 

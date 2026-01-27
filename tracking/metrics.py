@@ -9,7 +9,8 @@ Provides utilities for computing:
 """
 
 import time
-from typing import Any, Dict, Iterator, List, Optional, Union
+from collections.abc import Iterator
+from typing import Any
 
 try:
     import torch
@@ -20,7 +21,7 @@ except ImportError:
 
 
 def compute_grad_norm(
-    model_or_params: Union["nn.Module", Iterator["torch.nn.Parameter"]],
+    model_or_params: "nn.Module | Iterator[torch.nn.Parameter]",
     norm_type: float = 2.0,
     foreach: bool = True,
 ) -> float:
@@ -92,7 +93,7 @@ def get_learning_rate(
     return 0.0
 
 
-def get_amp_scale(scaler: Optional["torch.cuda.amp.GradScaler"] = None) -> Optional[float]:
+def get_amp_scale(scaler: "torch.cuda.amp.GradScaler | None" = None) -> float | None:
     """
     Get the current AMP scaler value.
 
@@ -128,11 +129,11 @@ class ThroughputTracker:
             world_size: Number of distributed processes.
         """
         self.world_size = world_size
-        self._start_time: Optional[float] = None
+        self._start_time: float | None = None
         self._step_count: int = 0
         self._sample_count: int = 0
         self._token_count: int = 0
-        self._last_time: Optional[float] = None
+        self._last_time: float | None = None
         self._last_step: int = 0
         self._last_samples: int = 0
         self._last_tokens: int = 0
@@ -164,7 +165,7 @@ class ThroughputTracker:
         self._sample_count += batch_size * self.world_size
         self._token_count += tokens * self.world_size
 
-    def get_throughput(self) -> Dict[str, float]:
+    def get_throughput(self) -> dict[str, float]:
         """
         Get current throughput metrics.
 
@@ -196,7 +197,7 @@ class ThroughputTracker:
 
         return metrics
 
-    def get_interval_throughput(self) -> Dict[str, float]:
+    def get_interval_throughput(self) -> dict[str, float]:
         """
         Get throughput since last call to this method.
 
@@ -238,10 +239,10 @@ class ThroughputTracker:
 
 
 def extract_loss_components(
-    loss: Union["torch.Tensor", Dict[str, Any], float],
-    loss_ar: Optional[Union["torch.Tensor", float]] = None,
-    loss_fm: Optional[Union["torch.Tensor", float]] = None,
-) -> Dict[str, float]:
+    loss: "torch.Tensor | dict[str, Any] | float",
+    loss_ar: "torch.Tensor | float | None" = None,
+    loss_fm: "torch.Tensor | float | None" = None,
+) -> dict[str, float]:
     """
     Extract loss components into a standardized format.
 
@@ -283,7 +284,7 @@ def extract_loss_components(
     return metrics
 
 
-def _to_float(value: Union["torch.Tensor", float, int]) -> float:
+def _to_float(value: "torch.Tensor | float | int") -> float:
     """Convert a value to float."""
     if TORCH_AVAILABLE and isinstance(value, torch.Tensor):
         return value.detach().item()
@@ -291,9 +292,9 @@ def _to_float(value: Union["torch.Tensor", float, int]) -> float:
 
 
 def aggregate_metrics(
-    metrics_list: List[Dict[str, float]],
+    metrics_list: list[dict[str, float]],
     method: str = "mean",
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Aggregate a list of metric dictionaries.
 
@@ -331,9 +332,9 @@ def aggregate_metrics(
 
 
 def filter_metrics(
-    metrics: Dict[str, Any],
+    metrics: dict[str, Any],
     include_none: bool = False,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Filter metrics dictionary to only include valid numeric values.
 

@@ -12,10 +12,10 @@ import os
 import subprocess
 import sys
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 
-def get_git_info(repo_path: Optional[str] = None) -> Dict[str, Any]:
+def get_git_info(repo_path: str | None = None) -> dict[str, Any]:
     """
     Capture git repository information.
 
@@ -98,7 +98,7 @@ def get_git_info(repo_path: Optional[str] = None) -> Dict[str, Any]:
     return git_info
 
 
-def get_environment_info() -> Dict[str, Any]:
+def get_environment_info() -> dict[str, Any]:
     """
     Capture environment information.
 
@@ -144,7 +144,7 @@ def get_environment_info() -> Dict[str, Any]:
     return env_info
 
 
-def get_slurm_info() -> Dict[str, Any]:
+def get_slurm_info() -> dict[str, Any]:
     """
     Capture SLURM job information from environment variables.
 
@@ -175,7 +175,7 @@ def get_slurm_info() -> Dict[str, Any]:
     return slurm_info
 
 
-def get_distributed_info() -> Dict[str, Any]:
+def get_distributed_info() -> dict[str, Any]:
     """
     Capture distributed training information.
 
@@ -206,7 +206,7 @@ def get_distributed_info() -> Dict[str, Any]:
     return dist_info
 
 
-def get_seeds() -> Dict[str, Optional[int]]:
+def get_seeds() -> dict[str, int | None]:
     """
     Capture current random seeds if they can be determined.
 
@@ -229,7 +229,7 @@ def get_seeds() -> Dict[str, Optional[int]]:
     return seeds
 
 
-def set_seeds(seed: int, deterministic: bool = False) -> Dict[str, int]:
+def set_seeds(seed: int, deterministic: bool = False) -> dict[str, int]:
     """
     Set random seeds for reproducibility.
 
@@ -271,11 +271,11 @@ def set_seeds(seed: int, deterministic: bool = False) -> Dict[str, int]:
 
 
 def get_metadata(
-    config: Optional[Dict[str, Any]] = None,
-    seeds: Optional[Dict[str, int]] = None,
-    repo_path: Optional[str] = None,
-    extra: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    config: dict[str, Any] | None = None,
+    seeds: dict[str, int] | None = None,
+    repo_path: str | None = None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Capture all reproducibility metadata.
 
