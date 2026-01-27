@@ -4,13 +4,11 @@ Run naming conventions for experiment tracking.
 Provides consistent naming for W&B runs and standardized tags.
 """
 
-import os
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .metadata import get_git_info, get_slurm_info
-
 
 # Required tags for consistency
 REQUIRED_TAGS = ["model", "dataset", "objective"]
@@ -20,12 +18,12 @@ OPTIONAL_TAGS = ["experiment_group", "cluster", "qos"]
 
 
 def generate_run_name(
-    model: Optional[str] = None,
-    objective: Optional[str] = None,
-    dataset: Optional[str] = None,
-    timestamp: Optional[datetime] = None,
-    git_short: Optional[str] = None,
-    suffix: Optional[str] = None,
+    model: str | None = None,
+    objective: str | None = None,
+    dataset: str | None = None,
+    timestamp: datetime | None = None,
+    git_short: str | None = None,
+    suffix: str | None = None,
 ) -> str:
     """
     Generate a consistent run name.
@@ -95,14 +93,14 @@ def _sanitize_component(value: str) -> str:
 
 
 def generate_tags(
-    model: Optional[str] = None,
-    dataset: Optional[str] = None,
-    objective: Optional[str] = None,
-    experiment_group: Optional[str] = None,
-    cluster: Optional[str] = None,
-    qos: Optional[str] = None,
-    extra_tags: Optional[List[str]] = None,
-) -> List[str]:
+    model: str | None = None,
+    dataset: str | None = None,
+    objective: str | None = None,
+    experiment_group: str | None = None,
+    cluster: str | None = None,
+    qos: str | None = None,
+    extra_tags: list[str] | None = None,
+) -> list[str]:
     """
     Generate a list of tags for a run.
 
@@ -154,14 +152,14 @@ def generate_tags(
 
 
 def generate_tags_dict(
-    model: Optional[str] = None,
-    dataset: Optional[str] = None,
-    objective: Optional[str] = None,
-    experiment_group: Optional[str] = None,
-    cluster: Optional[str] = None,
-    qos: Optional[str] = None,
-    extra: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    model: str | None = None,
+    dataset: str | None = None,
+    objective: str | None = None,
+    experiment_group: str | None = None,
+    cluster: str | None = None,
+    qos: str | None = None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Generate a dictionary of tags for W&B config.
 
@@ -213,9 +211,9 @@ def generate_tags_dict(
 
 
 def validate_tags(
-    tags: Dict[str, Any],
+    tags: dict[str, Any],
     require_all: bool = False,
-) -> List[str]:
+) -> list[str]:
     """
     Validate that required tags are present.
 
@@ -238,9 +236,9 @@ def validate_tags(
 
 
 def get_run_group(
-    experiment_group: Optional[str] = None,
-    model: Optional[str] = None,
-    objective: Optional[str] = None,
+    experiment_group: str | None = None,
+    model: str | None = None,
+    objective: str | None = None,
 ) -> str:
     """
     Generate a W&B group name for organizing related runs.
@@ -269,7 +267,7 @@ def get_run_group(
     return "default"
 
 
-def parse_run_name(run_name: str) -> Dict[str, Optional[str]]:
+def parse_run_name(run_name: str) -> dict[str, str | None]:
     """
     Parse a run name back into its components.
 
