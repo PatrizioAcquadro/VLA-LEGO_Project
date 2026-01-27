@@ -35,7 +35,6 @@ dependencies = [
 # CI: minimal deps for testing (no training deps)
 ci = [
     "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
     "ruff>=0.1.0",
     "black>=23.0.0",
     "isort>=5.12.0",
@@ -51,8 +50,17 @@ train = [
 
 # Dev: everything (ci + train + pre-commit)
 dev = [
-    "vla-lego[ci]",
-    "vla-lego[train]",
+    # CI tools
+    "pytest>=7.0.0",
+    "ruff>=0.1.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.0.0",
+    # Training
+    "wandb>=0.15.0",
+    "accelerate>=0.20.0",
+    "deepspeed>=0.10.0",
+    # Dev-only
     "pre-commit>=3.0.0",
 ]
 

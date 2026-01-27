@@ -85,7 +85,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e ".[ci]" --no-deps || pip install torch numpy hydra-core omegaconf
+          pip install -e ".[ci]"
 
       - name: Run mypy
         run: mypy sim models train eval --ignore-missing-imports
