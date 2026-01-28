@@ -225,6 +225,57 @@ apptainer exec --nv vla-lego.sif python -m train.trainer cluster=gilbreth
 
 See [docs/git-workflow.md](docs/git-workflow.md) for detailed cluster instructions.
 
+## Running with Containers (Deps-Only Model)
+
+Container images contain **only dependencies** (CUDA, Python, PyTorch, etc.). Your code is bind-mounted at runtime from your git checkout.
+
+### Why deps-only?
+
+- **No rebuilds for code changes** — `git pull` updates your code instantly
+- **Reproducibility** — run = (git commit) + (image digest/tag)
+- **Smaller images** — no repo code baked in
+
+### Docker (Lab PC)
+
+```bash
+# Using wrapper script (recommended)
+./scripts/docker-run.sh python -m train.trainer --help
+./scripts/docker-run.sh python -m train.trainer trainer=debug cluster=local
+
+# Or directly with docker
+docker run --rm -it --gpus all \
+    -v $(pwd):/workspace \
+    ghcr.io/patrizioacquadro/vla-lego_project:latest \
+    python -m train.trainer cluster=local
+```
+
+### Apptainer (HPC Cluster)
+
+```bash
+# Download image once (or use release artifact)
+apptainer pull vla-lego.sif docker://ghcr.io/patrizioacquadro/vla-lego_project:latest
+
+# Using wrapper script (recommended)
+./scripts/apptainer-run.sh python -m train.trainer cluster=gilbreth
+```
+
+### Reproducibility
+
+Each container run prints git commit, Python version, and GPU info. This output is saved to `/tmp/vla_run_info.txt` inside the container. Record this for experiment tracking:
+
+```
+=== VLA-LEGO Container Run ===
+Timestamp: 2024-01-15T10:30:00+00:00
+Python: Python 3.10.12
+Git commit: abc1234...
+Git branch: main
+Git dirty: 0 files
+PyTorch: 2.2.0
+CUDA: True
+GPU: NVIDIA A100-SXM4-80GB
+==============================
+```
+
 ## Documentation
 
 | Document | Description |
