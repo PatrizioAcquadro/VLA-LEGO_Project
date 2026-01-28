@@ -1,12 +1,18 @@
 # ============================================================================
 # Apptainer Definition File for VLA-LEGO
-# Use on HPC clusters like Gilbreth that support Apptainer/Singularity
 #
-# Build:
+# NOTE: This file is NOT used by CI/CD. Apptainer images are built from the
+# Docker image digest for consistency. This file is provided for manual
+# standalone builds on HPC systems without Docker access.
+#
+# IMPORTANT: This is a DEPS-ONLY build. The container does not include
+# repository code. You must bind-mount your code at /workspace.
+#
+# Manual build (if needed):
 #   apptainer build vla-lego.sif apptainer.def
 #
-# Or pull from GitHub Container Registry:
-#   apptainer pull vla-lego.sif docker://ghcr.io/YOUR_USERNAME/vla-lego:latest
+# Recommended: Pull from GitHub Container Registry (built from Docker):
+#   apptainer pull vla-lego.sif docker://ghcr.io/patrizioacquadro/vla-lego_project:latest
 # ============================================================================
 
 Bootstrap: docker
@@ -79,16 +85,24 @@ From: nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
     python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
 
 %help
-    VLA-LEGO Training Container
+    VLA-LEGO Training Container (Deps-Only)
+
+    This container includes ONLY dependencies (CUDA, Python, PyTorch, etc.).
+    You MUST bind-mount your code at /workspace.
 
     Usage on Gilbreth:
+        # Using the wrapper script (recommended)
+        ./scripts/apptainer-run.sh python -m train.trainer cluster=gilbreth
+
+        # Manual execution with bind-mount
+        apptainer exec --nv -B $(pwd):/workspace vla-lego.sif \
+            /usr/local/bin/entrypoint.sh python -m train.trainer cluster=gilbreth
+
         # Interactive shell
-        apptainer shell --nv vla-lego.sif
+        apptainer shell --nv -B $(pwd):/workspace vla-lego.sif
 
-        # Run training
-        apptainer exec --nv vla-lego.sif python -m train.trainer
-
-        # Bind project directory
-        apptainer exec --nv -B /scratch/gilbreth/$USER/vla-lego:/app vla-lego.sif python -m train.trainer
+    Reproducibility:
+        Each run prints git commit, Python version, and GPU info.
+        Save this output for experiment tracking.
 
     The --nv flag enables NVIDIA GPU support.

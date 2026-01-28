@@ -1,6 +1,17 @@
 # ============================================================================
-# Dockerfile for VLA-LEGO Training
-# Multi-stage build for smaller final image
+# Dockerfile for VLA-LEGO (Deps-Only Model)
+#
+# This image contains ONLY dependencies (CUDA, Python, PyTorch, etc.).
+# Repository code is NOT baked in - it must be bind-mounted at runtime.
+#
+# INVARIANTS (must always hold):
+# 1. Without bind-mount: `python -c "import train"` MUST fail
+# 2. With bind-mount + PYTHONPATH=/workspace: imports MUST work
+# 3. PyTorch must be CUDA-enabled (cu121)
+#
+# Usage:
+#   docker run -v $(pwd):/workspace IMAGE python -m train.trainer
+#   ./scripts/docker-run.sh python -m train.trainer
 # ============================================================================
 
 # ---------------------------------------------------------------------------
@@ -55,77 +66,123 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1 \
 RUN python -m pip install --upgrade pip setuptools wheel
 
 # ---------------------------------------------------------------------------
-# Stage 3: Install dependencies
+# Stage 3: Install dependencies (NOT the package itself)
 # ---------------------------------------------------------------------------
 FROM python AS dependencies
 
-WORKDIR /app
-
-# Copy dependency files first (for caching)
-COPY pyproject.toml ./
-COPY README.md ./
-
-# Install PyTorch with CUDA support
+# Install PyTorch with CUDA support first (large, changes rarely)
+# Using explicit cu121 index to ensure CUDA-enabled build
 RUN pip install --no-cache-dir \
     torch==2.2.0 \
     torchvision==0.17.0 \
     torchaudio==2.2.0 \
     --index-url https://download.pytorch.org/whl/cu121
 
-# Install other dependencies
-RUN pip install --no-cache-dir \
-    numpy>=1.24.0 \
-    hydra-core>=1.3.0 \
-    omegaconf>=2.3.0 \
-    wandb>=0.15.0 \
-    tqdm>=4.65.0 \
-    einops>=0.6.0 \
-    safetensors>=0.3.0 \
-    accelerate>=0.20.0 \
-    deepspeed>=0.10.0
+# Install tomli for TOML parsing (Python 3.10 doesn't have tomllib)
+RUN pip install --no-cache-dir tomli
 
-# Dev dependencies (for testing inside container)
-RUN pip install --no-cache-dir \
-    pytest>=7.0.0 \
-    pytest-cov>=4.0.0
+# Copy ONLY pyproject.toml to extract dependencies
+COPY pyproject.toml /tmp/pyproject.toml
+
+# Extract dependencies from pyproject.toml and install them
+# IMPORTANT: We do NOT run `pip install .` which would install the package itself
+RUN python << 'EXTRACT_DEPS' && \
+    pip install --no-cache-dir -r /tmp/requirements.txt && \
+    rm /tmp/pyproject.toml /tmp/requirements.txt
+import tomli
+
+with open('/tmp/pyproject.toml', 'rb') as f:
+    config = tomli.load(f)
+
+# Get base dependencies
+deps = config['project']['dependencies']
+
+# Get train extras (for distributed training)
+train_deps = config['project']['optional-dependencies']['train']
+
+# Combine all deps (skip torch* since we installed CUDA version explicitly)
+all_deps = []
+for dep in deps + train_deps:
+    dep_lower = dep.lower()
+    if not dep_lower.startswith('torch'):
+        all_deps.append(dep)
+
+# Write to requirements file
+with open('/tmp/requirements.txt', 'w') as f:
+    f.write('\n'.join(all_deps))
+    print(f"Extracted {len(all_deps)} dependencies")
+EXTRACT_DEPS
+
+# Install pytest for testing inside container
+RUN pip install --no-cache-dir pytest>=7.0.0 pytest-cov>=4.0.0
 
 # ---------------------------------------------------------------------------
-# Stage 4: Final image
+# Stage 4: Final image with validation
 # ---------------------------------------------------------------------------
 FROM dependencies AS final
 
-WORKDIR /app
+# Set working directory to /workspace (will be bind-mounted)
+WORKDIR /workspace
 
-# Build arguments for versioning
-ARG GIT_COMMIT=unknown
-ARG BUILD_DATE=unknown
-
-# Labels
-LABEL org.opencontainers.image.title="VLA-LEGO Training"
-LABEL org.opencontainers.image.description="Training environment for VLA-LEGO Model"
-LABEL org.opencontainers.image.revision="${GIT_COMMIT}"
-LABEL org.opencontainers.image.created="${BUILD_DATE}"
-
-# Copy project code
-COPY . .
-
-# Install project in editable mode
-RUN pip install --no-cache-dir -e .
+# Copy entrypoint script
+COPY scripts/container-entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV CUDA_DEVICE_ORDER=PCI_BUS_ID
 
-# Store build info
-RUN echo "GIT_COMMIT=${GIT_COMMIT}" > /app/.build_info \
-    && echo "BUILD_DATE=${BUILD_DATE}" >> /app/.build_info
-
-# Default command
-CMD ["python", "-m", "train.trainer", "--help"]
+# Labels
+LABEL org.opencontainers.image.title="VLA-LEGO Training (Deps-Only)"
+LABEL org.opencontainers.image.description="Dependencies-only image for VLA-LEGO. Bind-mount code at /workspace."
 
 # ---------------------------------------------------------------------------
-# Healthcheck
+# Build-time validation: Verify deps-only invariants
+# ---------------------------------------------------------------------------
+
+# Validate 1: Project modules must NOT be importable (no code baked in)
+RUN python -c "
+try:
+    import train
+    raise AssertionError('FAIL: train module should not be importable without bind-mount')
+except ModuleNotFoundError:
+    print('OK: train module not found (deps-only verified)')
+
+try:
+    import models
+    raise AssertionError('FAIL: models module should not be importable without bind-mount')
+except ModuleNotFoundError:
+    print('OK: models module not found (deps-only verified)')
+"
+
+# Validate 2: PyTorch must be CUDA-enabled (cu121)
+RUN python -c "
+import torch
+cuda_version = torch.version.cuda
+assert cuda_version is not None, f'FAIL: torch.version.cuda is None (CPU-only build?)'
+assert cuda_version.startswith('12.'), f'FAIL: expected CUDA 12.x, got {cuda_version}'
+print(f'OK: PyTorch {torch.__version__} with CUDA {cuda_version}')
+"
+
+# Validate 3: Core dependencies are available
+RUN python -c "
+import numpy; print(f'numpy: {numpy.__version__}')
+import hydra; print(f'hydra: {hydra.__version__}')
+import wandb; print(f'wandb: {wandb.__version__}')
+import einops; print(f'einops: {einops.__version__}')
+import accelerate; print(f'accelerate: {accelerate.__version__}')
+print('OK: All core dependencies available')
+"
+
+# Entrypoint validates mount and sets up environment
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+# Default command (shows help if no command provided)
+CMD ["python", "--version"]
+
+# ---------------------------------------------------------------------------
+# Healthcheck - verify PyTorch CUDA support (doesn't require GPU)
 # ---------------------------------------------------------------------------
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import torch; assert torch.cuda.is_available()" || exit 1
+    CMD python -c "import torch; assert torch.version.cuda is not None" || exit 1
