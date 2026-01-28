@@ -360,11 +360,11 @@ class ExperimentTracker:
         if not self._active or self._run is None:
             return
 
-        config = config or self.config
+        if config is None:
+            config = self.config
 
         try:
             import wandb
-
         except ImportError as e:
             warnings.warn(f"wandb not installed: {e}. Cannot log config artifact.", stacklevel=2)
             return
@@ -375,6 +375,7 @@ class ExperimentTracker:
             warnings.warn(f"pyyaml not installed: {e}. Cannot log config artifact.", stacklevel=2)
             return
 
+        try:
             # Create artifact
             artifact = wandb.Artifact(
                 name=f"config-{self._run_id}",

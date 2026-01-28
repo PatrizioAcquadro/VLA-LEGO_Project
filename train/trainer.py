@@ -137,6 +137,8 @@ class Trainer:
 
     def _create_scheduler(self) -> None:
         """Create learning rate scheduler."""
+        assert self.optimizer is not None, "Optimizer must be created before scheduler."
+
         sched_cfg = self.cfg.trainer.scheduler
         train_cfg = self.cfg.trainer.training
 
@@ -234,7 +236,7 @@ class Trainer:
 
                 # Compute loss
                 model_for_loss = self.model.module if self.distributed else self.model
-                loss = model_for_loss.compute_loss(
+                loss = model_for_loss.compute_loss(  # type: ignore[union-attr]
                     outputs["logits"],
                     batch["labels"],
                     batch["attention_mask"],
@@ -305,7 +307,7 @@ class Trainer:
                 outputs = self.model(batch["input_ids"], batch["attention_mask"])
 
                 model_for_loss = self.model.module if self.distributed else self.model
-                loss = model_for_loss.compute_loss(
+                loss = model_for_loss.compute_loss(  # type: ignore[union-attr]
                     outputs["logits"],
                     batch["labels"],
                     batch["attention_mask"],
@@ -341,7 +343,9 @@ class Trainer:
             ckpt_path = ckpt_dir / f"step_{self.global_step}.pt"
 
         model_state = (
-            self.model.module.state_dict() if self.distributed else self.model.state_dict()
+            self.model.module.state_dict()  # type: ignore[union-attr]
+            if self.distributed
+            else self.model.state_dict()
         )
 
         checkpoint = {
@@ -379,7 +383,7 @@ class Trainer:
         checkpoint = torch.load(path, map_location=self.device)
 
         model = self.model.module if self.distributed else self.model
-        model.load_state_dict(checkpoint["model_state_dict"])
+        model.load_state_dict(checkpoint["model_state_dict"])  # type: ignore[union-attr]
 
         self.global_step = checkpoint["step"]
         self.epoch = checkpoint.get("epoch", 0)

@@ -18,6 +18,7 @@ def get_gpu_count() -> int:
     """
     try:
         import torch
+
         if torch.cuda.is_available():
             return torch.cuda.device_count()
     except ImportError:
@@ -45,6 +46,7 @@ def get_gpu_memory_stats(device: int | None = None) -> dict[str, float]:
 
     try:
         import torch
+
         if not torch.cuda.is_available():
             return stats
 
@@ -80,6 +82,7 @@ def reset_peak_memory_stats(device: int | None = None) -> None:
     """
     try:
         import torch
+
         if torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats(device)
     except Exception:
@@ -106,6 +109,7 @@ def get_gpu_utilization(device: int = 0) -> dict[str, Any]:
 
     try:
         import pynvml
+
         pynvml.nvmlInit()
 
         handle = pynvml.nvmlDeviceGetHandleByIndex(device)
@@ -117,9 +121,7 @@ def get_gpu_utilization(device: int = 0) -> dict[str, Any]:
 
         # Temperature
         try:
-            temp = pynvml.nvmlDeviceGetTemperature(
-                handle, pynvml.NVML_TEMPERATURE_GPU
-            )
+            temp = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
             stats["temperature"] = temp
         except pynvml.NVMLError:
             pass
@@ -140,6 +142,7 @@ def get_gpu_utilization(device: int = 0) -> dict[str, Any]:
         # pynvml not available, try nvidia-ml-py
         try:
             from py3nvml import py3nvml as nvml
+
             nvml.nvmlInit()
 
             handle = nvml.nvmlDeviceGetHandleByIndex(device)
@@ -174,13 +177,15 @@ def get_all_gpu_stats(local_rank: int | None = None) -> dict[str, Any]:
 
     # Memory stats from torch.cuda
     memory_stats = get_gpu_memory_stats(local_rank)
-    stats.update({
-        "gpu/memory_used_gb": memory_stats["memory_allocated_gb"],
-        "gpu/memory_reserved_gb": memory_stats["memory_reserved_gb"],
-        "gpu/memory_peak_gb": memory_stats["memory_peak_gb"],
-        "gpu/memory_total_gb": memory_stats["memory_total_gb"],
-        "gpu/memory_free_gb": memory_stats["memory_free_gb"],
-    })
+    stats.update(
+        {
+            "gpu/memory_used_gb": memory_stats["memory_allocated_gb"],
+            "gpu/memory_reserved_gb": memory_stats["memory_reserved_gb"],
+            "gpu/memory_peak_gb": memory_stats["memory_peak_gb"],
+            "gpu/memory_total_gb": memory_stats["memory_total_gb"],
+            "gpu/memory_free_gb": memory_stats["memory_free_gb"],
+        }
+    )
 
     # Utilization stats from pynvml
     util_stats = get_gpu_utilization(local_rank)
