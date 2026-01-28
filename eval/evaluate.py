@@ -56,7 +56,7 @@ class Evaluator:
                 batch = {k: v.to(self.device) for k, v in batch.items()}
 
                 outputs = self.model(batch["input_ids"], batch["attention_mask"])
-                loss = self.model.compute_loss(  # type: ignore[union-attr]
+                loss = self.model.compute_loss(  # type: ignore[union-attr, operator]
                     outputs["logits"],
                     batch["labels"],
                     batch["attention_mask"],

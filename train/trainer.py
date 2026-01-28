@@ -236,7 +236,7 @@ class Trainer:
 
                 # Compute loss
                 model_for_loss = self.model.module if self.distributed else self.model
-                loss = model_for_loss.compute_loss(  # type: ignore[union-attr]
+                loss = model_for_loss.compute_loss(  # type: ignore[union-attr, operator]
                     outputs["logits"],
                     batch["labels"],
                     batch["attention_mask"],
@@ -307,7 +307,7 @@ class Trainer:
                 outputs = self.model(batch["input_ids"], batch["attention_mask"])
 
                 model_for_loss = self.model.module if self.distributed else self.model
-                loss = model_for_loss.compute_loss(  # type: ignore[union-attr]
+                loss = model_for_loss.compute_loss(  # type: ignore[union-attr, operator]
                     outputs["logits"],
                     batch["labels"],
                     batch["attention_mask"],
