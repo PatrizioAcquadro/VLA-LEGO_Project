@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # ============================================================================
 # Dockerfile for VLA-LEGO (Deps-Only Model)
 #
@@ -142,7 +143,8 @@ LABEL org.opencontainers.image.description="Dependencies-only image for VLA-LEGO
 # ---------------------------------------------------------------------------
 
 # Validate 1: Project modules must NOT be importable (no code baked in)
-RUN python -c "
+RUN <<'VALIDATE_DEPS_ONLY'
+python -c "
 try:
     import train
     raise AssertionError('FAIL: train module should not be importable without bind-mount')
@@ -155,18 +157,22 @@ try:
 except ModuleNotFoundError:
     print('OK: models module not found (deps-only verified)')
 "
+VALIDATE_DEPS_ONLY
 
 # Validate 2: PyTorch must be CUDA-enabled (cu121)
-RUN python -c "
+RUN <<'VALIDATE_CUDA'
+python -c "
 import torch
 cuda_version = torch.version.cuda
 assert cuda_version is not None, f'FAIL: torch.version.cuda is None (CPU-only build?)'
 assert cuda_version.startswith('12.'), f'FAIL: expected CUDA 12.x, got {cuda_version}'
 print(f'OK: PyTorch {torch.__version__} with CUDA {cuda_version}')
 "
+VALIDATE_CUDA
 
 # Validate 3: Core dependencies are available
-RUN python -c "
+RUN <<'VALIDATE_CORE_DEPS'
+python -c "
 import numpy; print(f'numpy: {numpy.__version__}')
 import hydra; print(f'hydra: {hydra.__version__}')
 import wandb; print(f'wandb: {wandb.__version__}')
@@ -174,6 +180,7 @@ import einops; print(f'einops: {einops.__version__}')
 import accelerate; print(f'accelerate: {accelerate.__version__}')
 print('OK: All core dependencies available')
 "
+VALIDATE_CORE_DEPS
 
 # Entrypoint validates mount and sets up environment
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
