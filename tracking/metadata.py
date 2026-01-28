@@ -114,6 +114,7 @@ def get_environment_info() -> dict[str, Any]:
     # PyTorch info
     try:
         import torch
+
         env_info["pytorch_version"] = torch.__version__
         env_info["cuda_available"] = torch.cuda.is_available()
         if torch.cuda.is_available():
@@ -121,8 +122,7 @@ def get_environment_info() -> dict[str, Any]:
             env_info["cudnn_version"] = torch.backends.cudnn.version()
             env_info["gpu_count"] = torch.cuda.device_count()
             env_info["gpu_names"] = [
-                torch.cuda.get_device_name(i)
-                for i in range(torch.cuda.device_count())
+                torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())
             ]
     except ImportError:
         pass
@@ -130,6 +130,7 @@ def get_environment_info() -> dict[str, Any]:
     # DeepSpeed info
     try:
         import deepspeed
+
         env_info["deepspeed_version"] = deepspeed.__version__
     except ImportError:
         pass
@@ -137,6 +138,7 @@ def get_environment_info() -> dict[str, Any]:
     # Transformers info
     try:
         import transformers
+
         env_info["transformers_version"] = transformers.__version__
     except ImportError:
         pass
@@ -191,6 +193,7 @@ def get_distributed_info() -> dict[str, Any]:
 
     try:
         import torch.distributed as dist
+
         if dist.is_initialized():
             dist_info["world_size"] = dist.get_world_size()
             dist_info["rank"] = dist.get_rank()
@@ -241,12 +244,14 @@ def set_seeds(seed: int, deterministic: bool = False) -> dict[str, int]:
         Dictionary with the seeds that were set.
     """
     import random
+
     random.seed(seed)
 
     seeds = {"python": seed}
 
     try:
         import numpy as np
+
         np.random.seed(seed)
         seeds["numpy"] = seed
     except ImportError:
@@ -254,6 +259,7 @@ def set_seeds(seed: int, deterministic: bool = False) -> dict[str, int]:
 
     try:
         import torch
+
         torch.manual_seed(seed)
         seeds["torch"] = seed
 
@@ -315,6 +321,7 @@ def is_main_process() -> bool:
     """
     try:
         import torch.distributed as dist
+
         if dist.is_initialized():
             return dist.get_rank() == 0
     except ImportError:
