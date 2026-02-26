@@ -169,7 +169,11 @@ class TestRenderSmoke:
             results.append([f.rgb for f in frames])
 
         for a, b in zip(results[0], results[1], strict=True):
-            assert np.array_equal(a, b), "Rendering is not deterministic"
+            # atol=1 allows for GPU-accelerated renderer (EGL) rounding jitter
+            assert np.allclose(a, b, atol=1), (
+                f"Rendering is not deterministic (max_diff="
+                f"{int(np.max(np.abs(a.astype(int) - b.astype(int))))})"
+            )
 
     def test_trajectory_sync(self, seeded_model_data: tuple, render_config) -> None:
         """Trajectory frame step_indices match expected values."""

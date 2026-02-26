@@ -154,10 +154,19 @@ def run_render_smoke(model) -> dict:
         frames = render_trajectory(m, d, n_steps=50, config=det_config, render_every=10)
         runs.append([f.rgb for f in frames])
 
-    det_ok = all(np.array_equal(a, b) for a, b in zip(runs[0], runs[1], strict=True))
+    # Allow atol=1 for GPU-accelerated renderers (EGL) where rasteriser
+    # floating-point non-determinism can cause ±1 pixel-value jitter.
+    det_ok = all(
+        np.allclose(a, b, atol=1) for a, b in zip(runs[0], runs[1], strict=True)
+    )
+    max_diff = max(
+        int(np.max(np.abs(a.astype(int) - b.astype(int))))
+        for a, b in zip(runs[0], runs[1], strict=True)
+    )
     results["checks"]["deterministic"] = det_ok
+    results["checks"]["deterministic_max_diff"] = max_diff
     status = "OK" if det_ok else "FAIL"
-    print(f"  [{status}] Render determinism (2 runs, 5 frames each)")
+    print(f"  [{status}] Render determinism (2 runs, 5 frames each, max_diff={max_diff})")
 
     # Trajectory sync check
     data = mujoco.MjData(model)
