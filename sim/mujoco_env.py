@@ -44,7 +44,7 @@ def step_n(
     """
     for _ in range(n_steps):
         mujoco.mj_step(model, data)
-    return data.qpos.copy()
+    return np.array(data.qpos.copy())
 
 
 def check_deterministic(

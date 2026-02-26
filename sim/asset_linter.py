@@ -62,7 +62,7 @@ _FILE_ATTRS: dict[str, list[str]] = {
 }
 
 
-def _check_absolute_paths(tree: ET.ElementTree, mjcf_path: Path) -> list[LintIssue]:
+def _check_absolute_paths(tree: ET.ElementTree[ET.Element], mjcf_path: Path) -> list[LintIssue]:
     """Check for absolute paths in file-referencing attributes."""
     issues: list[LintIssue] = []
     root = tree.getroot()
@@ -84,7 +84,7 @@ def _check_absolute_paths(tree: ET.ElementTree, mjcf_path: Path) -> list[LintIss
     return issues
 
 
-def _get_compiler_dirs(tree: ET.ElementTree) -> tuple[str | None, str | None]:
+def _get_compiler_dirs(tree: ET.ElementTree[ET.Element]) -> tuple[str | None, str | None]:
     """Extract meshdir and texturedir from <compiler> element if present."""
     root = tree.getroot()
     compiler = root.find(".//compiler")
@@ -93,7 +93,7 @@ def _get_compiler_dirs(tree: ET.ElementTree) -> tuple[str | None, str | None]:
     return compiler.get("meshdir"), compiler.get("texturedir")
 
 
-def _check_missing_files(tree: ET.ElementTree, mjcf_path: Path) -> list[LintIssue]:
+def _check_missing_files(tree: ET.ElementTree[ET.Element], mjcf_path: Path) -> list[LintIssue]:
     """Check that all referenced files exist relative to the MJCF file."""
     issues: list[LintIssue] = []
     root = tree.getroot()
@@ -154,7 +154,7 @@ def _check_missing_files(tree: ET.ElementTree, mjcf_path: Path) -> list[LintIssu
     return issues
 
 
-def _check_include_files(tree: ET.ElementTree, mjcf_path: Path) -> list[LintIssue]:
+def _check_include_files(tree: ET.ElementTree[ET.Element], mjcf_path: Path) -> list[LintIssue]:
     """Check that all <include> file references exist."""
     issues: list[LintIssue] = []
     root = tree.getroot()
@@ -177,7 +177,7 @@ def _check_include_files(tree: ET.ElementTree, mjcf_path: Path) -> list[LintIssu
     return issues
 
 
-def _check_mesh_scales(tree: ET.ElementTree, mjcf_path: Path) -> list[LintIssue]:
+def _check_mesh_scales(tree: ET.ElementTree[ET.Element], mjcf_path: Path) -> list[LintIssue]:
     """Check for suspicious mesh scale factors."""
     issues: list[LintIssue] = []
     root = tree.getroot()
