@@ -156,9 +156,7 @@ def run_render_smoke(model) -> dict:
 
     # Allow atol=1 for GPU-accelerated renderers (EGL) where rasteriser
     # floating-point non-determinism can cause ±1 pixel-value jitter.
-    det_ok = all(
-        np.allclose(a, b, atol=1) for a, b in zip(runs[0], runs[1], strict=True)
-    )
+    det_ok = all(np.allclose(a, b, atol=1) for a, b in zip(runs[0], runs[1], strict=True))
     max_diff = max(
         int(np.max(np.abs(a.astype(int) - b.astype(int))))
         for a, b in zip(runs[0], runs[1], strict=True)
