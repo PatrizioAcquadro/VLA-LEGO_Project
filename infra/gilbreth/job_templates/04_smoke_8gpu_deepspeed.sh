@@ -123,17 +123,17 @@ cat << DSCONFIG > $SHARED_DIR/ds_config_multinode.json
         "overlap_comm": true,
         "contiguous_gradients": true
     },
-    
+
     "bf16": {
         "enabled": true
     },
-    
+
     "gradient_clipping": 1.0,
-    
+
     "steps_per_print": 25,
-    
+
     "wall_clock_breakdown": false,
-    
+
     "comms_logger": {
         "enabled": false
     }
@@ -166,7 +166,7 @@ class DummyModel(nn.Module):
                 nn.Linear(hidden_size * 4, hidden_size),
             ])
         self.layers = nn.Sequential(*layers)
-    
+
     def forward(self, x):
         return self.layers(x)
 
@@ -175,18 +175,18 @@ def main():
     parser.add_argument("--local_rank", type=int, default=-1)
     parser = deepspeed.add_config_arguments(parser)
     args = parser.parse_args()
-    
+
     # Initialize DeepSpeed distributed
     deepspeed.init_distributed()
-    
+
     rank = torch.distributed.get_rank()
     world_size = torch.distributed.get_world_size()
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     hostname = socket.gethostname()
-    
+
     device = torch.device(f"cuda:{local_rank}")
     torch.cuda.set_device(device)
-    
+
     print(f"[Rank {rank}/{world_size}] Node: {hostname}, GPU: {local_rank}", flush=True)
 
     print(f"[Rank {rank}] Entering barrier...", flush=True)
@@ -199,57 +199,57 @@ def main():
         print(f"Backend: {torch.distributed.get_backend()}")
         print(f"DeepSpeed ZeRO Stage 1")
         print(f"{'='*50}\n")
-    
+
     # Create model
     model = DummyModel(hidden_size=4096, num_layers=8)
     num_params = sum(p.numel() for p in model.parameters())
-    
+
     if rank == 0:
         print(f"Model parameters: {num_params:,} ({num_params * 4 / 1e9:.2f} GB in fp32)")
-    
+
     # DeepSpeed initialization
     model_engine, optimizer, _, _ = deepspeed.initialize(
         args=args,
         model=model,
         model_parameters=model.parameters(),
     )
-    
+
     if rank == 0:
         print(f"DeepSpeed initialized")
         print(f"  ZeRO stage: {model_engine.zero_optimization_stage()}")
-    
+
     criterion = nn.MSELoss()
-    
+
     # Training loop
     if rank == 0:
         print("\nRunning 100 multi-node training steps...")
-    
+
     start = time.time()
-    
+
     for step in range(100):
         x = torch.randn(32, 4096, device=device, dtype=torch.bfloat16)
         y = torch.randn(32, 4096, device=device, dtype=torch.bfloat16)
-        
+
         output = model_engine(x)
         loss = criterion(output, y)
-        
+
         model_engine.backward(loss)
         model_engine.step()
-        
+
         # All-reduce loss for logging
         if (step + 1) % 25 == 0:
             loss_tensor = loss.detach().clone()
             torch.distributed.all_reduce(loss_tensor, op=torch.distributed.ReduceOp.AVG)
             if rank == 0:
                 print(f"  Step {step+1}/100 | Avg Loss: {loss_tensor.item():.4f}")
-    
+
     elapsed = time.time() - start
     max_mem = torch.cuda.max_memory_allocated(device) / 1e9
-    
+
     # Gather memory stats from all ranks
     mem_tensor = torch.tensor([max_mem], device=device)
     torch.distributed.all_reduce(mem_tensor, op=torch.distributed.ReduceOp.MAX)
-    
+
     if rank == 0:
         print(f"\nCompleted in {elapsed:.2f}s ({100/elapsed:.1f} steps/sec)")
         print(f"Effective throughput: {100 * world_size / elapsed:.1f} samples/sec (world)")

@@ -48,7 +48,13 @@ train = [
     "deepspeed>=0.10.0",
 ]
 
-# Dev: everything (ci + train + pre-commit)
+# Simulation: MuJoCo and sim dependencies
+sim = [
+    "mujoco>=3.1.0,<4.0.0",
+    "imageio[ffmpeg]>=2.31.0",
+]
+
+# Dev: everything (ci + train + sim + pre-commit)
 dev = [
     # CI tools
     "pytest>=7.0.0",
@@ -60,6 +66,9 @@ dev = [
     "wandb>=0.15.0",
     "accelerate>=0.20.0",
     "deepspeed>=0.10.0",
+    # Simulation
+    "mujoco>=3.1.0,<4.0.0",
+    "imageio[ffmpeg]>=2.31.0",
     # Dev-only
     "pre-commit>=3.0.0",
 ]
@@ -67,6 +76,8 @@ dev = [
 [project.scripts]
 vla-train = "train.trainer:main"
 vla-eval = "eval.evaluate:main"
+vla-viewer = "sim.viewer:main"
+vla-lint-assets = "sim.asset_linter_cli:main"
 
 [project.urls]
 Repository = "https://github.com/PatrizioAcquadro/VLA-LEGO_Project"

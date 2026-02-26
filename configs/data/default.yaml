@@ -35,11 +35,11 @@ dataloader:
   pin_memory: true
   prefetch_factor: 2
   persistent_workers: true
-  
+
   # Shuffling
   shuffle_train: true
   shuffle_val: false
-  
+
   # Drop last incomplete batch (important for distributed)
   drop_last: true
 

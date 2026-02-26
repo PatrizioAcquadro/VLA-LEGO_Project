@@ -195,21 +195,21 @@ if conda env list | grep -q "${CONDA_ENV_NAME}"; then
 else
     echo "Creating new conda environment: ${CONDA_ENV_NAME}"
     echo "This will take a few minutes..."
-    
+
     conda create -y -n ${CONDA_ENV_NAME} python=3.10
     source activate ${CONDA_ENV_NAME} || conda activate ${CONDA_ENV_NAME}
-    
+
     # Install PyTorch with CUDA support
     echo ""
     echo "Installing PyTorch 2.2 with CUDA 12.1..."
     pip install torch==2.2.0 torchvision==0.17.0 torchaudio==2.2.0 \
         --index-url https://download.pytorch.org/whl/cu121
-    
+
     # Install DeepSpeed
     echo ""
     echo "Installing DeepSpeed..."
     pip install deepspeed==0.14.0
-    
+
     # Install other dependencies
     echo ""
     echo "Installing additional packages..."

@@ -141,7 +141,7 @@ class DummyModel(nn.Module):
                 nn.Linear(hidden_size * 4, hidden_size),
             ])
         self.layers = nn.Sequential(*layers)
-    
+
     def forward(self, x):
         return self.layers(x)
 
@@ -150,51 +150,51 @@ def main():
     parser.add_argument("--local_rank", type=int, default=-1)
     parser = deepspeed.add_config_arguments(parser)
     args = parser.parse_args()
-    
+
     # Initialize DeepSpeed
     deepspeed.init_distributed()
-    
+
     rank = torch.distributed.get_rank()
     world_size = torch.distributed.get_world_size()
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    
+
     device = torch.device(f"cuda:{local_rank}")
     torch.cuda.set_device(device)
-    
+
     if rank == 0:
         print(f"World size: {world_size}")
         print(f"Using DeepSpeed ZeRO Stage 1")
-    
+
     print(f"[Rank {rank}] GPU {local_rank}: {torch.cuda.get_device_name(device)}")
-    
+
     # Create model
     model = DummyModel(hidden_size=4096, num_layers=6)
     num_params = sum(p.numel() for p in model.parameters())
-    
+
     if rank == 0:
         print(f"Model parameters: {num_params:,} ({num_params * 4 / 1e9:.2f} GB in fp32)")
-    
+
     # DeepSpeed initialization
     model_engine, optimizer, _, _ = deepspeed.initialize(
         args=args,
         model=model,
         model_parameters=model.parameters(),
     )
-    
+
     if rank == 0:
         print(f"DeepSpeed engine initialized")
         print(f"  ZeRO stage: {model_engine.zero_optimization_stage()}")
         print(f"  BF16 enabled: {model_engine.bfloat16_enabled()}")
         print(f"  FP16 enabled: {model_engine.fp16_enabled()}")
-    
+
     criterion = nn.MSELoss()
-    
+
     # Training loop
     if rank == 0:
         print("\nRunning 100 DeepSpeed training steps...")
-    
+
     start = time.time()
-    
+
     for step in range(100):
         # Create input in BF16 to match model dtype
         x = torch.randn(32, 4096, device=device, dtype=torch.bfloat16)
@@ -202,13 +202,13 @@ def main():
 
         output = model_engine(x)
         loss = criterion(output, y)
-        
+
         model_engine.backward(loss)
         model_engine.step()
-        
+
         if (step + 1) % 25 == 0 and rank == 0:
             print(f"  Step {step+1}/100 | Loss: {loss.item():.4f}")
-    
+
     elapsed = time.time() - start
     max_mem = torch.cuda.max_memory_allocated(device) / 1e9
 

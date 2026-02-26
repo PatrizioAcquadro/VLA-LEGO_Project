@@ -17,7 +17,7 @@
 
 ## Overview
 
-VLA-LEGO is a Master's thesis research project developing a **Vision-Language-Action (VLA) system** for robotic bimanual manipulation. The project replicates and extends the [EO-1 model](https://arxiv.org/abs/2508.21112) architecture for coordinated two-arm assembly tasks on the **Unitree H1 humanoid robot**.
+VLA-LEGO is a Master's thesis research project developing a **Vision-Language-Action (VLA) system** for robotic bimanual manipulation. The project replicates and extends the [EO-1 model](https://arxiv.org/abs/2508.21112) architecture for coordinated two-arm assembly tasks on the **IHMC Alex humanoid robot**.
 
 This research is conducted as part of an exchange program between **Politecnico di Milano** and **Purdue University**, under the supervision of Prof. Eugenio Culurciello and Prof. Marcello Restelli.
 
@@ -26,12 +26,12 @@ This research is conducted as part of an exchange program between **Politecnico 
 - Replicate the EO-1 Vision-Language-Action architecture
 - Extend the model for bimanual manipulation tasks
 - Evaluate on LIBERO benchmark (Spatial, Object, Goal, Long subsets)
-- Deploy on Unitree H1 humanoid robot for LEGO assembly
+- Deploy on IHMC Alex humanoid robot for LEGO assembly
 
 ## Features
 
 - **EO-1 Architecture** — Unified decoder-only transformer with Qwen 2.5 VL backbone (3B parameters), combining discrete autoregressive decoding with continuous flow matching
-- **Bimanual Manipulation** — Coordinated two-arm control for assembly tasks on Unitree H1
+- **Bimanual Manipulation** — Coordinated two-arm control for assembly tasks on IHMC Alex
 - **LIBERO Evaluation** — Comprehensive benchmark evaluation across spatial, object, goal, and long-horizon tasks
 - **Hydra Configuration** — Hierarchical, composable configs with CLI overrides
 - **Distributed Training** — PyTorch DDP with NCCL backend, optimized for 8x A100 GPUs
@@ -290,7 +290,7 @@ GPU: NVIDIA A100-SXM4-80GB
 - [ ] Flow matching action head integration
 - [ ] Bimanual action space extension
 - [ ] LIBERO benchmark evaluation
-- [ ] Unitree H1 deployment
+- [ ] IHMC Alex deployment
 
 ## Contributing
 

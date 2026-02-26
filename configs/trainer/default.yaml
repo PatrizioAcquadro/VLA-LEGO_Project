@@ -30,14 +30,14 @@ gradient:
 training:
   max_steps: 100000
   # Alternative: max_epochs: 10
-  
+
   # Batch sizes
   batch_size_per_device: 8
   # Effective batch = batch_size_per_device * num_gpus * accumulation_steps
-  
+
   # Precision
   precision: "bf16"  # bf16, fp16, fp32
-  
+
   # Compilation (PyTorch 2.0+)
   compile: false  # torch.compile() - faster but longer startup
 
@@ -48,7 +48,7 @@ checkpoint:
   save_every_n_steps: 5000
   keep_last_n: 3
   save_optimizer: true
-  
+
   # Resume from checkpoint
   resume_from: null  # Path to checkpoint, or "latest"
 
