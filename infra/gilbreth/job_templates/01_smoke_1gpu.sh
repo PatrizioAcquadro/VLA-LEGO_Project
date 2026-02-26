@@ -95,46 +95,46 @@ class DummyModel(nn.Module):
             nn.GELU(),
             nn.Linear(hidden_size * 4, hidden_size),
         )
-    
+
     def forward(self, x):
         return self.layers(x)
 
 def main():
     device = torch.device("cuda:0")
     print(f"Using device: {device}")
-    
+
     # Create model
     model = DummyModel(hidden_size=1024).to(device)
     num_params = sum(p.numel() for p in model.parameters())
     print(f"Model parameters: {num_params:,}")
-    
+
     optimizer = optim.AdamW(model.parameters(), lr=1e-4)
     criterion = nn.MSELoss()
-    
+
     # Training loop
     print("\nRunning 100 training steps...")
     start = time.time()
-    
+
     for step in range(100):
         x = torch.randn(32, 1024, device=device)
         y = torch.randn(32, 1024, device=device)
-        
+
         optimizer.zero_grad()
         output = model(x)
         loss = criterion(output, y)
         loss.backward()
         optimizer.step()
-        
+
         if (step + 1) % 25 == 0:
             print(f"  Step {step+1}/100 | Loss: {loss.item():.4f}")
-    
+
     elapsed = time.time() - start
     print(f"\nCompleted in {elapsed:.2f}s ({100/elapsed:.1f} steps/sec)")
-    
+
     # Memory stats
     max_mem = torch.cuda.max_memory_allocated(device) / 1e9
     print(f"Peak GPU memory: {max_mem:.2f} GB")
-    
+
     # Save checkpoint
     os.makedirs("checkpoints", exist_ok=True)
     ckpt_path = "checkpoints/smoke_1gpu.pt"
@@ -146,13 +146,13 @@ def main():
     }
     torch.save(checkpoint, ckpt_path)
     print(f"\nCheckpoint saved: {ckpt_path}")
-    
+
     # Verify checkpoint reload
     loaded = torch.load(ckpt_path, map_location=device)
     model.load_state_dict(loaded["model_state_dict"])
     optimizer.load_state_dict(loaded["optimizer_state_dict"])
     print("Checkpoint reload: SUCCESS ✓")
-    
+
     print("\n" + "="*50)
     print("SMOKE TEST 1 GPU: PASSED ✓")
     print("="*50)

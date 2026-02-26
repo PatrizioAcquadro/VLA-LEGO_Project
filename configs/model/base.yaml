@@ -5,25 +5,25 @@ name: base
 
 architecture:
   type: "transformer"
-  
+
   # Embedding dimensions
   hidden_size: 512
   intermediate_size: 2048  # FFN hidden dim (typically 4x hidden)
-  
+
   # Attention
   num_attention_heads: 8
   num_layers: 6
-  
+
   # Sequence
   max_seq_length: 1024
-  
+
   # Regularization
   hidden_dropout: 0.1
   attention_dropout: 0.1
-  
+
   # Activation
   activation: "gelu"
-  
+
   # Normalization
   layer_norm_eps: 1e-6
   use_pre_norm: true  # Pre-LN (more stable) vs Post-LN

@@ -44,10 +44,10 @@ hydra:
     subdir: ${hydra.job.num}
   job:
     chdir: false  # Don't change working directory
-  
+
   # Save config alongside outputs
   output_subdir: .hydra
-  
+
   # Job logging
   job_logging:
     root:

@@ -4,73 +4,98 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-VLA-LEGO is a Vision-Language-Action system for bimanual robotic LEGO assembly. It replicates and extends the EO-1 model architecture (Qwen 2.5 VL backbone with autoregressive decoding + flow matching) for coordinated two-arm manipulation on the Unitree H1 humanoid robot.
+VLA-LEGO is a Vision-Language-Action system for bimanual robotic LEGO assembly. It replicates and extends the EO-1 model architecture (Qwen 2.5 VL backbone with autoregressive decoding + flow matching) for coordinated two-arm manipulation on the IHMC Alex humanoid robot.
 
-## Common Commands
+## Commands
 
-### Development Setup
+### Setup
 ```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip setuptools wheel
 pip install -e ".[dev]"
 pre-commit install
 ```
 
 ### Training
 ```bash
-# Debug training (100 steps, small batch)
-python -m train.trainer trainer=debug cluster=local
+python -m train.trainer trainer=debug cluster=local                            # debug (100 steps, small batch)
+python -m train.trainer cluster=local                                          # full, base model
+python -m train.trainer model=large cluster=gilbreth                           # full, large model, HPC
+python -m train.trainer trainer.optimizer.lr=1e-5 trainer.training.batch_size_per_device=16  # override any value
+```
 
-# Full training with base model
-python -m train.trainer cluster=local
-
-# Full training with large model on Gilbreth HPC
-python -m train.trainer model=large cluster=gilbreth
-
-# Override any config value
-python -m train.trainer trainer.optimizer.lr=1e-5 trainer.training.batch_size_per_device=16
+### Simulation
+```bash
+python scripts/validate_mujoco.py                                              # import, load, determinism, metadata
+vla-viewer sim/assets/scenes/test_scene.xml                                    # interactive viewer
+vla-viewer sim/assets/scenes/test_scene.xml --show-contacts --show-joints      # with debug overlays
+python scripts/validate_offscreen.py                                           # headless rendering: video + frames
+python scripts/validate_sim_smoke.py                                           # physics + rendering smoke tests
+python scripts/validate_assets.py                                              # asset layout + linter + load test
+vla-lint-assets                                                                # lint all MJCF files under sim/assets/
 ```
 
 ### Testing
 ```bash
-pytest                              # All tests
-pytest tests/test_models.py -v      # Single file
-pytest --cov=. --cov-report=html    # With coverage
-pytest -m "not slow and not gpu"    # Skip slow/GPU tests
+pytest                              # all tests
+pytest tests/test_models.py -v      # single file
+pytest --cov=. --cov-report=html    # with coverage
+pytest -m "not slow and not gpu"    # skip slow/GPU tests
+pytest tests/test_mujoco.py -v      # MuJoCo sim tests
+pytest -m smoke -v                  # sim smoke tests
+pytest tests/test_asset_loader.py -v  # asset loader + linter tests
 ```
 
 ### Code Quality
 ```bash
-black .                                          # Format
-isort .                                          # Sort imports
-ruff check .                                     # Lint
-mypy sim models train eval --ignore-missing-imports  # Type check
-pre-commit run --all-files                       # All checks
-python scripts/validate_configs.py               # Validate Hydra configs
+black .                                                    # format
+isort .                                                    # sort imports
+ruff check .                                               # lint
+mypy sim models train eval tracking --ignore-missing-imports  # type check
+pre-commit run --all-files                                 # all checks
+python scripts/validate_configs.py                         # validate Hydra configs
 ```
 
 ### HPC (Gilbreth)
 ```bash
-sbatch infra/gilbreth/job_templates/01_smoke_1gpu.sh    # Single GPU test
-sbatch infra/gilbreth/job_templates/04_smoke_8gpu_deepspeed.sh  # Multi-node
+sbatch infra/gilbreth/job_templates/01_smoke_1gpu.sh       # single GPU test
+sbatch infra/gilbreth/job_templates/04_smoke_8gpu_deepspeed.sh  # multi-node
 ```
 
 ## Architecture
 
 ### Module Structure
 - **configs/** - Hydra configuration hierarchy (model, trainer, data, cluster, logging)
-- **models/** - TransformerModel implementation with MSE loss for state prediction
-- **train/** - Trainer class handling distributed training, checkpointing, validation
-- **data/** - Dataset classes (DummyDataset for testing, SimulationDataset for real data)
-- **eval/** - Evaluation scripts
-- **tracking/** - W&B experiment tracking with distributed-safe logging
+- **models/** - TransformerModel with MSE loss for state prediction
+- **train/** - Trainer class handling distributed training (DDP/DeepSpeed), checkpointing, validation
+- **data/** - DummyDataset (testing) and SimulationDataset (real data, stub)
+- **sim/** - MuJoCo simulation: `mujoco_env.py` (load/step/determinism), `env_meta.py` (metadata), `viewer.py` (interactive debug viewer), `offscreen.py` (headless rendering + video export), `asset_loader.py` (single entrypoint: `load_scene()`), `asset_linter.py` (MJCF validation), `assets/` (MJCF scenes + robot models)
+- **eval/** - Evaluator class (entry point stub)
+- **tracking/** - W&B experiment tracking with distributed-safe logging, GPU monitoring, throughput metrics, run naming
 - **infra/gilbreth/** - SLURM job templates and HPC setup scripts
 
-### Configuration System
+### Configuration
 All hyperparameters flow through Hydra configs in `configs/`. Key config groups:
-- `model`: base (256 hidden, 4 layers) or large (512 hidden, 8 layers)
+- `model`: base (512 hidden, 6 layers, 8 heads, GELU, ~25M params) or large (2048 hidden, 24 layers, 32 heads, SwiGLU, flow matching, ~1.2B params)
 - `trainer`: default or debug (100 steps, fp32)
 - `cluster`: local or gilbreth (DeepSpeed, multi-GPU)
 
 **Configuration-first principle**: Never hardcode values in code. Use `cfg.trainer.optimizer.lr` style access.
+
+### Dependency Groups (`pyproject.toml`)
+- `ci` - linters + pytest (CI only)
+- `train` - wandb, accelerate, deepspeed
+- `sim` - `mujoco>=3.1.0,<4.0.0`, `imageio[ffmpeg]>=2.31.0`
+- `dev` - ci + train + sim + pre-commit (use this for local dev)
+
+### Console Scripts
+- `vla-train` - training entry point (`train.trainer:main`)
+- `vla-eval` - evaluation entry point (`eval.evaluate:main`)
+- `vla-viewer` - interactive MuJoCo viewer (`sim.viewer:main`)
+- `vla-lint-assets` - MJCF asset linter (`sim.asset_linter_cli:main`)
+
+### Pytest Markers
+- `slow`, `gpu`, `mujoco`, `viewer`, `smoke`, `assets` - auto-skipped when hardware/packages unavailable
 
 ### Training Pipeline
 1. `train/trainer.py:main()` is the Hydra entry point
@@ -83,6 +108,45 @@ All hyperparameters flow through Hydra configs in `configs/`. Key config groups:
 - `logs/` - Training logs and Hydra outputs
 - `wandb/` - W&B offline logs
 - `cache/` - HuggingFace/data cache
+
+## Simulation
+
+### Viewer
+When any task requires visual verification in MuJoCo (new asset, changed collision, camera placement, etc.), append a concrete walkthrough to `docs/viewer-debug-checklist.md` with: the exact `vla-viewer` launch command, which UI panels to open and toggles to enable, step-by-step what to look at and verify (checkboxes), and what "correct" vs "wrong" looks like. Do not assume the user knows the MuJoCo viewer UI.
+
+**Import rule**: `mujoco.viewer` is only imported inside `sim/viewer.py:launch_viewer()`. Never import it at module top level or in training/runtime code.
+
+### Offscreen Rendering
+`sim/offscreen.py` provides headless rendering (no display needed). Key API:
+- `render_trajectory(model, data, n_steps, config, render_every)` -> list of `RenderedFrame`
+- `save_video(frames, path, fps)` -> MP4 file
+- `save_sample_frames(frames, dir)` -> PNG files
+- `RenderConfig(camera_name=..., render_depth=True, render_segmentation=True)`
+
+**Critical**: Always call `mj_forward(model, data)` before rendering (done automatically inside `render_frame`). Without it, RGB renders black.
+
+**Camera rule**: Use named MJCF cameras for offscreen rendering. The free camera (id=-1) has no useful default viewpoint in headless mode. `test_scene.xml` has an `overhead` camera.
+
+### Smoke Tests
+- `tests/test_sim_smoke.py` - pytest suite (`@pytest.mark.smoke` + `@pytest.mark.mujoco`)
+- `scripts/validate_sim_smoke.py` - standalone script, artifacts to `logs/sim_smoke/`
+- Thresholds: max penetration 5 cm (`data.contact[i].dist`), energy < 1000 J, no NaN
+- Set `WANDB_MODE=online` before running `validate_sim_smoke.py` to attach artifacts to W&B
+
+### Asset Layout
+```
+sim/assets/
+    scenes/              # MJCF scene files (e.g., test_scene.xml)
+    robots/<name>/       # Robot models: <name>.xml + meshes/ + textures/
+```
+
+**Loading scenes**: `sim.asset_loader.load_scene("test_scene")` - single entrypoint. Resolves paths under `sim/assets/scenes/`, delegates to `mujoco_env.load_model()`.
+
+**Loading robots**: `sim.asset_loader.resolve_robot_path("alex")` - expects `sim/assets/robots/alex/alex.xml`.
+
+**Asset linting**: `vla-lint-assets` checks absolute paths (ERROR), missing referenced files (ERROR), and suspicious mesh scales (WARNING). Run before committing new/modified MJCF files.
+
+**Rule**: All file references in MJCF must be relative. The linter respects `<compiler meshdir="..." texturedir="...">` for path resolution.
 
 ## Code Style
 
@@ -104,46 +168,15 @@ Key variables (see `.env.example`):
 - `WANDB_MODE` - online/offline/disabled
 - `CUDA_DEVICE_ORDER=PCI_BUS_ID` - Consistent GPU numbering
 
-## Container Model (Deps-Only)
+## Containers
 
-Docker/Apptainer images contain **dependencies only** — code is bind-mounted at `/workspace` from your git checkout.
+Docker/Apptainer images contain **dependencies only** - code is bind-mounted at `/workspace` from your git checkout. Use containers for cluster training and reproducibility; use native Python for local dev and CI.
 
-### Why deps-only?
-- Code changes don't require container rebuilds
-- `git pull` updates code instantly
-- Reproducibility: run = (git commit) + (image digest)
-
-### When to use containers
-- Training on GPU clusters (Gilbreth) via Apptainer
-- Ensuring consistent dependencies across machines
-- Running on machines without local Python/CUDA setup
-
-### When NOT to use containers
-- Quick local development/debugging (use native Python)
-- CI checks (runs native Python, not containers)
-
-### Running with containers
 ```bash
-# Docker (lab PC)
-./scripts/docker-run.sh python -m train.trainer trainer=debug cluster=local
-
-# Apptainer (Gilbreth HPC)
-./scripts/apptainer-run.sh python -m train.trainer cluster=gilbreth
+./scripts/docker-run.sh python -m train.trainer trainer=debug cluster=local   # Docker (lab PC)
+./scripts/apptainer-run.sh python -m train.trainer cluster=gilbreth            # Apptainer (Gilbreth HPC)
 ```
 
-### Adding/changing dependencies
-1. Update `pyproject.toml` (add to appropriate section)
-2. Push to `main` (or create release tag `v*`)
-3. CI automatically rebuilds the container
-4. Pull the new image before running
+**Adding/changing dependencies**: update `pyproject.toml`, push to `main` - CI rebuilds the image automatically.
 
-### CI/CD container rebuild triggers
-Heavy builds (Docker + Apptainer) run only when these files change on `main`:
-- `Dockerfile`
-- `pyproject.toml`
-- `.dockerignore`
-- `scripts/container-entrypoint.sh`
-
-**Note**: `apptainer.def` does NOT trigger rebuilds. CI builds Apptainer images from the Docker image digest, not from apptainer.def directly.
-
-Code-only changes do NOT trigger container rebuilds.
+**CI rebuild triggers**: `Dockerfile`, `pyproject.toml`, `.dockerignore`, `scripts/container-entrypoint.sh`. Note: `apptainer.def` does NOT trigger rebuilds (CI builds Apptainer from the Docker image digest). Code-only changes do NOT trigger rebuilds.

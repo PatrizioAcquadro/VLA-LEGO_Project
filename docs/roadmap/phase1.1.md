@@ -1,11 +1,11 @@
 # Phase 1.1 — Robot Model Integration (4 days)
-**Goal:** Deliver a stable, reproducible, and H1-compatible *upper-body fixed-base* robot model in MuJoCo, with functional bimanual grippers, a finalized action/state contract for VLA training, and a kinematics validation report that proves compatibility with the target H1 configuration.
+**Goal:** Deliver a stable, reproducible, and Alex-compatible *upper-body fixed-base* robot model in MuJoCo, with functional bimanual grippers, a finalized action/state contract for VLA training, and a kinematics validation report that proves compatibility with the target Alex configuration.
 
 **Fixed decisions (frozen for 1.1+):**
 - **Sim engine:** MuJoCo (MJCF-first workflow; code-first + viewer for debugging).
-- **Robot asset:** Existing **Unitree H1** model (no proxy).
+- **Robot asset:** Existing **IHMC Alex** model (no proxy).
 - **Scope:** **Upper-body fixed-base** (no locomotion/floating base in 1.x).
-- **H1 compatibility target:** **Level 2+** (full kinematic compatibility + realistic limits/saturations; partial dynamics realism where impactful).
+- **Alex compatibility target:** **Level 2+** (full kinematic compatibility + realistic limits/saturations; partial dynamics realism where impactful).
 - **Action space:** **Δq joint deltas** for bimanual arms + gripper commands.
 - **Robot state:** Core required + recommended kinematic signals (see Section 5).
 - **Views:** **4 cameras from day 1** (overhead + wrist-L + wrist-R + third-person).
@@ -14,14 +14,14 @@
 
 ## 1) Import/Create Bimanual Robot URDF/MJCF
 ### What we will do
-Integrate the existing Unitree H1 asset into MuJoCo as an *upper-body fixed-base* bimanual robot, ensuring it loads reliably, simulates stably, and exposes consistent frames and signals for downstream VLA training.
+Integrate the existing IHMC Alex asset into MuJoCo as an *upper-body fixed-base* bimanual robot, ensuring it loads reliably, simulates stably, and exposes consistent frames and signals for downstream VLA training.
 
 ### Why this matters
-All downstream phases (multi-view data generation, action learning, sim-to-real) depend on a single “source of truth” robot model that is stable, versioned, and structurally consistent with H1.
+All downstream phases (multi-view data generation, action learning, sim-to-real) depend on a single “source of truth” robot model that is stable, versioned, and structurally consistent with Alex.
 
 ### Execution checklist
 - **Asset ingestion**
-  - Identify and pin a single authoritative H1 model version (commit hash / release tag).
+  - Identify and pin a single authoritative Alex model version (commit hash / release tag).
   - Convert to **MJCF** if necessary (MJCF-first is the final truth).
   - Remove or disable unused full-body components for 1.x (legs/locomotion) *without breaking arm kinematics*.
 - **Upper-body fixed-base setup**
@@ -81,7 +81,7 @@ LEGO assembly is sensitive to small instabilities. Incorrect limits or poorly co
 
 ## 3) Set Up Gripper Models (Parallel Jaw) — Functional Bimanual End-Effectors
 ### What we will do
-Implement **parallel-jaw** grippers (1-DoF open/close) for both arms, with stable contacts and a future-proof command interface that can later map to the H1 real end-effector implementation.
+Implement **parallel-jaw** grippers (1-DoF open/close) for both arms, with stable contacts and a future-proof command interface that can later map to the Alex real end-effector implementation.
 
 ### Why this matters
 Without reliable grasping, you cannot generate meaningful LEGO datasets or demonstrate bimanual assembly. A simple, stable gripper beats a complex hand early on.
@@ -108,16 +108,16 @@ Without reliable grasping, you cannot generate meaningful LEGO datasets or demon
 
 ---
 
-## 4) Verify Kinematics Match Target (H1-Compatible) — Validation Report
+## 4) Verify Kinematics Match Target (Alex-Compatible) — Validation Report
 ### What we will do
-Produce a **Kinematics Validation Report** demonstrating that the integrated model matches the target H1 kinematics (Level 2), and documenting any residual differences and their impact.
+Produce a **Kinematics Validation Report** demonstrating that the integrated model matches the target Alex kinematics (Level 2), and documenting any residual differences and their impact.
 
 ### Why this matters
 This is your proof that the sim robot is not a “proxy”. It protects the project from hidden frame/joint mismatches that would break sim-to-real or invalidate evaluation.
 
 ### Execution checklist
 - **Define the kinematic reference**
-  - Use the pinned H1 model definition as the reference (same model family / authoritative source).
+  - Use the pinned Alex model definition as the reference (same model family / authoritative source).
   - Freeze EE frame definitions used for comparison.
 - **FK consistency tests**
   - Sample N (e.g., 50–200) random joint configurations within limits for each arm.
@@ -218,9 +218,9 @@ Set up four synchronized camera streams in MuJoCo for data generation and policy
 Bimanual LEGO assembly requires both global context and local precision views. Multi-view inputs also strengthen generalization and make demos more compelling for industrial evaluation.
 
 ### View specification (frozen)
-1. **Workspace Overhead** — global layout of bricks and task context  
-2. **Left Wrist Camera** — precision grasp/alignment view  
-3. **Right Wrist Camera** — precision grasp/alignment view  
+1. **Workspace Overhead** — global layout of bricks and task context
+2. **Left Wrist Camera** — precision grasp/alignment view
+3. **Right Wrist Camera** — precision grasp/alignment view
 4. **Third-Person Camera** — debugging + presentation + additional context
 
 ### Execution checklist
@@ -242,13 +242,13 @@ Bimanual LEGO assembly requires both global context and local precision views. M
 
 # Final Definition of Done (Phase 1.1)
 Phase 1.1 is complete when:
-- The **H1 upper-body fixed-base MJCF** loads and simulates stably.
+- The **Alex upper-body fixed-base MJCF** loads and simulates stably.
 - **Joint limits + Level 2+ constraints** are configured and validated.
 - **Bimanual parallel-jaw grippers** work reliably for basic grasp+lift.
 - The **action contract (16-D Δq + gripper)** is frozen and stable under repeated action chunks.
 - The **robot state contract** includes core proprioception + EE pose/velocity and is consistent.
 - **Four cameras** (overhead, wrist-L, wrist-R, third-person) render reliably and synchronously.
-- A **Kinematics Validation Report** exists with FK-based evidence of H1 compatibility.
+- A **Kinematics Validation Report** exists with FK-based evidence of Alex compatibility.
 
 ---
 

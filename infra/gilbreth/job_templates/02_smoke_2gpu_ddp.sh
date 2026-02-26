@@ -99,7 +99,7 @@ class DummyModel(nn.Module):
             nn.GELU(),
             nn.Linear(hidden_size * 4, hidden_size),
         )
-    
+
     def forward(self, x):
         return self.layers(x)
 
@@ -142,31 +142,31 @@ def main():
     print(f"[Rank {rank}] Creating DDP wrapper...", flush=True)
     model = DDP(model, device_ids=[local_rank])
     print(f"[Rank {rank}] DDP wrapper created", flush=True)
-    
+
     num_params = sum(p.numel() for p in model.parameters())
     if rank == 0:
         print(f"Model parameters: {num_params:,}")
-    
+
     optimizer = optim.AdamW(model.parameters(), lr=1e-4)
     criterion = nn.MSELoss()
-    
+
     # Training loop
-    
+
     start = time.time()
-    
+
     for step in range(100):
         x = torch.randn(64, 2048, device=device)
         y = torch.randn(64, 2048, device=device)
-        
+
         optimizer.zero_grad()
         output = model(x)
         loss = criterion(output, y)
         loss.backward()
         optimizer.step()
-        
+
         if (step + 1) % 25 == 0 and rank == 0:
             print(f"  Step {step+1}/100 | Loss: {loss.item():.4f}")
-    
+
     elapsed = time.time() - start
     max_mem = torch.cuda.max_memory_allocated(device) / 1e9
 
@@ -197,7 +197,7 @@ def main():
         print("\n" + "="*50)
         print("SMOKE TEST 2 GPU DDP: PASSED ✓")
         print("="*50)
-    
+
     dist.destroy_process_group()
 
 if __name__ == "__main__":

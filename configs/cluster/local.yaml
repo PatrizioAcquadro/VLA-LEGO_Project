@@ -7,13 +7,13 @@ hardware:
   accelerator: "auto"  # Detect automatically
   gpu_type: "auto"
   gpus_per_node: 1
-  
+
   gpu_memory_gb: 8  # Conservative estimate
   cpu_memory_gb: 32
 
 distributed:
   backend: "nccl"  # Falls back to gloo if needed
-  
+
   deepspeed:
     enabled: false  # Disable for local testing
 

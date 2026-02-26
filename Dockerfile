@@ -44,6 +44,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2-dev \
     libxmlsec1-dev \
     liblzma-dev \
+    # OpenGL/rendering deps for MuJoCo (Phase 0.2)
+    libgl1-mesa-glx \
+    libgl1-mesa-dev \
+    libosmesa6-dev \
+    libglfw3 \
+    libglfw3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
@@ -101,9 +107,12 @@ deps = config['project']['dependencies']
 # Get train extras (for distributed training)
 train_deps = config['project']['optional-dependencies']['train']
 
+# Get sim extras (for MuJoCo simulation)
+sim_deps = config['project']['optional-dependencies'].get('sim', [])
+
 # Combine all deps (skip torch* since we installed CUDA version explicitly)
 all_deps = []
-for dep in deps + train_deps:
+for dep in deps + train_deps + sim_deps:
     dep_lower = dep.lower()
     if not dep_lower.startswith('torch'):
         all_deps.append(dep)

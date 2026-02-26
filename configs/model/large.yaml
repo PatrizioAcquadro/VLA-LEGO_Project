@@ -5,25 +5,25 @@ name: large
 
 architecture:
   type: "transformer"
-  
+
   # Embedding dimensions
   hidden_size: 2048
   intermediate_size: 8192
-  
+
   # Attention
   num_attention_heads: 32
   num_layers: 24
-  
+
   # Sequence
   max_seq_length: 2048
-  
+
   # Regularization
   hidden_dropout: 0.0  # Often disabled for large models
   attention_dropout: 0.0
-  
+
   # Activation
   activation: "swiglu"  # SwiGLU for better performance
-  
+
   # Normalization
   layer_norm_eps: 1e-6
   use_pre_norm: true

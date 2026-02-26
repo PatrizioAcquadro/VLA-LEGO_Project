@@ -43,7 +43,7 @@ All Phase 1 work depends on a stable simulator. If MuJoCo import/rendering is fl
 ## 0.2.2 — Interactive Viewer Workflow (Lab PC “Debug Mode”)
 ### What we will do
 Enable an interactive viewer workflow on the lab PC to debug:
-- robot asset loading (H1 MJCF/meshes),
+- robot asset loading (Alex MJCF/meshes),
 - coordinate frames,
 - contacts,
 - camera placement.
@@ -76,18 +76,26 @@ Make sure offscreen rendering works without a GUI so you can:
 Phase 1 requires multi-view logging. Offscreen rendering is non-negotiable for scale and for unattended regression tests.
 
 ### Execution checklist
-- Select and validate the headless rendering backend strategy (GPU-offscreen preferred).
-- Run an offscreen render smoke test that produces:
-  - RGB frames (required)
-  - depth frames (strongly recommended; needed soon)
-  - segmentation/instance IDs (recommended for debugging/evaluation)
-- Export a short video artifact (e.g., 5–10 seconds) + a few sample images.
-- Verify strict synchronization primitives exist conceptually:
-  - same sim step -> same rendered frame index (alignment contract)
-- Store artifacts with Phase 0.1 run naming conventions.
+- [x] Select and validate the headless rendering backend strategy (GPU-offscreen preferred).
+- [x] Run an offscreen render smoke test that produces:
+  - [x] RGB frames (required)
+  - [x] depth frames (strongly recommended; needed soon)
+  - [x] segmentation/instance IDs (recommended for debugging/evaluation)
+- [x] Export a short video artifact (e.g., 5–10 seconds) + a few sample images.
+- [x] Verify strict synchronization primitives exist conceptually:
+  - [x] same sim step -> same rendered frame index (alignment contract)
+- [x] Store artifacts with Phase 0.1 run naming conventions.
 
 ### Milestone (minimum satisfiable)
-- A headless run produces a short MP4 (or equivalent) + sample frames reliably on the lab PC.
+- [x] A headless run produces a short MP4 (or equivalent) + sample frames reliably on the lab PC.
+
+### Implementation notes
+- Core module: `sim/offscreen.py` — `RenderConfig`, `RenderedFrame`, `render_frame`, `render_trajectory`, `save_video`, `save_sample_frames`
+- Validation: `python scripts/validate_offscreen.py` (6-check script)
+- Tests: `pytest tests/test_offscreen.py -v` (24 tests)
+- Dependency: `imageio[ffmpeg]>=2.31.0` added to `sim` and `dev` groups
+- Named camera `overhead` added to `test_scene.xml` for reliable offscreen rendering
+- Key detail: `mj_forward()` must be called before rendering to compute lighting
 
 ---
 
@@ -99,26 +107,34 @@ Add a minimal smoke test suite for simulation that is fast and repeatable.
 This protects you from subtle regressions when you change assets, contacts, or rendering. It also signals “startup-grade engineering discipline”.
 
 ### Execution checklist
-- Create 3 standardized tests:
+- [x] Create 3 standardized tests:
   1) **Step test:** N steps with stable dt, no NaNs, no explosions
   2) **Render test:** produce RGB (+ depth if enabled) deterministically
   3) **I/O test:** writes logs/artifacts to the correct directory layout
-- Define pass/fail metrics:
-  - max penetration threshold (if measurable)
-  - no unstable energy blow-ups
+- [x] Define pass/fail metrics:
+  - max penetration threshold (5 cm)
+  - energy bound (1000 J)
   - render returns correct shapes and non-empty frames
-- Integrate with Phase 0.1 conventions:
+- [x] Integrate with Phase 0.1 conventions:
   - log seed + config snapshot
-  - attach artifacts to W&B/MLflow if that’s your standard
+  - attach artifacts to W&B (opt-in via `WANDB_MODE=online`)
 
 ### Milestone (minimum satisfiable)
-- One command runs all smoke tests and generates artifacts + logs with consistent naming.
+- [x] One command runs all smoke tests and generates artifacts + logs with consistent naming.
+
+### Implementation notes
+- Pytest suite: `pytest -m smoke -v` or `pytest tests/test_sim_smoke.py -v` (12 tests)
+- Standalone script: `python scripts/validate_sim_smoke.py` (3 categories, artifacts to `logs/sim_smoke/`)
+- Pass/fail thresholds: max penetration 5 cm, energy bound 1000 J, no NaN, finite qpos
+- `smoke` marker registered in `tests/conftest.py`
+- W&B: set `WANDB_MODE=online` to attach video/frames/metadata as artifacts
+- Artifacts: `logs/sim_smoke/smoke_video.mp4`, `logs/sim_smoke/frames/*.png`, `logs/sim_smoke/sim_smoke_meta.json`
 
 ---
 
 ## 0.2.5 — Asset Pathing & Loader Contract (Pre-Phase 1.1 enabler)
 ### What we will do
-Lock a strict contract for how assets (MJCF + meshes + textures) are stored and referenced, so loading the H1 model is predictable.
+Lock a strict contract for how assets (MJCF + meshes + textures) are stored and referenced, so loading the Alex model is predictable.
 
 ### Why this matters
 The most common failure mode in robotics sim work is “broken mesh paths / wrong scaling / inconsistent frames”. A loader contract prevents repeated friction.
@@ -132,10 +148,19 @@ The most common failure mode in robotics sim work is “broken mesh paths / wron
   - suspicious scaling factors
 - Create a minimal “asset load test” that loads:
   - floor + light + one test body
-  - then the H1 MJCF (in Phase 1.1)
+  - then the Alex MJCF (in Phase 1.1)
 
 ### Milestone (minimum satisfiable)
 - Assets are loadable via a single entrypoint with zero missing-path errors.
+
+### Implementation notes
+- Canonical layout: `sim/assets/scenes/` (MJCF scenes), `sim/assets/robots/<name>/` (robot models with meshes/textures), `sim/assets/shared/` (future shared materials)
+- Core module: `sim/asset_loader.py` — `load_scene("test_scene")` as single entrypoint, `resolve_scene_path()`, `resolve_robot_path()`
+- Linter module: `sim/asset_linter.py` — `lint_mjcf()` checks absolute paths, missing files, suspicious scales
+- CLI: `vla-lint-assets` console script (`sim/asset_linter_cli.py`)
+- Validation: `python scripts/validate_assets.py` (4-check script, artifacts to `logs/`)
+- Tests: `pytest tests/test_asset_loader.py -v` (directory layout, loader, linter)
+- `test_scene.xml` moved from `sim/assets/` to `sim/assets/scenes/`
 
 ---
 
@@ -166,5 +191,5 @@ Phase 0.2 is complete when:
 - Lab PC supports **interactive viewer** for fast debugging.
 - Lab PC supports **headless offscreen rendering** and exports artifacts reliably.
 - A **push-button sim smoke test suite** exists and aligns with Phase 0.1 reproducibility standards.
-- Asset paths and loader contract are defined (ready to load Unitree H1 in Phase 1.1).
+- Asset paths and loader contract are defined (ready to load IHMC Alex in Phase 1.1).
 - Cluster can run a headless sim smoke job (render + save) using existing Phase 0.1 infrastructure.

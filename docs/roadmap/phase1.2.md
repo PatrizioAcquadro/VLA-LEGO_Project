@@ -1,9 +1,9 @@
 # Phase 1.2 — LEGO Environment Creation (5 days)
-**Goal:** Build a MuJoCo LEGO assembly environment that is **real-world-relevant for Unitree H1**, supports **contact-rich press-fit behavior (soft-realism)**, is **stable enough to generate large-scale datasets**, and is **engineered to a startup-grade standard** (reproducible, measurable, scalable, debuggable).
+**Goal:** Build a MuJoCo LEGO assembly environment that is **real-world-relevant for IHMC Alex**, supports **contact-rich press-fit behavior (soft-realism)**, is **stable enough to generate large-scale datasets**, and is **engineered to a startup-grade standard** (reproducible, measurable, scalable, debuggable).
 
 **Fixed upstream decisions (from 1.1):**
 - **Sim engine:** MuJoCo (MJCF-first, code-first workflow; viewer for debugging)
-- **Robot:** Existing **Unitree H1** model (no proxy), **upper-body fixed-base**
+- **Robot:** Existing **IHMC Alex** model (no proxy), **upper-body fixed-base**
 - **Action:** 16-D **Δq** (bimanual 14) + **gripper** (2), policy rate ~20 Hz
 - **State:** core (q, q̇, gripper) + recommended (EE pose + EE velocity)
 - **Views:** 4 cameras from day 1 (overhead, wrist-L, wrist-R, third-person)
@@ -159,7 +159,7 @@ The baseplate anchors the entire assembly task. It defines the reference frame f
   - Use a visually accurate baseplate surface.
   - Implement studs as *press-fit compatible connector geometry* (consistent with brick studs/tubes).
 - **Workspace layout**
-  - Define a stable workspace frame relative to H1 torso:
+  - Define a stable workspace frame relative to Alex torso:
     - baseplate pose
     - spawn regions
     - safety margins from robot self-collision
@@ -196,9 +196,9 @@ Startups care about **data** and **measurement**. Capturing richer modalities ea
 - **Segmentation / instance IDs** (debug + evaluation + potential auxiliary losses)
 
 **Camera set (frozen):**
-1) Overhead / workspace  
-2) Left wrist  
-3) Right wrist  
+1) Overhead / workspace
+2) Left wrist
+3) Right wrist
 4) Third-person
 
 **Resolution & rate (balanced high-quality, not wasteful)**
