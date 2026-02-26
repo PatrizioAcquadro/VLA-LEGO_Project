@@ -250,7 +250,8 @@ class TestRenderTrajectory:
             results.append([f.rgb for f in frames])
 
         for a, b in zip(results[0], results[1], strict=True):
-            assert np.array_equal(a, b)
+            # atol=1 allows for GPU-accelerated renderer (EGL) rounding jitter
+            assert np.allclose(a, b, atol=1)
 
 
 @pytest.mark.mujoco

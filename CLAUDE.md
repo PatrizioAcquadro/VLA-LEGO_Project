@@ -60,6 +60,7 @@ python scripts/validate_configs.py                         # validate Hydra conf
 ```bash
 sbatch infra/gilbreth/job_templates/01_smoke_1gpu.sh       # single GPU test
 sbatch infra/gilbreth/job_templates/04_smoke_8gpu_deepspeed.sh  # multi-node
+sbatch infra/gilbreth/job_templates/06_smoke_sim_headless.sh   # headless sim smoke test
 ```
 
 ## Architecture
@@ -131,7 +132,15 @@ When any task requires visual verification in MuJoCo (new asset, changed collisi
 - `tests/test_sim_smoke.py` - pytest suite (`@pytest.mark.smoke` + `@pytest.mark.mujoco`)
 - `scripts/validate_sim_smoke.py` - standalone script, artifacts to `logs/sim_smoke/`
 - Thresholds: max penetration 5 cm (`data.contact[i].dist`), energy < 1000 J, no NaN
+- Render determinism uses `np.allclose(atol=1)` — allows ±1 pixel-value jitter from GPU (EGL) rasteriser
 - Set `WANDB_MODE=online` before running `validate_sim_smoke.py` to attach artifacts to W&B
+
+### Cluster Simulation Smoke
+- `infra/gilbreth/job_templates/06_smoke_sim_headless.sh` - SLURM job for headless sim on Gilbreth
+- Uses `MUJOCO_GL=egl` (NVIDIA EGL on GPU nodes); Apptainer container uses `osmesa` as fallback
+- First run on a fresh conda env will `pip install mujoco imageio[ffmpeg]` automatically
+- Artifacts land in `logs/sim_smoke/` (symlinked to scratch)
+- **ThinLinc policy**: no GUI on cluster by default (headless artifacts only). Use ThinLinc only if a visual bug cannot be diagnosed from saved videos/frames
 
 ### Asset Layout
 ```
