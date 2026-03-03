@@ -142,7 +142,7 @@ def artifact_3_ezgripper(model: mujoco.MjModel) -> None:
 
     try:
         # 3 open/close cycles
-        for cycle in range(3):
+        for _ in range(3):
             # Open
             left_ee.set_grasp(1.0)
             right_ee.set_grasp(1.0)
@@ -221,7 +221,7 @@ def artifact_4_action_space(model: mujoco.MjModel) -> None:
 def artifact_5_robot_state(model: mujoco.MjModel) -> None:
     """Extract and log robot state at several poses."""
     print("\n[5/7] Robot state extraction")
-    from sim.robot_state import AlexRobotState, STATE_DIM
+    from sim.robot_state import STATE_DIM, AlexRobotState
 
     subdir = OUT_DIR / "05_robot_state"
     subdir.mkdir(parents=True, exist_ok=True)
@@ -268,7 +268,7 @@ def artifact_5_robot_state(model: mujoco.MjModel) -> None:
 def artifact_6_multiview(model: mujoco.MjModel) -> None:
     """Synchronized dual-camera captures at rest pose."""
     print("\n[6/7] Multi-view synchronized captures")
-    from sim.camera import MultiViewRenderer, CAMERA_NAMES, NUM_VIEWS
+    from sim.camera import CAMERA_NAMES, NUM_VIEWS, MultiViewRenderer
 
     subdir = OUT_DIR / "06_multiview"
 
