@@ -201,9 +201,7 @@ class AlexActionSpace:
     # Normalization
     # ------------------------------------------------------------------
 
-    def denormalize(
-        self, action: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray]:
+    def denormalize(self, action: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Convert a normalized 17-D action to (arm_delta_q, gripper_cmd).
 
         Args:
@@ -270,9 +268,7 @@ class AlexActionSpace:
         arm_delta_q, gripper_cmd = self.denormalize(action)
 
         # Current arm joint positions
-        current_arm_q = np.array(
-            [data.qpos[j] for j in self._arm_jnt_ids], dtype=np.float64
-        )
+        current_arm_q = np.array([data.qpos[j] for j in self._arm_jnt_ids], dtype=np.float64)
 
         # Arm targets: current + delta, clamped to joint limits
         arm_target = current_arm_q + arm_delta_q
@@ -303,11 +299,7 @@ class AlexActionSpace:
             Array of shape ``(17,)`` — first 15 are arm joint positions
             (radians), last 2 are gripper states in ``[0, 1]``.
         """
-        arm_q = np.array(
-            [data.qpos[j] for j in self._arm_jnt_ids], dtype=np.float64
-        )
-        gripper_q = np.array(
-            [data.qpos[j] for j in self._gripper_jnt_ids], dtype=np.float64
-        )
+        arm_q = np.array([data.qpos[j] for j in self._arm_jnt_ids], dtype=np.float64)
+        gripper_q = np.array([data.qpos[j] for j in self._gripper_jnt_ids], dtype=np.float64)
         gripper_state = np.clip(gripper_q / EZGRIPPER_JOINT_RANGE_HI, 0.0, 1.0)
         return np.concatenate([arm_q, gripper_state])

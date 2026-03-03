@@ -121,9 +121,7 @@ def artifact_2_gravity_settle(model: mujoco.MjModel) -> None:
     data = mujoco.MjData(model)
     data.ctrl[:] = 0.0  # PD targets at home
 
-    frames = render_trajectory_cam(
-        model, data, "third_person", n_steps=2500, render_every=5
-    )
+    frames = render_trajectory_cam(model, data, "third_person", n_steps=2500, render_every=5)
     save_video(frames, OUT_DIR / "02_gravity_settle" / "gravity_settle.mp4")
 
 
@@ -187,8 +185,9 @@ def artifact_4_action_space(model: mujoco.MjModel) -> None:
         for tick in range(200):
             # Small random actions (arm in [-0.3, 0.3], grippers oscillate)
             arm_action = rng.uniform(-0.3, 0.3, size=15)
-            gripper_action = np.array([0.5 + 0.5 * np.sin(tick * 0.1),
-                                       0.5 + 0.5 * np.sin(tick * 0.1 + np.pi)])
+            gripper_action = np.array(
+                [0.5 + 0.5 * np.sin(tick * 0.1), 0.5 + 0.5 * np.sin(tick * 0.1 + np.pi)]
+            )
             action = np.concatenate([arm_action, gripper_action])
             state = runner.step(action)
 
@@ -255,8 +254,10 @@ def artifact_5_robot_state(model: mujoco.MjModel) -> None:
             "valid": len(rs.validate()) == 0,
         }
         warnings = states[pose_name]["warnings"]
-        print(f"  {pose_name}: state_dim={len(flat)}, valid={states[pose_name]['valid']}"
-              + (f", warnings={warnings}" if warnings else ""))
+        print(
+            f"  {pose_name}: state_dim={len(flat)}, valid={states[pose_name]['valid']}"
+            + (f", warnings={warnings}" if warnings else "")
+        )
         print(f"    left_ee_pos={rs.left_ee_pos.round(4).tolist()}")
         print(f"    right_ee_pos={rs.right_ee_pos.round(4).tolist()}")
 
@@ -302,8 +303,7 @@ def artifact_6_multiview(model: mujoco.MjModel) -> None:
         mujoco.mj_resetDataKeyframe(model, data2, key_id)
 
     cam_ids = {
-        name: mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, name)
-        for name in CAMERA_NAMES
+        name: mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, name) for name in CAMERA_NAMES
     }
     renderer = mujoco.Renderer(model, height=240, width=320)
     side_by_side_frames: list[np.ndarray] = []
@@ -381,9 +381,7 @@ def artifact_7_grasp_scene(model_grasp: mujoco.MjModel) -> None:
                 frames.append(renderer.render().copy())
 
         # Save a closeup if available
-        grasp_cam = mujoco.mj_name2id(
-            model_grasp, mujoco.mjtObj.mjOBJ_CAMERA, "grasp_closeup"
-        )
+        grasp_cam = mujoco.mj_name2id(model_grasp, mujoco.mjtObj.mjOBJ_CAMERA, "grasp_closeup")
         if grasp_cam >= 0:
             mujoco.mj_forward(model_grasp, data)
             renderer.update_scene(data, grasp_cam)

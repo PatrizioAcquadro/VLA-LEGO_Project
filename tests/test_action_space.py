@@ -88,16 +88,12 @@ class TestActionSpaceContract:
     def test_arm_joint_ordering(self, alex_model) -> None:
         """Arm joint ordering matches the frozen canonical list."""
         for name in ARM_ACTUATOR_NAMES:
-            act_id = mujoco.mj_name2id(
-                alex_model, mujoco.mjtObj.mjOBJ_ACTUATOR, name
-            )
+            act_id = mujoco.mj_name2id(alex_model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
             assert act_id >= 0, f"Actuator '{name}' not found"
 
     def test_gripper_actuators_exist(self, alex_model) -> None:
         for name in GRIPPER_ACTUATOR_NAMES:
-            act_id = mujoco.mj_name2id(
-                alex_model, mujoco.mjtObj.mjOBJ_ACTUATOR, name
-            )
+            act_id = mujoco.mj_name2id(alex_model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
             assert act_id >= 0, f"Actuator '{name}' not found"
 
     def test_delta_q_max_positive(self, action_space: AlexActionSpace) -> None:
@@ -112,7 +108,9 @@ class TestActionSpaceContract:
             vel = JOINT_VELOCITY_LIMITS.get(jnt_name, 25.0)
             expected = vel * control_dt * DEFAULT_RATE_LIMIT_FACTOR
             np.testing.assert_allclose(
-                dqm[i], expected, atol=1e-10,
+                dqm[i],
+                expected,
+                atol=1e-10,
                 err_msg=f"delta_q_max mismatch for {act_name}",
             )
 
@@ -136,9 +134,7 @@ class TestActionSpaceContract:
 class TestNormalization:
     """Normalization / denormalization round-trip and semantics."""
 
-    def test_normalize_denormalize_roundtrip(
-        self, action_space: AlexActionSpace
-    ) -> None:
+    def test_normalize_denormalize_roundtrip(self, action_space: AlexActionSpace) -> None:
         rng = np.random.default_rng(42)
         delta_q = rng.uniform(-0.1, 0.1, size=ARM_DIM)
         gripper = rng.uniform(0, 1, size=GRIPPER_DIM)
@@ -166,9 +162,7 @@ class TestNormalization:
         np.testing.assert_allclose(delta_q, np.zeros(ARM_DIM))
         np.testing.assert_allclose(gripper, [0.0, 0.0])
 
-    def test_unit_action_equals_delta_q_max(
-        self, action_space: AlexActionSpace
-    ) -> None:
+    def test_unit_action_equals_delta_q_max(self, action_space: AlexActionSpace) -> None:
         action = np.ones(ACTION_DIM)
         delta_q, gripper = action_space.denormalize(action)
         np.testing.assert_allclose(delta_q, action_space.delta_q_max)
@@ -205,9 +199,7 @@ class TestApplyAction:
         # ctrl should be close to current qpos (zero delta)
         for i in range(alex_model.nu):
             jnt_id = alex_model.actuator_trnid[i, 0]
-            np.testing.assert_allclose(
-                fresh_data.ctrl[i], qpos_before[jnt_id], atol=1e-8
-            )
+            np.testing.assert_allclose(fresh_data.ctrl[i], qpos_before[jnt_id], atol=1e-8)
 
     def test_apply_action_changes_ctrl(
         self, alex_model, fresh_data, action_space: AlexActionSpace
@@ -220,14 +212,10 @@ class TestApplyAction:
         action_space.apply_action(action, fresh_data)
 
         # spine_z actuator (index 0) should have moved
-        spine_act_id = mujoco.mj_name2id(
-            alex_model, mujoco.mjtObj.mjOBJ_ACTUATOR, "spine_z"
-        )
+        spine_act_id = mujoco.mj_name2id(alex_model, mujoco.mjtObj.mjOBJ_ACTUATOR, "spine_z")
         assert fresh_data.ctrl[spine_act_id] != 0.0
 
-    def test_apply_action_respects_joint_limits(
-        self, alex_model, fresh_data
-    ) -> None:
+    def test_apply_action_respects_joint_limits(self, alex_model, fresh_data) -> None:
         """Target position stays within joint limits even with large deltas."""
         action_space = AlexActionSpace(alex_model)
         mujoco.mj_forward(alex_model, fresh_data)
@@ -244,12 +232,12 @@ class TestApplyAction:
         for i in range(alex_model.nu):
             jnt_id = alex_model.actuator_trnid[i, 0]
             lo, hi = alex_model.jnt_range[jnt_id]
-            assert fresh_data.ctrl[i] >= lo - 1e-6, (
-                f"ctrl[{i}] = {fresh_data.ctrl[i]} below limit {lo}"
-            )
-            assert fresh_data.ctrl[i] <= hi + 1e-6, (
-                f"ctrl[{i}] = {fresh_data.ctrl[i]} above limit {hi}"
-            )
+            assert (
+                fresh_data.ctrl[i] >= lo - 1e-6
+            ), f"ctrl[{i}] = {fresh_data.ctrl[i]} below limit {lo}"
+            assert (
+                fresh_data.ctrl[i] <= hi + 1e-6
+            ), f"ctrl[{i}] = {fresh_data.ctrl[i]} above limit {hi}"
 
     def test_gripper_action_independent(
         self, alex_model, fresh_data, action_space: AlexActionSpace
@@ -275,11 +263,11 @@ class TestApplyAction:
 
         # Arm actuators should be unchanged by gripper action
         for name in ARM_ACTUATOR_NAMES:
-            act_id = mujoco.mj_name2id(
-                alex_model, mujoco.mjtObj.mjOBJ_ACTUATOR, name
-            )
+            act_id = mujoco.mj_name2id(alex_model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
             np.testing.assert_allclose(
-                ctrl_grip_only[act_id], 0.0, atol=1e-8,
+                ctrl_grip_only[act_id],
+                0.0,
+                atol=1e-8,
                 err_msg=f"Gripper action affected arm actuator {name}",
             )
 
@@ -400,9 +388,9 @@ class TestActionChunks:
         t = np.linspace(0, 2 * np.pi, chunk_size)
         actions = np.zeros((chunk_size, ACTION_DIM))
         # Gentle sinusoidal motion on a few joints
-        actions[:, 0] = 0.3 * np.sin(t)         # spine
-        actions[:, 1] = 0.2 * np.sin(t + 0.5)   # left_shoulder_y
-        actions[:, 8] = 0.2 * np.sin(t + 0.5)   # right_shoulder_y
+        actions[:, 0] = 0.3 * np.sin(t)  # spine
+        actions[:, 1] = 0.2 * np.sin(t + 0.5)  # left_shoulder_y
+        actions[:, 8] = 0.2 * np.sin(t + 0.5)  # right_shoulder_y
 
         runner.step_sequence(actions)
 

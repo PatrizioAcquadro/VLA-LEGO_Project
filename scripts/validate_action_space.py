@@ -52,9 +52,7 @@ def print_contract(action_space: AlexActionSpace) -> None:
     print()
 
 
-def test_random_actions(
-    model: mujoco.MjModel, n_steps: int = 200, seed: int = 42
-) -> dict:
+def test_random_actions(model: mujoco.MjModel, n_steps: int = 200, seed: int = 42) -> dict:
     """Run random actions and report stability metrics."""
     print("-" * 70)
     print(f"Random action stability test ({n_steps} steps, seed={seed})")
@@ -184,9 +182,7 @@ def generate_video(model: mujoco.MjModel) -> None:
         # Render every 2 control steps (10 fps video)
         if step % 2 == 0:
             mujoco.mj_forward(model, data)
-            cam_id = mujoco.mj_name2id(
-                model, mujoco.mjtObj.mjOBJ_CAMERA, config.camera_name
-            )
+            cam_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, config.camera_name)
             renderer.update_scene(data, camera=cam_id)
             rgb = renderer.render()
             frames.append(RenderedFrame(rgb=rgb.copy(), step=step, time=data.time))
