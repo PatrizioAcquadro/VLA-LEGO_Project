@@ -42,6 +42,17 @@ class TestAssetDirectoryLayout:
 
         assert (SCENES_DIR / "test_scene.xml").exists()
 
+    def test_alex_scene_exists(self) -> None:
+        from sim.asset_loader import SCENES_DIR
+
+        assert (SCENES_DIR / "alex_upper_body.xml").exists()
+
+    def test_alex_robot_dir_exists(self) -> None:
+        from sim.asset_loader import ROBOTS_DIR
+
+        assert (ROBOTS_DIR / "alex").is_dir()
+        assert (ROBOTS_DIR / "alex" / "alex.xml").exists()
+
 
 # ---------------------------------------------------------------------------
 # B. load_scene entrypoint
@@ -127,6 +138,15 @@ class TestResolveRobotPath:
 
         with pytest.raises(FileNotFoundError):
             resolve_robot_path("nonexistent_robot")
+
+    def test_alex_robot_resolves(self) -> None:
+        """resolve_robot_path("alex") returns a valid path."""
+        from sim.asset_loader import resolve_robot_path
+
+        path = resolve_robot_path("alex")
+        assert path.is_absolute()
+        assert path.name == "alex.xml"
+        assert path.exists()
 
 
 # ---------------------------------------------------------------------------
