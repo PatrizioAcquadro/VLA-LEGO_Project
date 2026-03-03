@@ -32,6 +32,12 @@ vla-viewer sim/assets/scenes/test_scene.xml --show-contacts --show-joints      #
 python scripts/validate_offscreen.py                                           # headless rendering: video + frames
 python scripts/validate_sim_smoke.py                                           # physics + rendering smoke tests
 python scripts/validate_assets.py                                              # asset layout + linter + load test
+python scripts/validate_alex_model.py                                          # Alex model validation + video artifacts
+python scripts/validate_kinematics.py                                          # FK symmetry, workspace, joint axis validation
+ALEX_SDK_PATH=../ihmc-alex-sdk python scripts/validate_kinematics.py           # with reference FK comparison
+python scripts/validate_action_space.py                                        # action space contract + stability tests
+python scripts/validate_robot_state.py                                         # robot state contract + consistency tests
+python scripts/validate_cameras.py                                             # multi-view camera contract + sync tests
 vla-lint-assets                                                                # lint all MJCF files under sim/assets/
 ```
 
@@ -44,6 +50,11 @@ pytest -m "not slow and not gpu"    # skip slow/GPU tests
 pytest tests/test_mujoco.py -v      # MuJoCo sim tests
 pytest -m smoke -v                  # sim smoke tests
 pytest tests/test_asset_loader.py -v  # asset loader + linter tests
+pytest tests/test_alex_model.py -v   # Alex robot model tests
+pytest tests/test_ezgripper.py -v   # EZGripper integration tests
+pytest tests/test_action_space.py -v # action space + sim runner tests
+pytest tests/test_robot_state.py -v  # robot state contract tests
+pytest tests/test_cameras.py -v      # multi-view camera contract tests
 ```
 
 ### Code Quality
@@ -70,7 +81,7 @@ sbatch infra/gilbreth/job_templates/06_smoke_sim_headless.sh   # headless sim sm
 - **models/** - TransformerModel with MSE loss for state prediction
 - **train/** - Trainer class handling distributed training (DDP/DeepSpeed), checkpointing, validation
 - **data/** - DummyDataset (testing) and SimulationDataset (real data, stub)
-- **sim/** - MuJoCo simulation: `mujoco_env.py` (load/step/determinism), `env_meta.py` (metadata), `viewer.py` (interactive debug viewer), `offscreen.py` (headless rendering + video export), `asset_loader.py` (single entrypoint: `load_scene()`), `asset_linter.py` (MJCF validation), `assets/` (MJCF scenes + robot models)
+- **sim/** - MuJoCo simulation: `mujoco_env.py` (load/step/determinism), `env_meta.py` (metadata), `viewer.py` (interactive debug viewer), `offscreen.py` (headless rendering + video export), `asset_loader.py` (single entrypoint: `load_scene()`), `asset_linter.py` (MJCF validation), `control.py` (safety clamps, rate limiting, velocity/effort limits — `AlexController`), `end_effector.py` (`EndEffectorInterface` ABC + `EZGripperInterface` — gripper command abstraction), `action_space.py` (frozen 17-D action contract — `AlexActionSpace`, normalization, delta-q mapping), `robot_state.py` (frozen 52-D state contract — `AlexRobotState`, `RobotState` dataclass, normalization), `sim_runner.py` (fixed-rate control loop — `SimRunner`, 20 Hz with 25 substeps, returns `RobotState`), `camera.py` (frozen 2-view contract — `MultiViewRenderer`, synchronized dual-camera capture, `CameraMetadata`), `assets/` (MJCF scenes + robot models)
 - **eval/** - Evaluator class (entry point stub)
 - **tracking/** - W&B experiment tracking with distributed-safe logging, GPU monitoring, throughput metrics, run naming
 - **infra/gilbreth/** - SLURM job templates and HPC setup scripts
@@ -156,6 +167,81 @@ sim/assets/
 **Asset linting**: `vla-lint-assets` checks absolute paths (ERROR), missing referenced files (ERROR), and suspicious mesh scales (WARNING). Run before committing new/modified MJCF files.
 
 **Rule**: All file references in MJCF must be relative. The linter respects `<compiler meshdir="..." texturedir="...">` for path resolution.
+
+### Alex Robot Model (Phase 1.1)
+- **Source**: `ihmc-alex-sdk` commit `be25a395e35238bc6385a58bcc50aa047d936a25`. PROVENANCE.md in /sim/assets/robots/alex contains all details
+- **Files**: `sim/assets/robots/alex/alex.xml` + `meshes/` (16 OBJ + 3 STL)
+- **Scenes**: `alex_upper_body.xml` (robot + floor + cameras), `alex_grasp_test.xml` (robot + table + cube)
+- **23 joints** (15 arm + 8 EZGripper): `spine_z` + 7 per arm + 4 EZGripper per arm
+- **17 actuators** (15 arm + 2 EZGripper): one `{side}_ezgripper` actuator per hand
+- **Fixed base** (no freejoint), **fixed neck** (NECK_Z/Y removed)
+- **EE sites**: `left_ee_site`, `right_ee_site` (on gripper body)
+- **Tool frame sites**: `left_tool_frame`, `right_tool_frame` (on EZGripper palm, frozen reference)
+- **Cameras**: `robot_cam` (head-mounted), `overhead`, `third_person` (scene-level)
+- **Collision geoms**: Simplified capsules/boxes (group 3) alongside visual meshes (group 1)
+- **Include note**: When loading via `<include>`, the scene file sets `<compiler meshdir>` to resolve mesh paths relative to the robot directory.
+- **Dynamics (Phase 1.1.2)**:
+  - Integrator: `implicitfast`, solver: 50 iterations, timestep 0.002s
+  - Per-joint damping: proximal=2.0, mid=1.5, distal=0.5, gripper=0.3 Ns/rad
+  - Armature: 0.01 on arm joints, 0.005 on EZGripper joints
+  - Contact: `solref="0.005 1.0"` (critically damped); EZGripper finger pads: `friction="1.5 0.02 0.01"`
+  - Actuator `ctrlrange` clamped to joint range (`inheritrange="1"`)
+  - Keyframes: `home` (all zeros), `rest` (shoulders abducted, elbows bent), `open_grippers`
+- **EZGripper end-effectors (Phase 1.1.3)**:
+  - SAKE EZGripper Gen2 (Dynamixel MX-64AR), STL meshes from SAKE repo
+  - Underactuated: 4 joints per hand coupled via `<equality>` constraints (1:1 ratio)
+  - `gripper_cmd ∈ [0, 1]`: 0 = closed (joint=0), 1 = open (joint=1.94 rad)
+  - Command interface: `sim/end_effector.py` — `EZGripperInterface.set_grasp(cmd)`
+  - `EndEffectorInterface` ABC supports future Ability Hand (6-DoF) swap
+  - Adapter transform from IHMC URDF (`euler="3.14159 1.5708 0"`) — verified via FK symmetry (0.0 cm error, GO verdict)
+- **Kinematics validation (Phase 1.1.4)**:
+  - **Verdict: GO** — all Tier 1 checks pass, no axis flips or systematic offsets
+  - FK symmetry: 0.0000 cm max position error (perfect left/right mirror)
+  - Mirror mapping: Y-axis joints keep sign, X-axis and Z-axis joints negate sign
+  - Workspace covers LEGO table region (X∈[0.3,0.6], Y∈[-0.3,0.3], Z∈[0.8,1.2] m)
+  - All 14 arm joints verified kinematically active (position or orientation effect)
+  - Report: `docs/kinematics-validation-report.md`, script: `scripts/validate_kinematics.py`
+  - Tests: `tests/test_alex_model.py::TestAlexKinematics` (6 tests)
+  - Tier 2 (reference FK comparison vs SDK) available via `ALEX_SDK_PATH` env var
+- **Control pipeline** (`sim/control.py`):
+  - `AlexController`: safety clamps + rate limiting (80% of hardware velocity limit per timestep)
+  - `JOINT_VELOCITY_LIMITS`: per-joint velocity limits from URDF (rad/s); EZGripper: 6.6 rad/s
+  - `JOINT_EFFORT_LIMITS`: per-joint effort limits matching MJCF forcerange (N·m); EZGripper: 8.0 N·m
+- **Action space & control contract (Phase 1.1.5)**:
+  - **Frozen 17-D action vector**: `[Δq_spine(1), Δq_left_arm(7), Δq_right_arm(7), gripper_left(1), gripper_right(1)]`
+  - Per-arm joint order: SHOULDER_Y, SHOULDER_X, SHOULDER_Z, ELBOW_Y, WRIST_Z, WRIST_X, GRIPPER_Z
+  - Arm actions normalized to `[-1, 1]`, mapped to Δq via per-joint `delta_q_max = vel_limit * control_dt * 0.8`
+  - Gripper actions absolute `[0, 1]` (0=closed, 1=open)
+  - **Control rate**: 20 Hz (50 ms per action), 25 physics substeps per action (timestep 0.002s)
+  - **Pipeline**: `AlexActionSpace.apply_action()` denormalizes → computes target → `AlexController` clamps positions → `data.ctrl`
+  - `AlexActionSpace` disables `AlexController` rate limiting (`rate_limit_factor=0.0`) because normalization already bounds deltas
+  - `SimRunner.step(action)` applies action + runs 25 substeps; `step_sequence(actions)` for action chunks
+  - Config: `configs/sim/default.yaml` (control_hz, rate_limit_factor)
+  - Constants frozen in `sim/action_space.py`: `ACTION_DIM=17`, `ARM_DIM=15`, `GRIPPER_DIM=2`, `ARM_ACTUATOR_NAMES`
+  - `ARM_JOINT_NAMES` derived in `sim/robot_state.py` from `ARM_ACTUATOR_NAMES` (maps actuator names to joint names)
+- **Robot state contract (Phase 1.1.6)**:
+  - **Frozen 52-D state vector**: `[q(15), q_dot(15), gripper(2), left_ee_pos(3), left_ee_quat(4), right_ee_pos(3), right_ee_quat(4), left_ee_vel(3), right_ee_vel(3)]`
+  - Reference frame: World (Z-up, X-forward, Y-left); robot base fixed at [0, 0, 1.0]
+  - Quaternion convention: MuJoCo `[w, x, y, z]`
+  - EE sites: `left_tool_frame`, `right_tool_frame` (frozen reference on gripper palm)
+  - EE velocity via `mj_objectVelocity()` (MuJoCo-native, exact Jacobian method, world frame)
+  - Joint velocities via `data.qvel[model.jnt_dofadr[jnt_id]]` (DOF address, not joint ID)
+  - `AlexRobotState(model)`: extracts state from `MjData`, provides `get_state()` → `RobotState` dataclass, `get_flat_state()` → 52-D array
+  - `RobotState` dataclass: named fields + `to_flat_array()` / `from_flat_array()` / `validate()`
+  - Normalization: q min-max, q_dot by vel limits, gripper [0,1]→[-1,1], EE pos by workspace, EE quat pass-through, EE vel by max
+  - `SimRunner.step()` now returns `RobotState`; `SimRunner.get_state()` for on-demand extraction
+  - Config: `configs/sim/default.yaml` `state:` section (dims, EE sites, frame, normalization, workspace bounds)
+  - Constants frozen in `sim/robot_state.py`: `STATE_DIM=52`, `Q_DIM=15`, `Q_DOT_DIM=15`, `GRIPPER_STATE_DIM=2`, `EE_POSE_DIM=14`, `EE_VEL_DIM=6`, named slices
+- **Multi-view cameras (Phase 1.1.7)**:
+  - **Frozen 2-view contract**: `robot_cam` (head-mounted ego, moves with spine_z) + `third_person` (fixed external)
+  - Default resolution: 320x240, capture rate: 20 Hz (aligned with policy rate)
+  - `MultiViewRenderer(model)`: renders all frozen views from same sim timestep via single shared `mujoco.Renderer`
+  - `MultiViewFrame`: dataclass with `views: dict[str, RenderedFrame]`, `step_index`, `timestamp`
+  - `CameraMetadata`: fovy, world-frame pos/mat via `data.cam_xpos`/`data.cam_xmat` (live for body-attached cameras)
+  - Images decoupled from 52-D `RobotState` — separate rendering pipeline, no changes to state contract or `SimRunner`
+  - Reuses `sim/offscreen.py` functions (`render_frame`, `resolve_camera_id`, etc.) — no modifications to offscreen module
+  - Config: `configs/sim/default.yaml` `camera:` section (views, resolution, capture_hz, depth/segmentation toggles)
+  - Constants frozen in `sim/camera.py`: `CAMERA_NAMES`, `NUM_VIEWS=2`, `DEFAULT_WIDTH=320`, `DEFAULT_HEIGHT=240`
 
 ## Code Style
 

@@ -1,50 +1,65 @@
 # Phase 1.1 — Robot Model Integration (4 days)
-**Goal:** Deliver a stable, reproducible, and Alex-compatible *upper-body fixed-base* robot model in MuJoCo, with functional bimanual grippers, a finalized action/state contract for VLA training, and a kinematics validation report that proves compatibility with the target Alex configuration.
+**Goal:** Deliver a stable, reproducible, and Alex-compatible *upper-body fixed-base* robot model in MuJoCo, with functional bimanual end-effectors (SAKE EZGripper), a finalized action/state contract for VLA training, and a kinematics validation report that proves compatibility with the target Alex configuration.
+
+# Repo
+https://github.com/ihmcrobotics/ihmc-alex-sdk
+
+# File path inside repo
+alex-models/alex_V1_description/mjcf/alex_v1_full_body_nub_forearms_mjx.xml
 
 **Fixed decisions (frozen for 1.1+):**
 - **Sim engine:** MuJoCo (MJCF-first workflow; code-first + viewer for debugging).
-- **Robot asset:** Existing **IHMC Alex** model (no proxy).
+- **Robot asset:** Existing **IHMC Alex** model from `ihmc-alex-sdk` (no proxy).
 - **Scope:** **Upper-body fixed-base** (no locomotion/floating base in 1.x).
 - **Alex compatibility target:** **Level 2+** (full kinematic compatibility + realistic limits/saturations; partial dynamics realism where impactful).
+- **End-effectors:** **SAKE EZGripper** (1D grasp signal) initially; abstraction layer for future PSYONIC Ability Hand swap.
 - **Action space:** **Δq joint deltas** for bimanual arms + gripper commands.
 - **Robot state:** Core required + recommended kinematic signals (see Section 5).
-- **Views:** **4 cameras from day 1** (overhead + wrist-L + wrist-R + third-person).
+- **Views:** **2 cameras from day 1** (robot camera + third-person).
 
 ---
 
-## 1) Import/Create Bimanual Robot URDF/MJCF
+## 1) Import/Create Bimanual Robot URDF/MJCF ✅
 ### What we will do
-Integrate the existing IHMC Alex asset into MuJoCo as an *upper-body fixed-base* bimanual robot, ensuring it loads reliably, simulates stably, and exposes consistent frames and signals for downstream VLA training.
+Integrate the existing IHMC Alex V1 asset into MuJoCo as an *upper-body fixed-base* bimanual robot, starting from the existing MJCF files in `ihmc-alex-sdk`. Strip lower-body joints and fix the head, keeping the torso rotation active.
 
 ### Why this matters
 All downstream phases (multi-view data generation, action learning, sim-to-real) depend on a single “source of truth” robot model that is stable, versioned, and structurally consistent with Alex.
 
 ### Execution checklist
 - **Asset ingestion**
-  - Identify and pin a single authoritative Alex model version (commit hash / release tag).
-  - Convert to **MJCF** if necessary (MJCF-first is the final truth).
-  - Remove or disable unused full-body components for 1.x (legs/locomotion) *without breaking arm kinematics*.
+  - ✅ Identify and pin a single authoritative Alex V1 model version (commit hash / release tag) from `ihmc-alex-sdk`. → `be25a395e35238bc6385a58bcc50aa047d936a25`
+  - ✅ Starting model: `alex_v1_full_body_mjx.xml` (full-body variant with wrist joints, NOT nub_forearms). EZGripper will be added in Section 3.
+  - ✅ Strip lower-body joints (12 joints: LEFT/RIGHT_HIP_X/Z/Y, KNEE_Y, ANKLE_Y/X).
+  - ✅ Fix NECK_Z and NECK_Y joints at a default head pose (head camera is static).
+  - ✅ Keep **SPINE_Z** (torso rotation) active — useful for bimanual reach.
 - **Upper-body fixed-base setup**
-  - Define a fixed root/body for the torso (no floating base).
-  - Confirm base frame orientation conventions (world axes, base frame axes).
+  - ✅ Define a fixed root/body for the torso (no floating base). Base at z=1.0m.
+  - ✅ Confirm base frame orientation conventions (world Z-up, base frame at pelvis).
 - **Geometry & collision strategy**
-  - Keep **visual meshes** for realism/debug.
-  - Use **simplified collision geoms** (capsules/boxes) for stability.
-  - Define/verify self-collision policy (enable only where needed; exclude unstable pairs).
+  - ✅ Keep **visual meshes** for realism/debug (group 1, contype=0).
+  - ✅ Use **simplified collision geoms** (capsules/boxes/sphere, group 3) for stability.
+  - ✅ Define/verify self-collision policy (adjacent pairs excluded; cross-arm enabled).
 - **Frames & naming contract**
-  - Freeze canonical names for:
-    - base/torso frame
-    - left/right arm joint names
-    - left/right end-effector frames (tool frames)
-    - camera mount frames (workspace, wrists, third-person)
-  - Verify quaternion convention is consistent across logging and model usage.
+  - ✅ Freeze canonical names for Alex joints (lowercase MuJoCo convention):
+    - base_link/torso frame, spine_z
+    - left arm: left_shoulder_y/x/z, left_elbow_y, left_wrist_z/x, left_gripper_z
+    - right arm: right_shoulder_y/x/z, right_elbow_y, right_wrist_z/x, right_gripper_z
+    - ✅ left/right end-effector sites (left_ee_site, right_ee_site)
+    - ✅ camera mount: robot_cam (head-mounted), overhead + third_person (scene-level)
+  - Quaternion convention: MuJoCo default (w, x, y, z). EE quaternions available via `framequat` sensors.
 
 ### Milestone (minimum success criteria)
-- Robot model loads in MuJoCo reliably (no missing assets), runs **10 seconds** without catastrophic instability, and has frozen joint ordering + named EE frames suitable for dataset logging.
+- ✅ Robot model loads in MuJoCo reliably (no missing assets), runs **10 seconds** without catastrophic instability, and has frozen joint ordering + named EE frames suitable for dataset logging.
+
+### Implementation notes
+- Source MJCF used SDK row-major `fullinertia` format (Ixx,Ixy,Ixz,Iyy,Iyz,Izz); converted to MuJoCo format (Ixx,Iyy,Izz,Ixy,Ixz,Iyz) with `balanceinertia=”true”` for triangle inequality compliance.
+- GRIPPER_Z joints added (exist in URDF but absent from source MJCF).
+- Mesh paths are explicit relative (`meshes/filename.obj`) for `<include>` compatibility; scene file sets `<compiler meshdir>` to resolve correctly.
 
 ---
 
-## 2) Configure Joint Limits & Dynamics Parameters (Level 2+ realism)
+## 2) Configure Joint Limits & Dynamics Parameters (Level 2+ realism) ✅
 ### What we will do
 Set joint limits, velocity limits, actuator constraints, and minimal-but-impactful dynamic parameters (damping/friction/armature) to make the robot numerically stable and physically plausible for contact-rich LEGO manipulation.
 
@@ -53,58 +68,74 @@ LEGO assembly is sensitive to small instabilities. Incorrect limits or poorly co
 
 ### Execution checklist
 - **Joint limits (kinematic correctness)**
-  - Populate min/max joint ranges for both arms (verify sign conventions left vs right).
-  - Validate that the “home pose” is consistent and collision-free.
-  - Add soft safety clamps in the control pipeline (separate from physics constraints).
+  - ✅ Source limits directly from Alex V1 URDF (already contains measured values for effort, velocity, and range per joint). Cross-reference with `hardware/` specs in `ihmc-alex-sdk`.
+  - ✅ Populate min/max joint ranges for SPINE_Z + both arms (verify sign conventions left vs right).
+  - ✅ Validate that the “home pose” is consistent and collision-free.
+  - ✅ Add soft safety clamps in the control pipeline (separate from physics constraints). → `sim/control.py`
 - **Velocity/acceleration constraints (realism + safety)**
-  - Define joint velocity limits (and an implied acceleration limit via smoothing/rate limiting).
-  - Enforce rate limits for commanded targets (avoid discontinuous jumps).
+  - ✅ Define joint velocity limits from URDF `velocity` attribute (and an implied acceleration limit via smoothing/rate limiting). → `JOINT_VELOCITY_LIMITS` in `sim/control.py`
+  - ✅ Enforce rate limits for commanded targets (avoid discontinuous jumps). → `AlexController.apply()` in `sim/control.py`
 - **Actuation constraints (Level 2+ dynamic realism)**
-  - Define actuator `ctrlrange` and plausible saturation behavior.
-  - Introduce conservative torque/effort caps (even if policy outputs Δq).
+  - ✅ Define actuator `ctrlrange` and plausible saturation behavior, sourcing effort limits from URDF `effort` attribute. → `inheritrange=”1”` (clamp to joint range)
+  - ✅ Introduce conservative torque/effort caps (even if policy outputs Δq). → `forcerange` on all actuators
 - **Numerical stabilization**
-  - Add joint damping/friction terms to reduce oscillations and improve settle behavior.
-  - Use armature / inertial stabilization parameters if needed.
-  - Ensure contact solver settings are stable for high-friction fingertip contact.
+  - ✅ Use damping/friction values from URDF as starting point (Alex URDF specifies per-joint damping). Per-joint-group tiered values.
+  - ✅ Use armature / inertial stabilization parameters if needed. → `armature=”0.01”` on all joints incl. spine.
+  - ✅ Ensure contact solver settings are stable for high-friction EZGripper fingertip contact. → `iterations=50`, `implicitfast` integrator, `solref`/`solimp` on collision geoms.
 - **Sanity tests**
-  - Drop/settle test in neutral pose (no explosions).
-  - Hold-pose test under PD (no persistent drift/jitter).
-  - Joint sweep test (each joint traverses part of its range stably).
+  - ✅ Drop/settle test in neutral pose (no explosions).
+  - ✅ Hold-pose test under PD (no persistent drift/jitter). → `TestAlexHoldPose`
+  - ✅ Joint sweep test (each joint traverses part of its range stably). → `TestAlexJointSweep`
 
 ### Milestone (minimum success criteria)
-- Robot remains stable under gravity and simple PD holding.
-- Joint motion respects limits and saturations.
-- No persistent high-frequency jitter in a static pose.
-- Joint sweep passes without self-collision blow-ups.
+- ✅ Robot remains stable under gravity and simple PD holding.
+- ✅ Joint motion respects limits and saturations.
+- ✅ No persistent high-frequency jitter in a static pose.
+- ✅ Joint sweep passes without self-collision blow-ups.
+
+### Implementation notes
+- **Integrator**: `implicitfast` (unconditionally stable, handles damping implicitly). Replaced Euler with `eulerdamp=”disable”`.
+- **Solver**: 50 iterations, 10 ls_iterations (up from 3/5) for contact-rich stability.
+- **Per-joint damping**: Proximal joints (spine, shoulders) = 2.0 Ns/rad, mid-chain (shoulder_z, elbow) = 1.5, distal (wrists) = 0.5, gripper = 0.3.
+- **Contact params**: `solref=”0.005 1.0”` (critically damped, 5ms), `solimp=”0.9 0.95 0.001 0.5 2”` (near-rigid).
+- **URDF velocity limits**: spine/shoulder_y/x = 9.0 rad/s, shoulder_z/elbow = 11.5, wrist/gripper = 25.0.
+- **URDF effort limits**: spine/shoulder_y = 150 N·m, shoulder_x = 100 (conservative), shoulder_z/elbow = 80, wrist/gripper = 20.
+- **Right arm URDF**: Has placeholder effort/velocity values (1000/100); left arm values used for both sides.
+- **Control pipeline**: `sim/control.py` provides `AlexController` with rate limiting at 80% of hardware velocity limit per timestep.
 
 ---
 
-## 3) Set Up Gripper Models (Parallel Jaw) — Functional Bimanual End-Effectors
+## 3) Set Up End-Effector Models (SAKE EZGripper + Abstraction Layer)
 ### What we will do
-Implement **parallel-jaw** grippers (1-DoF open/close) for both arms, with stable contacts and a future-proof command interface that can later map to the Alex real end-effector implementation.
+Integrate **SAKE EZGripper** end-effectors for both arms into the Alex MuJoCo model, starting from the existing "nub forearms" MJCF and the EZGripper URDF adapters in `ihmc-alex-sdk`. Design an abstracted command interface that can later be swapped for the **PSYONIC Ability Hand** (6-DoF dexterous hand) without changing the upstream action contract.
 
 ### Why this matters
-Without reliable grasping, you cannot generate meaningful LEGO datasets or demonstrate bimanual assembly. A simple, stable gripper beats a complex hand early on.
+Without reliable grasping, you cannot generate meaningful LEGO datasets or demonstrate bimanual assembly. Using the real Alex end-effectors (EZGripper) from day one ensures sim-to-real alignment and avoids training on a gripper geometry that doesn't exist on the real robot.
 
 ### Execution checklist
-- **Gripper mechanical model**
-  - Implement 1-DoF gripper width per arm (open/close).
-  - Ensure left/right grippers share the same semantics and scaling.
+- **EZGripper integration into MJCF**
+  - Convert EZGripper URDF adapter (`alex_v1.leftEZGripperAdapter.urdf` / `alex_v1.rightEZGripperAdapter.urdf`) to MJCF elements.
+  - Attach to the "nub forearm" model, replacing the nub termination with EZGripper geometry.
+  - Ensure left/right end-effectors share the same semantics and scaling.
 - **Contact geometry**
-  - Use collision primitives for fingertips (avoid mesh collisions).
-  - Set friction/contact parameters to support non-slipping grasps (tunable but stable defaults).
+  - Use collision primitives for EZGripper finger pads (30mm × 50mm pads; avoid mesh collisions).
+  - Set friction/contact parameters to support non-slipping grasps, accounting for EZGripper's underactuated compliance.
 - **Command interface (frozen)**
-  - Define `gripper_cmd ∈ [0, 1]` per arm: 0 = closed, 1 = open.
+  - Define `gripper_cmd ∈ [0, 1]` per arm: 0 = closed, 1 = open (maps to EZGripper's Dynamixel servo 0–180° range).
   - Define optional `gripper_force_limit` parameter (may be static in 1.1).
-  - Freeze a `tool_frame` per gripper for EE pose logging.
+  - Freeze a `tool_frame` per end-effector for EE pose logging.
+- **Abstraction layer (future-proofing)**
+  - Design an `EndEffectorInterface` abstraction so the Ability Hand (6-DoF, 5 individually actuated fingers) can replace EZGripper later without changing the upstream action/state contracts.
+  - Document the mapping: EZGripper uses 1D grasp signal; Ability Hand would expand to 6+ DoF (future Phase).
 - **Grasp sanity tests**
-  - Grasp a simple cube/brick proxy reliably.
+  - Grasp a simple cube/brick proxy reliably with EZGripper geometry.
   - Lift and hold object for several seconds without explosive contacts.
   - Repeat open/close cycles without accumulating instability.
 
 ### Milestone (minimum success criteria)
-- Both grippers open/close stably and can execute a repeatable grasp+lift on a simple object in sim.
-- Gripper command semantics and tool frames are frozen.
+- Both EZGrippers open/close stably and can execute a repeatable grasp+lift on a simple object in sim.
+- End-effector command semantics and tool frames are frozen.
+- Abstraction layer documented for future Ability Hand integration.
 
 ---
 
@@ -117,7 +148,7 @@ This is your proof that the sim robot is not a “proxy”. It protects the proj
 
 ### Execution checklist
 - **Define the kinematic reference**
-  - Use the pinned Alex model definition as the reference (same model family / authoritative source).
+  - Use the pinned Alex model definition as the reference (from `ihmc-alex-sdk`).
   - Freeze EE frame definitions used for comparison.
 - **FK consistency tests**
   - Sample N (e.g., 50–200) random joint configurations within limits for each arm.
@@ -150,7 +181,8 @@ Your entire learning system (dataset, policy output head, chunking, evaluation) 
 
 ### Execution checklist
 - **Action vector definition (frozen)**
-  - `action = [Δq_left(7), Δq_right(7), gripper_left(1), gripper_right(1)]` → **16-D**
+  - `action = [Δq_spine(1), Δq_left(7), Δq_right(7), gripper_left(1), gripper_right(1)]` → **17-D**
+  - Alex joint ordering per arm (7 DoF): SHOULDER_Y, SHOULDER_X, SHOULDER_Z, ELBOW_Y, WRIST_Z, WRIST_X, GRIPPER_Z
   - Normalize action to a fixed range (e.g., [-1, 1]) and map to Δq via `Δq_max` per joint.
 - **Control rate and substepping**
   - Policy/control rate: **20 Hz** (one action per 50 ms).
@@ -181,8 +213,8 @@ A stable and informative state representation improves learning efficiency, supp
 
 ### State definition (frozen for dataset + training)
 **Core (required):**
-- Joint positions: `q` (both arms)
-- Joint velocities: `q_dot` (both arms)
+- Joint positions: `q` (SPINE_Z + both arms)
+- Joint velocities: `q_dot` (SPINE_Z + both arms)
 - Gripper state: `gripper_width` or `gripper_cmd` (left/right)
 
 **Recommended (included as requested):**
@@ -195,7 +227,7 @@ A stable and informative state representation improves learning efficiency, supp
 - State normalization ranges are documented (clip ranges and scaling).
 
 ### Execution checklist
-- Implement extraction of q, q̇, gripper signals each step.
+- Implement extraction of q, q̇ (SPINE_Z + both arms), gripper signals each step.
 - Implement FK-based EE pose computation each step.
 - Implement EE velocity computation (finite differences or simulator-provided).
 - Validate state consistency:
@@ -210,32 +242,30 @@ A stable and informative state representation improves learning efficiency, supp
 
 ---
 
-## 7) Multi-View Cameras (4 Views from Day 1)
+## 7) Multi-View Cameras (2 Views from Day 1)
 ### What we will do
-Set up four synchronized camera streams in MuJoCo for data generation and policy inputs, aligned with the LEGO assembly task requirements.
+Set up two synchronized camera streams in MuJoCo for data generation and policy inputs, aligned with the LEGO assembly task requirements.
 
 ### Why this matters
-Bimanual LEGO assembly requires both global context and local precision views. Multi-view inputs also strengthen generalization and make demos more compelling for industrial evaluation.
+Bimanual LEGO assembly requires both an ego-centric robot perspective and an external observation view. Multi-view inputs strengthen generalization and make demos more compelling for industrial evaluation.
 
 ### View specification (frozen)
-1. **Workspace Overhead** — global layout of bricks and task context
-2. **Left Wrist Camera** — precision grasp/alignment view
-3. **Right Wrist Camera** — precision grasp/alignment view
-4. **Third-Person Camera** — debugging + presentation + additional context
+1. **Robot Camera** — mounted on Alex's head (NECK_Z/NECK_Y fixed at default pose), providing the robot's own perspective of the workspace
+2. **Third-Person Camera** — external camera looking directly at the robot for observation, debugging, and presentation
 
 ### Execution checklist
-- Define camera frames and mounts in MJCF (workspace, wrists, third-person).
+- Define camera frames and mounts in MJCF (head-mounted with fixed neck, third-person).
+- Set default NECK_Z/NECK_Y angles for optimal workspace framing.
 - Choose initial resolution and capture rate (aligned with policy rate unless constrained).
-- Ensure synchronization (all cameras correspond to the same sim timestep).
+- Ensure synchronization (both cameras correspond to the same sim timestep).
 - Validate:
-  - wrist cameras move with their respective end-effectors correctly
-  - overhead sees full workspace
-  - third-person provides stable diagnostic framing
+  - robot camera moves correctly with the robot
+  - third-person provides stable framing of the full workspace and robot
 - Log camera intrinsics/extrinsics metadata if available/needed for reproducibility.
 
 ### Milestone (minimum success criteria)
-- All 4 camera streams render reliably (headless-capable) and are time-aligned.
-- Wrist cameras track end-effectors correctly with no frame drift.
+- Both camera streams render reliably (headless-capable) and are time-aligned.
+- Robot camera tracks correctly with no frame drift.
 - Camera configuration is frozen for dataset logging.
 
 ---
@@ -244,11 +274,12 @@ Bimanual LEGO assembly requires both global context and local precision views. M
 Phase 1.1 is complete when:
 - The **Alex upper-body fixed-base MJCF** loads and simulates stably.
 - **Joint limits + Level 2+ constraints** are configured and validated.
-- **Bimanual parallel-jaw grippers** work reliably for basic grasp+lift.
-- The **action contract (16-D Δq + gripper)** is frozen and stable under repeated action chunks.
+- **Bimanual SAKE EZGripper end-effectors** work reliably for basic grasp+lift.
+- The **action contract (17-D: Δq spine + bimanual arms + gripper)** is frozen and stable under repeated action chunks.
 - The **robot state contract** includes core proprioception + EE pose/velocity and is consistent.
-- **Four cameras** (overhead, wrist-L, wrist-R, third-person) render reliably and synchronously.
+- **Two cameras** (robot camera, third-person) render reliably and synchronously.
 - A **Kinematics Validation Report** exists with FK-based evidence of Alex compatibility.
+- **End-effector abstraction layer** documented for future PSYONIC Ability Hand integration.
 
 ---
 
