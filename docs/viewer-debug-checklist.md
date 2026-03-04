@@ -262,30 +262,30 @@ vla-viewer sim/assets/scenes/alex_upper_body.xml --show-contacts --show-joints
    - Relaunch with `--passive --show-joints` if the toggle is not exposed
 2. Confirm:
    - [X] SPINE_Z axis is vertical (blue Z arrow at torso)
-   - [ ] Shoulder joints have axes aligned with expected Y/X/Z rotations
-   - [ ] Elbow joint axis is horizontal (Y axis)
+   - [X] Shoulder joints have axes aligned with expected Y/X/Z rotations
+   - [X] Elbow joint axis is horizontal (Y axis)
    - [X] Wrist and gripper joints are at the distal arm end
    - [X] No joints appear on the head (neck joints were removed)
 
 ### Step 3 — Verify Collision Geometry
 1. Toggle **Wireframe** in Rendering panel, or press **F3** to show group 3
 2. Confirm:
-   - [ ] Collision capsules/boxes visible on torso, shoulders, biceps, forearms, wrists, grippers
-   - [ ] Collision geoms roughly envelope the visual meshes (not oversized, not missing)
-   - [ ] Floor plane has collision
+   - [X] Collision capsules/boxes visible on torso, shoulders, biceps, forearms, wrists, grippers
+   - [X] Collision geoms roughly envelope the visual meshes (not oversized, not missing)
+   - [X] Floor plane has collision
 
 ### Step 4 — Verify EE Sites
 1. Enable **Site** visualization (group 4) in the viewer
 2. Confirm:
-   - [ ] Red sphere at left gripper tip (left_ee_site)
-   - [ ] Blue sphere at right gripper tip (right_ee_site)
+   - [X] Red sphere at left gripper tip (left_ee_site)
+   - [X] Blue sphere at right gripper tip (right_ee_site)
 
 ### Step 5 — Perturbation Test
 1. Double-click the left forearm, Ctrl+right-drag to apply force
 2. Confirm:
-   - [ ] Arm moves and returns toward rest (PD actuators active)
-   - [ ] No explosion or instability
-   - [ ] Repeat for right arm
+   - [X] Arm moves and returns toward rest (PD actuators active)
+   - [X] No explosion or instability
+   - [X] Repeat for right arm
 
 ### Step 6 — Camera Views
 1. `vla-viewer sim/assets/scenes/alex_upper_body.xml --camera overhead`
@@ -319,31 +319,37 @@ vla-viewer sim/assets/scenes/alex_upper_body.xml --show-contacts --show-joints
 1. Press **Space** to unpause
 2. Wait 5 seconds for the robot to settle
 3. Confirm:
-   - [ ] Arms settle to a stable rest position (no oscillation)
-   - [ ] No visible jitter in any joint
-   - [ ] Velocity readings near zero after settling
+   - [X] Arms settle to a stable rest position (no oscillation)
+   - [X] No visible jitter in any joint
+   - [X] Velocity readings near zero after settling
 
 ### Step 2 — Perturbation Recovery
 1. Double-click left forearm, Ctrl+right-drag to apply moderate force
 2. Confirm:
-   - [ ] Arm deflects and returns smoothly to rest
-   - [ ] No overshoot oscillation (damping is adequate)
-   - [ ] Recovery takes ~0.5-2s (not too sluggish, not too fast)
+   - [X] Arm deflects and returns smoothly to rest
+   - [X] No overshoot oscillation (damping is adequate)
+   - [X] Recovery takes ~0.5-2s (not too sluggish, not too fast)
 3. Repeat with right arm
 
 ### Step 3 — Verify Contact Solver Quality
 1. Enable **Contact point** and **Contact force** visualization
 2. Let robot settle under gravity
 3. Confirm:
-   - [ ] No spurious contact points flickering on/off
-   - [ ] Contact forces are smooth, not oscillating
+   - [X] No spurious contact points flickering on/off
+   - [X] Contact forces are smooth, not oscillating
 
 ### Step 4 — Test Rest Keyframe
-1. In the viewer, load the `rest` keyframe (shoulders abducted, elbows bent)
-2. Confirm:
-   - [ ] Robot reaches the rest pose without collision
-   - [ ] Arms stay stable in the bent-elbow configuration
-   - [ ] No self-collision warnings
+1. Launch in passive mode so stepping is active:
+   `vla-viewer sim/assets/scenes/alex_upper_body.xml --passive --show-contacts`
+2. In **Simulation** panel:
+   - Set `Key` to `1`
+   - Click **Load key**
+   - (`rest` is keyframe index 1 in this scene; `home` is index 0)
+3. Confirm over ~5-10 seconds:
+   - [X] Robot reaches the rest pose without collision
+   - [X] Arms stay stable in the bent-elbow configuration
+   - [X] No self-collision warnings
+4. Click **Reset**, then **Load key** again to verify repeatable behavior.
 
 ### What "correct" looks like
 - Robot holds position with zero visible drift
@@ -369,42 +375,45 @@ vla-viewer sim/assets/scenes/alex_upper_body.xml --show-contacts --show-joints
 1. Press **Space** to unpause, let robot settle (2-3 seconds)
 2. Zoom in on left hand (scroll + right-click drag)
 3. Confirm:
-   - [ ] EZGripper palm mesh visible at end of each arm (replaces nub)
-   - [ ] Two finger pairs visible on each hand (L1 + L2 per finger)
-   - [ ] Fingers are in closed position at home (joint = 0)
-   - [ ] No visual gaps between palm and wrist roll link
-   - [ ] Palm orientation looks correct relative to forearm
+   - [X] EZGripper palm mesh visible at end of each arm (replaces nub)
+   - [X] Two finger pairs visible on each hand (L1 + L2 per finger)
+   - [X] Fingers are in closed position at home (joint = 0)
+   - [X] No visual gaps between palm and wrist roll link
+   - [X] Palm orientation looks correct relative to forearm
 
 ### Step 2 — Verify Finger Collision Geometry
 1. Press **F3** to toggle collision geom visibility (group 3)
 2. Confirm:
-   - [ ] Box collision primitives visible on each finger segment (green-ish)
-   - [ ] Palm has a box collision geom
-   - [ ] Collision boxes roughly match finger pad dimensions (~30mm × 50mm)
-   - [ ] No collision geoms floating detached from visual meshes
+   - [X] Box collision primitives visible on each finger segment (green-ish)
+   - [X] Palm has a box collision geom
+   - [X] Collision boxes roughly match finger pad dimensions (~30mm × 50mm)
+   - [X] No collision geoms floating detached from visual meshes
 
 ### Step 3 — Verify Tool Frame Sites
 1. Enable **Site** visualization (group 4) in the viewer
 2. Confirm:
-   - [ ] Red sphere at left gripper (left_ee_site)
-   - [ ] Blue sphere at right gripper (right_ee_site)
-   - [ ] Yellow spheres at EZGripper palm centers (left/right_tool_frame)
+   - [X] Red sphere at left gripper (left_ee_site)
+   - [X] Blue sphere at right gripper (right_ee_site)
+   - [X] Yellow spheres at EZGripper palm centers (left/right_tool_frame)
 
 ### Step 4 — Test Open/Close via Keyframes
-1. Load the `open_grippers` keyframe in the viewer
-2. Confirm:
+1. In **Simulation** panel, set `Key` to `2`, then click **Load key** (`open_grippers`)
+2. Confirm in the opened pose:
    - [ ] All 4 finger joints on left hand open together (coupling works)
    - [ ] All 4 finger joints on right hand open together
-   - [ ] Motion is smooth, no jitter
-3. Load the `home` keyframe — fingers should close
+   - [ ] No post-load jitter/chattering for ~2-3 seconds
+3. Set `Key` to `0`, click **Load key** (`home`) — fingers should close symmetrically
+4. Repeat the cycle `2 -> 0` two or three times to verify repeatable coupling behavior
 
 ### Step 5 — Contact Test
-1. Enable **Contact point** and **Contact force** visualization
-2. Close grippers (home keyframe, actuator ctrl = 0)
-3. Confirm:
-   - [ ] Finger pads of opposing fingers create contact when closed
-   - [ ] Contact forces are reasonable (not exploding)
-   - [ ] No spurious contacts between palm and fingers
+1. Launch cube scene with contact visualization:
+   `vla-viewer sim/assets/scenes/alex_grasp_test.xml --passive --show-contacts --camera third_person`
+2. In **Simulation** panel, set `Key` to `1`, then click **Load key** (`pregrasp`)
+3. Double-click the cube, then use **Ctrl + right-drag** to move/press it against the finger pads
+4. Confirm:
+   - [X] Contact points appear at finger-pad/cube contact locations
+   - [X] Contact force arrows are finite/smooth (no exploding forces)
+   - [X] No persistent spurious contacts between palm and finger links at rest
 
 ### Step 6 — Grasp Test Scene
 ```bash
@@ -413,9 +422,9 @@ vla-viewer sim/assets/scenes/alex_grasp_test.xml --show-contacts
 1. Load `pregrasp` keyframe (arms forward, grippers open)
 2. Note: pre-grasp keyframe is approximate; may need manual tuning
 3. Confirm:
-   - [ ] Table and red cube visible in front of the robot
-   - [ ] Cube sits stably on the table
-   - [ ] Arms positioned roughly near the cube (adjust keyframe if needed)
+   - [X] Table and red cube visible in front of the robot
+   - [X] Cube sits stably on the table
+   - [X] Arms positioned roughly near the cube (adjust keyframe if needed)
 
 ### What "correct" looks like
 - EZGripper palm attached at correct orientation to wrist
@@ -444,9 +453,9 @@ vla-viewer sim/assets/scenes/alex_upper_body.xml --show-joints
 1. Press **Space** to unpause, let robot settle (2-3 seconds)
 2. Orbit the view to look at the robot from the front
 3. Confirm:
-   - [ ] Left and right arms are visually symmetric (mirror image about the midline)
-   - [ ] EE sites (red/blue spheres, group 4) are at the same height and symmetric Y positions
-   - [ ] No arm is significantly longer or shorter than the other
+   - [X] Left and right arms are visually symmetric (mirror image about the midline)
+   - [X] EE sites (red/blue spheres, group 4) are at the same height and symmetric Y positions
+   - [X] No arm is significantly longer or shorter than the other
 
 ### Step 2 — Verify Joint Axis Directions
 1. Enable **Joint** visualization (Visualization panel or `--show-joints`)

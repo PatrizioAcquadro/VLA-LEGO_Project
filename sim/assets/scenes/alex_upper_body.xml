@@ -29,9 +29,9 @@
 
     <worldbody>
         <light pos="0 0 3" dir="0 0 -1" directional="true"/>
-        <camera name="overhead" pos="0 -2 2" xyaxes="1 0 0 0 0.7 0.7"/>
-        <camera name="third_person" pos="1.5 -1.0 1.5"
-                xyaxes="0.55 0.83 0 -0.28 0.19 0.94" fovy="50"/>
+        <camera name="overhead" pos="0 -2.8 2.8" xyaxes="1 0 0 0 0.7 0.7" fovy="62"/>
+        <camera name="third_person" pos="1.8 -1.2 1.6"
+                xyaxes="0.55 0.83 0 -0.28 0.19 0.94" fovy="55"/>
         <geom name="floor" type="plane" size="0 0 0.05" material="groundplane"
               contype="1" conaffinity="1" priority="1" friction="0.8" condim="3"/>
     </worldbody>

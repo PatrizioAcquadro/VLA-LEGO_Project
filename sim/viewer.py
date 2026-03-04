@@ -246,6 +246,19 @@ def launch_viewer(config: ViewerConfig) -> None:
     results = run_preflight_checks(model)
     print_preflight_report(results)
 
+    # These options are applied via the passive viewer handle; if the user
+    # requests them without --passive, switch modes instead of ignoring flags.
+    needs_passive = bool(
+        config.camera_name or config.show_contacts or config.show_joints or config.duration > 0
+    )
+    if needs_passive and not config.passive:
+        print(
+            "Note: --camera/--show-contacts/--show-joints/--duration "
+            "require passive mode; enabling --passive.",
+            file=sys.stderr,
+        )
+        config.passive = True
+
     if config.passive:
         _launch_passive(model, data, config)
     else:
