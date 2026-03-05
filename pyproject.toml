@@ -78,6 +78,7 @@ vla-train = "train.trainer:main"
 vla-eval = "eval.evaluate:main"
 vla-viewer = "sim.viewer:main"
 vla-lint-assets = "sim.asset_linter_cli:main"
+vla-gen-bricks = "sim.lego.cli:main"
 
 [project.urls]
 Repository = "https://github.com/PatrizioAcquadro/VLA-LEGO_Project"

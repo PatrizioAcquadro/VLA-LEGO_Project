@@ -1,0 +1,30 @@
+<!-- LEGO contact material defaults (Phase 1.2.1)
+     Frozen from press-fit spec (docs/press-fit-spec.md, Section 4).
+     Include in any scene that uses LEGO bricks:
+         <include file="../lego/defaults.xml"/>
+-->
+<mujoco>
+    <default>
+        <default class="lego/stud_tube">
+            <geom contype="2" conaffinity="2"
+                  solref="0.004 1.0"
+                  solimp="0.95 0.99 0.001 0.5 3"
+                  friction="0.5 0.005 0.005"
+                  condim="4"/>
+        </default>
+        <default class="lego/brick_surface">
+            <geom contype="2" conaffinity="3"
+                  solref="0.005 1.0"
+                  solimp="0.9 0.95 0.001 0.5 2"
+                  friction="0.4 0.005 0.002"
+                  condim="3"/>
+        </default>
+        <default class="lego/baseplate">
+            <geom contype="2" conaffinity="3"
+                  solref="0.005 1.0"
+                  solimp="0.9 0.95 0.001 0.5 2"
+                  friction="0.6 0.01 0.005"
+                  condim="3"/>
+        </default>
+    </default>
+</mujoco>
