@@ -1,0 +1,61 @@
+# LEGO simulation parameters (Phase 1.2.1)
+# Frozen from press-fit spec (docs/press-fit-spec.md, Section 8)
+
+lego:
+  # Geometry (frozen)
+  geometry:
+    stud_pitch: 0.008            # m
+    stud_radius: 0.00235         # m (collision)
+    stud_visual_radius: 0.0024   # m
+    stud_height: 0.0017          # m
+    tube_ring_radius: 0.0024     # m (capsule centers)
+    tube_capsule_radius: 0.0005  # m
+    tube_capsule_count: 8
+    tube_capsule_height: 0.0016  # m
+    brick_height: 0.0096         # m (standard, no stud)
+    wall_thickness: 0.0012       # m
+    inter_brick_gap: 0.0002      # m
+    density: 1050.0              # kg/m^3 (ABS)
+
+  # Contact classes (frozen from spec Section 4)
+  contact:
+    stud_tube:
+      solref: [0.004, 1.0]
+      solimp: [0.95, 0.99, 0.001, 0.5, 3.0]
+      friction: [0.5, 0.005, 0.005]
+      condim: 4
+    brick_surface:
+      solref: [0.005, 1.0]
+      solimp: [0.9, 0.95, 0.001, 0.5, 2.0]
+      friction: [0.4, 0.005, 0.002]
+      condim: 3
+    baseplate:
+      solref: [0.005, 1.0]
+      solimp: [0.9, 0.95, 0.001, 0.5, 2.0]
+      friction: [0.6, 0.01, 0.005]
+      condim: 3
+
+  # Capture envelope tolerances
+  tolerances:
+    lateral_mm: 0.5
+    angular_deg: 3.0
+    approach_zone_mm: 2.0
+    max_insertion_speed_m_s: 0.01
+
+  # Success thresholds
+  thresholds:
+    insertion_success_rate: 0.95
+    min_retention_force_per_stud_N: 0.3
+    min_lateral_shear_per_stud_N: 0.2
+    max_penetration_m: 0.002
+    max_jitter_rms_m: 0.00005
+    max_drift_m: 0.0001
+    max_energy_J: 500.0
+    hold_duration_s: 5.0
+    max_active_contacts: 100
+
+  # Solver overrides for LEGO scenes
+  solver:
+    iterations: 80
+    ls_iterations: 10
+    noslip_iterations: 0
