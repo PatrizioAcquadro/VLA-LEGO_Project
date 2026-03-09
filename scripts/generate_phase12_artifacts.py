@@ -144,9 +144,7 @@ class MultiCamRecorder:
         grid_cols: int = 2,
     ) -> None:
         self.model = model
-        self.cam_ids = [
-            mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, n) for n in cam_names
-        ]
+        self.cam_ids = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, n) for n in cam_names]
         self.renderer = mujoco.Renderer(model, height=h, width=w)
         self.frames: list[np.ndarray] = []
         self.grid_cols = grid_cols
@@ -240,17 +238,13 @@ def artifact_2_baseplate() -> None:
 
     # Angled view
     renderer = mujoco.Renderer(model, height=480, width=640)
-    cam = make_free_cam(
-        lookat=(0, 0, bp.thickness / 2), distance=0.12, azimuth=135, elevation=-30
-    )
+    cam = make_free_cam(lookat=(0, 0, bp.thickness / 2), distance=0.12, azimuth=135, elevation=-30)
     save_frame(render_free(model, data, cam, renderer), subdir / "baseplate_8x8.png")
     renderer.close()
 
     # Top-down view
     renderer = mujoco.Renderer(model, height=480, width=480)
-    cam = make_free_cam(
-        lookat=(0, 0, bp.thickness / 2), distance=0.12, azimuth=0, elevation=-90
-    )
+    cam = make_free_cam(lookat=(0, 0, bp.thickness / 2), distance=0.12, azimuth=0, elevation=-90)
     save_frame(render_free(model, data, cam, renderer), subdir / "baseplate_8x8_topdown.png")
     renderer.close()
 
@@ -367,11 +361,13 @@ def artifact_4_retention_test() -> None:
 
         if step_count % 10 == 0:
             frames.append(render_free(model, data, cam, renderer))
-            force_log.append({
-                "step": step_count,
-                "force_N": round(float(current_force), 4),
-                "displacement_mm": round(float(displacement * 1000), 4),
-            })
+            force_log.append(
+                {
+                    "step": step_count,
+                    "force_N": round(float(current_force), 4),
+                    "displacement_mm": round(float(displacement * 1000), 4),
+                }
+            )
 
         if not detached and displacement > 0.001:
             detached = True
@@ -427,7 +423,8 @@ def artifact_5_workspace() -> None:
 
     # Multi-camera tiled video
     cam_names = [
-        n for n in ["overhead", "third_person", "workspace_closeup"]
+        n
+        for n in ["overhead", "third_person", "workspace_closeup"]
         if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, n) >= 0
     ]
 
@@ -461,7 +458,8 @@ def artifact_6_episode_resets() -> None:
     em = EpisodeManager(max_bricks=4, brick_set=("2x2", "2x4", "2x6"))
 
     cam_names = [
-        n for n in ["workspace_closeup", "overhead", "third_person"]
+        n
+        for n in ["workspace_closeup", "overhead", "third_person"]
         if mujoco.mj_name2id(em.model, mujoco.mjtObj.mjOBJ_CAMERA, n) >= 0
     ]
     if not cam_names:
@@ -482,18 +480,22 @@ def artifact_6_episode_resets() -> None:
 
     for seed, level, desc in episodes:
         info = em.reset(seed=seed, level=level)
-        print(f"  Episode seed={seed}: {desc} — {len(info.brick_types)} bricks, "
-              f"settle={info.settle_steps} steps, success={info.settle_success}")
+        print(
+            f"  Episode seed={seed}: {desc} — {len(info.brick_types)} bricks, "
+            f"settle={info.settle_steps} steps, success={info.settle_success}"
+        )
 
-        episode_report.append({
-            "seed": seed,
-            "level": level,
-            "description": desc,
-            "n_bricks": len(info.brick_types),
-            "brick_types": info.brick_types,
-            "settle_steps": info.settle_steps,
-            "settle_success": info.settle_success,
-        })
+        episode_report.append(
+            {
+                "seed": seed,
+                "level": level,
+                "description": desc,
+                "n_bricks": len(info.brick_types),
+                "brick_types": info.brick_types,
+                "settle_steps": info.settle_steps,
+                "settle_success": info.settle_success,
+            }
+        )
 
         # Render 1s of this settled episode
         for step in range(250):
@@ -512,8 +514,10 @@ def artifact_6_episode_resets() -> None:
     report_path.parent.mkdir(parents=True, exist_ok=True)
     with open(report_path, "w") as f:
         json.dump(episode_report, f, indent=2)
-    print(f"  Metrics: success_rate={em.metrics.success_rate:.0%}, "
-          f"avg_settle={em.metrics.avg_settle_steps:.0f} steps")
+    print(
+        f"  Metrics: success_rate={em.metrics.success_rate:.0%}, "
+        f"avg_settle={em.metrics.avg_settle_steps:.0f} steps"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -546,7 +550,8 @@ def artifact_7_single_assembly() -> None:
     print(f"  Target: type={target.brick_type}, pos={target.target_position}")
 
     cam_names = [
-        n for n in ["workspace_closeup", "third_person", "overhead"]
+        n
+        for n in ["workspace_closeup", "third_person", "overhead"]
         if mujoco.mj_name2id(em.model, mujoco.mjtObj.mjOBJ_CAMERA, n) >= 0
     ]
     if not cam_names:
@@ -682,7 +687,8 @@ def artifact_8_multi_assembly() -> None:
     goal = generate_assembly_goal(info, bp_type, bp_world_pos, seed=77)
 
     cam_names = [
-        n for n in ["workspace_closeup", "third_person", "overhead"]
+        n
+        for n in ["workspace_closeup", "third_person", "overhead"]
         if mujoco.mj_name2id(em.model, mujoco.mjtObj.mjOBJ_CAMERA, n) >= 0
     ]
     if not cam_names:
@@ -707,8 +713,10 @@ def artifact_8_multi_assembly() -> None:
         qpos_addr = int(em.model.jnt_qposadr[joint_id])
         vel_addr = int(em.model.jnt_dofadr[joint_id])
 
-        print(f"  Placing brick {i}: {target.brick_type} at "
-              f"({target.target_position[0]:.4f}, {target.target_position[1]:.4f})")
+        print(
+            f"  Placing brick {i}: {target.brick_type} at "
+            f"({target.target_position[0]:.4f}, {target.target_position[1]:.4f})"
+        )
 
         # Move to approach
         approach_pos = (
@@ -803,8 +811,10 @@ def artifact_8_multi_assembly() -> None:
     report_path.parent.mkdir(parents=True, exist_ok=True)
     with open(report_path, "w") as f:
         json.dump(report, f, indent=2)
-    print(f"  Result: {result.n_successful}/{result.n_total} placed, "
-          f"stable={result.structure_stable}")
+    print(
+        f"  Result: {result.n_successful}/{result.n_total} placed, "
+        f"stable={result.structure_stable}"
+    )
 
 
 # ---------------------------------------------------------------------------
