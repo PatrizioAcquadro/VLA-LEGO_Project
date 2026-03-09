@@ -23,6 +23,7 @@ SCENES_DIR: Path = ASSETS_DIR / "scenes"
 ROBOTS_DIR: Path = ASSETS_DIR / "robots"
 LEGO_DIR: Path = ASSETS_DIR / "lego"
 LEGO_BRICKS_DIR: Path = LEGO_DIR / "bricks"
+LEGO_BASEPLATES_DIR: Path = LEGO_DIR / "baseplates"
 
 
 def resolve_scene_path(scene_name: str) -> Path:
@@ -94,6 +95,31 @@ def resolve_lego_brick_path(brick_name: str) -> Path:
     path = LEGO_BRICKS_DIR / brick_name
     if not path.exists():
         raise FileNotFoundError(f"LEGO brick not found: {brick_name} (looked in {LEGO_BRICKS_DIR})")
+    return path.resolve()
+
+
+def resolve_lego_baseplate_path(baseplate_name: str) -> Path:
+    """Resolve a baseplate name to its MJCF path.
+
+    Args:
+        baseplate_name: Baseplate name, e.g., ``"8x8"`` or ``"baseplate_8x8"``.
+
+    Returns:
+        Absolute path to the baseplate MJCF file.
+
+    Raises:
+        FileNotFoundError: If baseplate file does not exist.
+    """
+    if not baseplate_name.startswith("baseplate_"):
+        baseplate_name = f"baseplate_{baseplate_name}"
+    if not baseplate_name.endswith(".xml"):
+        baseplate_name = f"{baseplate_name}.xml"
+
+    path = LEGO_BASEPLATES_DIR / baseplate_name
+    if not path.exists():
+        raise FileNotFoundError(
+            f"LEGO baseplate not found: {baseplate_name} (looked in {LEGO_BASEPLATES_DIR})"
+        )
     return path.resolve()
 
 

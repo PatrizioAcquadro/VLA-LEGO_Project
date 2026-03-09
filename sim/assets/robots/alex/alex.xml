@@ -255,6 +255,10 @@
                                                   class="alex/collision"/>
                                             <site name="left_ee_site" pos="0 0 0.03"
                                                   type="sphere" size="0.008" rgba="1 0 0 0.5" group="4"/>
+                                            <!-- Left wrist camera (Phase 1.2.4): attached to gripper body,
+                                                 looks along +Z (toward fingertips/workspace). -->
+                                            <camera name="left_wrist_cam" pos="0 0 0"
+                                                    xyaxes="1 0 0 0 -1 0" fovy="75"/>
 
                                             <!-- EZGripper Gen2 (Phase 1.1.3) -->
                                             <!-- Adapter transform from IHMC URDF (verified via FK symmetry — 0.0 cm error) -->
@@ -435,6 +439,10 @@
                                                   class="alex/collision"/>
                                             <site name="right_ee_site" pos="0 0 0.03"
                                                   type="sphere" size="0.008" rgba="0 0 1 0.5" group="4"/>
+                                            <!-- Right wrist camera (Phase 1.2.4): attached to gripper body,
+                                                 looks along +Z (toward fingertips/workspace). -->
+                                            <camera name="right_wrist_cam" pos="0 0 0"
+                                                    xyaxes="1 0 0 0 -1 0" fovy="75"/>
 
                                             <!-- EZGripper Gen2 (Phase 1.1.3) -->
                                             <body name="right_ezgripper_palm" pos="0 0 -0.02" euler="3.14159 1.5708 0">

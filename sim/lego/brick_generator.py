@@ -28,11 +28,13 @@ from sim.lego.constants import (
     STUD_COLLISION_RADIUS,
     STUD_HALF_HEIGHT,
     STUD_VISUAL_RADIUS,
+    TOP_THICKNESS,
     TUBE_CAPSULE_COUNT,
     TUBE_CAPSULE_HALF_HEIGHT,
     TUBE_CAPSULE_RADIUS,
     TUBE_RING_RADIUS,
     VISUAL_GROUP,
+    WALL_THICKNESS,
     BrickType,
 )
 from sim.lego.mass import compute_brick_mass
@@ -96,15 +98,69 @@ def generate_brick_body_xml(
         diaginertia=_compute_box_inertia_str(mass, brick),
     )
 
-    # --- Shell collision geom ---
+    # --- Shell collision geoms (hollow: 4 walls + top plate) ---
+    # Real LEGO bricks are open on the bottom; studs from below enter through
+    # the open bottom to engage tubes inside. Using 5 thin box geoms instead
+    # of a single solid box preserves this critical property.
+    hx, hy, hz = brick.shell_half_x, brick.shell_half_y, brick.shell_half_z
+    wt = WALL_THICKNESS
+    tt = TOP_THICKNESS
+    hw = wt / 2.0  # half wall thickness
+    ht = tt / 2.0  # half top thickness
+
+    # Top plate
     ET.SubElement(
         body,
         "geom",
-        name=f"{body_name}_shell",
+        name=f"{body_name}_shell_top",
         type="box",
         attrib={"class": "lego/brick_surface"},
-        size=_pos_str(brick.shell_half_x, brick.shell_half_y, brick.shell_half_z),
-        pos=_pos_str(0, 0, brick.shell_half_z),
+        size=_pos_str(hx, hy, ht),
+        pos=_pos_str(0, 0, brick.height - ht),
+        group=str(COLLISION_GROUP),
+    )
+    # Left wall (−X)
+    ET.SubElement(
+        body,
+        "geom",
+        name=f"{body_name}_shell_lx",
+        type="box",
+        attrib={"class": "lego/brick_surface"},
+        size=_pos_str(hw, hy, hz),
+        pos=_pos_str(-hx + hw, 0, hz),
+        group=str(COLLISION_GROUP),
+    )
+    # Right wall (+X)
+    ET.SubElement(
+        body,
+        "geom",
+        name=f"{body_name}_shell_rx",
+        type="box",
+        attrib={"class": "lego/brick_surface"},
+        size=_pos_str(hw, hy, hz),
+        pos=_pos_str(hx - hw, 0, hz),
+        group=str(COLLISION_GROUP),
+    )
+    # Front wall (+Y) — inner extent excludes corners (already covered by LX/RX)
+    ET.SubElement(
+        body,
+        "geom",
+        name=f"{body_name}_shell_fy",
+        type="box",
+        attrib={"class": "lego/brick_surface"},
+        size=_pos_str(hx - wt, hw, hz),
+        pos=_pos_str(0, hy - hw, hz),
+        group=str(COLLISION_GROUP),
+    )
+    # Back wall (−Y)
+    ET.SubElement(
+        body,
+        "geom",
+        name=f"{body_name}_shell_by",
+        type="box",
+        attrib={"class": "lego/brick_surface"},
+        size=_pos_str(hx - wt, hw, hz),
+        pos=_pos_str(0, -hy + hw, hz),
         group=str(COLLISION_GROUP),
     )
 
@@ -129,7 +185,7 @@ def generate_brick_body_xml(
             "geom",
             name=f"{body_name}_{cp.id}",
             type="cylinder",
-            attrib={"class": "lego/stud_tube"},
+            attrib={"class": "lego/stud"},
             size=f"{_fmt(STUD_COLLISION_RADIUS)} {_fmt(STUD_HALF_HEIGHT)}",
             pos=_pos_str(*cp.position),
             group=str(COLLISION_GROUP),
@@ -162,7 +218,7 @@ def generate_brick_body_xml(
                 "geom",
                 name=f"{body_name}_{cp.id}_c{ci}",
                 type="capsule",
-                attrib={"class": "lego/stud_tube"},
+                attrib={"class": "lego/tube"},
                 size=_fmt(TUBE_CAPSULE_RADIUS),
                 fromto=f"{_fmt(cx)} {_fmt(cy)} {_fmt(z_lo)} {_fmt(cx)} {_fmt(cy)} {_fmt(z_hi)}",
                 group=str(COLLISION_GROUP),
@@ -210,7 +266,7 @@ def generate_brick_mjcf(
     )
 
     # Inline default classes (so from_xml_string works without file context)
-    _add_lego_defaults(root)
+    add_lego_defaults(root)
 
     # Worldbody with floor and brick
     worldbody = ET.SubElement(root, "worldbody")
@@ -274,19 +330,31 @@ def write_brick_assets(
     return paths
 
 
-def _add_lego_defaults(root: ET.Element) -> None:
-    """Add the three LEGO contact material default classes inline."""
+def add_lego_defaults(root: ET.Element) -> None:
+    """Add the LEGO contact material default classes inline."""
     default = ET.SubElement(root, "default")
 
-    st = ET.SubElement(default, "default", attrib={"class": "lego/stud_tube"})
+    stud = ET.SubElement(default, "default", attrib={"class": "lego/stud"})
     ET.SubElement(
-        st,
+        stud,
         "geom",
-        contype="2",
-        conaffinity="2",
-        solref="0.004 1.0",
-        solimp="0.95 0.99 0.001 0.5 3",
-        friction="0.5 0.005 0.005",
+        contype="6",
+        conaffinity="7",
+        solref="0.003 1.0",
+        solimp="0.97 0.995 0.001 0.5 4",
+        friction="0.65 0.005 0.005",
+        condim="4",
+    )
+
+    tube = ET.SubElement(default, "default", attrib={"class": "lego/tube"})
+    ET.SubElement(
+        tube,
+        "geom",
+        contype="4",
+        conaffinity="4",
+        solref="0.003 1.0",
+        solimp="0.97 0.995 0.001 0.5 4",
+        friction="0.65 0.005 0.005",
         condim="4",
     )
 

@@ -36,9 +36,9 @@ state:
   ee_vel_max: 2.0                # m/s, normalization ceiling
 
 camera:
-  views: ["robot_cam", "third_person"]   # Frozen view names (Phase 1.1.7)
-  width: 320                             # Render width (px)
-  height: 240                            # Render height (px)
+  views: ["overhead", "left_wrist_cam", "right_wrist_cam", "third_person"]  # Frozen 4-view contract (Phase 1.2.4)
+  width: 320                             # Render width (px) — square for VLA training
+  height: 320                            # Render height (px) — square for VLA training
   capture_hz: 20.0                       # Aligned with control_hz
-  render_depth: false                    # Off by default (training uses RGB)
-  render_segmentation: false
+  render_depth: true                     # Depth enabled for full dataset modality
+  render_segmentation: true              # Segmentation enabled for debug + aux losses

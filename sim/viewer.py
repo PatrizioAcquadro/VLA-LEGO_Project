@@ -53,12 +53,14 @@ def parse_args(argv: list[str] | None = None) -> ViewerConfig:
     parser = argparse.ArgumentParser(
         description="Interactive MuJoCo viewer for debug inspection.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=textwrap.dedent("""\
+        epilog=textwrap.dedent(
+            """\
             Examples:
               vla-viewer sim/assets/scenes/test_scene.xml
               vla-viewer robot.xml --show-contacts --show-joints
               vla-viewer robot.xml --passive --duration 10
-        """),
+        """
+        ),
     )
     parser.add_argument("scene", type=Path, help="Path to MJCF XML file")
     parser.add_argument(

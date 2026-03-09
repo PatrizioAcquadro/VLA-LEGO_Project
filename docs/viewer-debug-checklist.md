@@ -618,3 +618,388 @@ vla-viewer sim/assets/scenes/alex_grasp_test.xml --camera robot_cam
 - robot_cam not moving with spine: camera not body-attached (MJCF error)
 - Both cameras pointing at sky/floor only: position/orientation error in MJCF
 - Flickering or frame misalignment in dual-view video: synchronization bug
+
+---
+
+## LEGO Brick Contact Verification (Phase 1.2.2)
+
+### Launch command
+```bash
+vla-viewer sim/assets/lego/bricks/brick_2x2.xml --show-contacts
+```
+
+### UI setup
+1. In the viewer, press `C` to toggle contact visualization
+2. Press `F` to toggle force visualization (contact normal forces)
+3. In Rendering panel: enable "Contact point" and "Contact force"
+4. In Model panel > geom: set group 3 visible (collision geoms), group 0 hidden
+
+### What to verify
+
+#### Single brick drop
+- [ ] Brick drops and lands flat on floor (no tumbling)
+- [ ] Contact points visible at bottom of brick (shell ↔ floor)
+- [ ] No stud/tube contacts with floor (contact isolation working)
+- [ ] Brick settles within ~1 second, no jitter
+
+#### Two-brick insertion (requires programmatic scene)
+```bash
+python -c "
+from sim.lego.contact_scene import generate_insertion_scene
+from sim.lego.constants import BRICK_TYPES
+bt = BRICK_TYPES['2x2']
+xml = generate_insertion_scene(bt, bt)
+with open('/tmp/lego_insertion_test.xml', 'w') as f:
+    f.write(xml)
+print('Scene saved to /tmp/lego_insertion_test.xml')
+"
+vla-viewer /tmp/lego_insertion_test.xml --show-contacts
+```
+
+- [ ] Base brick sits on pedestal, top brick suspended above
+- [ ] Press `Space` to unpause simulation — top brick falls toward base
+- [ ] Contact points appear between tube capsules and studs (4 contact pairs for 2x2)
+- [ ] Top brick seats into base brick (Z drops below stud tops)
+- [ ] Contact forces point laterally (not just vertical) — indicates stud-tube interlock
+- [ ] No excessive penetration visible (bricks should not overlap)
+
+#### Hollow shell verification
+- [ ] Toggle collision geoms visible (group 3): 5 thin box geoms visible (4 walls + top)
+- [ ] Bottom face is open (no geom covering bottom)
+- [ ] Studs protrude above top plate
+- [ ] Tube capsule ring visible inside cavity (8 small capsules in a circle)
+
+### What "correct" vs "wrong" looks like
+- **Correct**: Top brick nests into base brick with visible lateral contact forces at stud-tube pairs
+- **Wrong — brick sits ON TOP of studs**: Shell bottom is blocked (check hollow shell), or tube capsule radius too large
+- **Wrong — brick falls through**: Contact isolation broken (check contype/conaffinity bits)
+- **Wrong — excessive vibration**: solref too stiff (decrease timeconst), or solver iterations too low
+- **Wrong — no contacts visible**: Contact visualization not enabled, or geom groups misconfigured
+
+---
+
+## Walkthrough: Hybrid Retention Mode Verification (Phase 1.2.2b)
+
+Visual verification of the spec-proxy weld activation/deactivation cycle.
+
+### Generate Test Scene
+```bash
+python -c "
+from sim.lego.contact_scene import generate_insertion_scene
+from sim.lego.constants import BRICK_TYPES
+bt = BRICK_TYPES['2x2']
+xml = generate_insertion_scene(bt, bt, retention_mode='spec_proxy')
+with open('/tmp/lego_hybrid_test.xml', 'w') as f:
+    f.write(xml)
+print('Hybrid scene saved to /tmp/lego_hybrid_test.xml')
+"
+```
+
+### Launch Command
+```bash
+vla-viewer /tmp/lego_hybrid_test.xml --show-contacts
+```
+
+### Step 1 — Verify Scene Has Weld Constraint
+1. In the viewer, open the **Model** panel
+2. Navigate to **Equality constraints** section
+3. Confirm:
+   - [ ] A weld constraint named `snap_base_top` exists
+   - [ ] It shows `active=false` initially (constraint is pre-declared but inactive)
+
+### Step 2 — Observe Physics-Only Insertion
+1. Press **Space** to unpause simulation
+2. Watch the top brick fall toward the base brick
+3. Confirm:
+   - [ ] Top brick drops under gravity/force and seats into base brick
+   - [ ] Contact points appear between stud and tube capsule pairs
+   - [ ] Insertion looks the same as physics-only mode (weld not active yet)
+
+### Step 3 — Verify Weld Activation (Programmatic)
+Run the hybrid validation to observe weld activation in the console:
+```bash
+python scripts/validate_lego_contacts.py --mode spec_proxy
+```
+Look for output like:
+```
+  [PASS] [PROXY] Insertion + weld activation — success=True, welds=1
+```
+This confirms the `ConnectionManager` detected engagement and activated the weld.
+
+### Step 4 — Test Retention (Perturbation)
+After insertion + weld activation (use the programmatic scene):
+```python
+from sim.lego.contact_scene import load_insertion_scene, setup_connection_manager
+from sim.lego.contact_utils import perform_insertion_then_measure, apply_force_ramp
+from sim.lego.constants import BRICK_TYPES
+import numpy as np
+
+bt = BRICK_TYPES["2x2"]
+model, data = load_insertion_scene(bt, bt, retention_mode="spec_proxy")
+mgr = setup_connection_manager(model, data, [("base_2x2", "top_2x2")])
+ir = perform_insertion_then_measure(model, data, base_brick_name="2x2", connection_manager=mgr)
+print(f"Insertion: {ir.success}, Active welds: {mgr.active_connections}")
+
+# Apply upward pull
+force = apply_force_ramp(model, data, "top_2x2", np.array([0,0,1.0]),
+                         0.5, 10.0, displacement_threshold=0.002, connection_manager=mgr)
+print(f"Pull-off force: {force:.3f} N (target: >= 1.2 N)")
+```
+- [ ] Weld activates (active_connections = 1)
+- [ ] Pull-off force ≥ 1.2 N (vs ~0.26 N in physics-only mode)
+
+### Step 5 — Verify Release
+Apply a very large force to break the weld:
+```python
+force = apply_force_ramp(model, data, "top_2x2", np.array([0,0,1.0]),
+                         5.0, 50.0, displacement_threshold=0.01, connection_manager=mgr)
+print(f"Release force: {force:.3f} N, Active welds: {mgr.active_connections}")
+```
+- [ ] Weld deactivates after sufficient displacement (active_connections = 0)
+- [ ] Top brick separates from base brick
+
+### What "correct" looks like
+- **Free phase**: Top brick falls and seats into base — identical to physics mode
+- **Welded phase**: After ~100 ms of sustained engagement, weld activates silently. Brick pair resists pull/shear forces at spec-target levels (~2 N pull-off for 2x2)
+- **Released phase**: Under extreme force, weld breaks and brick separates cleanly
+
+### What "wrong" looks like
+- **Weld activates during insertion**: Brick locks above the engagement position (not fully seated). Fix: ensure `perform_insertion_then_measure` does not pass ConnectionManager to `run_insertion`
+- **Weld never activates**: Z or XY alignment thresholds too strict, or brick not reaching engagement depth. Check `ConnectionManager` thresholds
+- **Impulse on activation**: Brick jumps when weld activates. Fix: relpose should be computed from current pose, not target pose
+- **Weld too stiff**: Force ramp reaches max without displacement. Tune `weld_solref` in config
+
+---
+
+## Walkthrough: LEGO Baseplate & Workspace (Phase 1.2.3)
+
+### Standalone Baseplate
+
+#### Launch Command
+```bash
+vla-viewer sim/assets/lego/baseplates/baseplate_8x8.xml --show-contacts
+```
+
+#### Step 1 — Verify Baseplate Geometry
+1. Press **Space** to unpause (baseplate is fixed, nothing should move)
+2. Confirm:
+   - [ ] Green 8×8 baseplate visible on the floor
+   - [ ] 64 studs arranged in an 8×8 grid on top surface
+   - [ ] No tubes (baseplates are solid thin plates)
+   - [ ] Baseplate is thin (~3.2 mm) — zoom in to verify plate thickness
+
+#### Step 2 — Verify Collision Geometry
+1. Press **F3** to toggle collision geom visibility (group 3)
+2. Confirm:
+   - [ ] One box collision geom for the plate surface (`lego/baseplate` class)
+   - [ ] 64 cylinder collision geoms for studs (`lego/stud` class)
+   - [ ] No collision geom on the bottom face
+   - [ ] Studs are cylindrical, not spherical
+3. Toggle group 0 (visual) off, group 3 on:
+   - [ ] Collision studs slightly smaller than visual studs (2.35 mm vs 2.4 mm radius)
+
+#### Step 3 — Verify No Dynamics
+1. Let simulation run for 10+ seconds
+2. Confirm:
+   - [ ] Baseplate does not move (no freejoint — fixed to world)
+   - [ ] No NaN warnings in console
+   - [ ] No jitter or vibration
+
+### Brick on Baseplate
+
+#### Generate Test Scene
+```bash
+python -c "
+from sim.lego.contact_scene import generate_baseplate_insertion_scene
+from sim.lego.constants import BASEPLATE_TYPES, BRICK_TYPES
+bp = BASEPLATE_TYPES['8x8']
+brick = BRICK_TYPES['2x2']
+xml = generate_baseplate_insertion_scene(bp, brick)
+with open('/tmp/lego_baseplate_insertion.xml', 'w') as f:
+    f.write(xml)
+print('Scene saved to /tmp/lego_baseplate_insertion.xml')
+"
+```
+
+#### Launch Command
+```bash
+vla-viewer /tmp/lego_baseplate_insertion.xml --show-contacts
+```
+
+#### Step 1 — Verify Insertion
+1. Press **Space** to unpause
+2. Confirm:
+   - [ ] Brick drops onto baseplate and seats into stud grid
+   - [ ] Contact points visible between brick tubes and baseplate studs
+   - [ ] Brick does not fall through the baseplate
+   - [ ] No excessive penetration (brick should rest on top, not embedded)
+
+#### Step 2 — Perturbation Test
+1. Double-click the brick, **Ctrl+right-drag** to push laterally
+2. Confirm:
+   - [ ] Brick resists lateral displacement (stud-tube friction interlock)
+   - [ ] Brick returns to approximate rest position after small perturbation
+   - [ ] No explosion or instability
+
+### Workspace Scene (Alex + Table + Baseplate)
+
+#### Launch Command
+```bash
+vla-viewer sim/assets/scenes/alex_lego_workspace.xml --show-contacts --show-joints
+```
+
+#### Step 1 — Verify Scene Layout
+1. Confirm:
+   - [ ] Alex robot visible at center (fixed base at Z=1.0)
+   - [ ] Table in front of robot (pos ≈ 0.45, 0, 0.75)
+   - [ ] Green baseplate on table surface
+   - [ ] Baseplate studs at correct height (table top + 3.2 mm plate)
+
+#### Step 2 — Verify Robot Reachability
+1. Load `rest` keyframe (Key=1, click Load key)
+2. Confirm:
+   - [ ] Robot arms positioned forward, roughly at table height
+   - [ ] Hands could plausibly reach the baseplate area
+   - [ ] No self-collision or table collision at rest pose
+
+#### Step 3 — Camera Views
+1. Restart with `--camera overhead`:
+   ```bash
+   vla-viewer sim/assets/scenes/alex_lego_workspace.xml --camera overhead
+   ```
+   - [ ] Top-down view shows robot, table, and baseplate
+2. Restart with `--camera workspace_closeup`:
+   ```bash
+   vla-viewer sim/assets/scenes/alex_lego_workspace.xml --camera workspace_closeup
+   ```
+   - [ ] Close view of baseplate area, studs clearly visible
+3. Restart with `--camera third_person`:
+   - [ ] Full scene visible from elevated angle
+
+#### Step 4 — Verify Robot Actuators
+1. Press **Space** to unpause
+2. Apply perturbation to an arm (Ctrl+right-drag)
+3. Confirm:
+   - [ ] Arm responds and returns to rest (17 actuators active)
+   - [ ] No instability from LEGO contact solver settings (80 iterations)
+
+### What "correct" looks like
+- Green 8×8 baseplate with uniform stud grid, sitting flat on table
+- Bricks can be dropped onto baseplate and seat into studs
+- Robot arms can reach the workspace area
+- Three camera views provide useful perspectives for debugging
+
+### What "wrong" looks like
+- Baseplate floating above or below table surface (Z offset error)
+- Studs missing or not visible (generator bug)
+- Brick falls through baseplate (contact isolation broken — check contype/conaffinity)
+- Robot arms cannot reach baseplate area (table position too far)
+- Scene crashes on load (missing robot include or mesh path resolution error)
+
+---
+
+## Walkthrough: 4-View Camera Contract (Phase 1.2.4)
+
+### Overview
+Verify the frozen 4-camera setup: `overhead` (fixed), `left_wrist_cam` (body-attached),
+`right_wrist_cam` (body-attached), `third_person` (fixed). All at 320×320, 20 Hz.
+
+### Step 1 — Verify Left Wrist Camera
+
+```bash
+vla-viewer sim/assets/scenes/alex_lego_workspace.xml --camera left_wrist_cam
+```
+
+In the viewer:
+- [ ] View shows the workspace area from the left gripper's perspective
+- [ ] The table/baseplate surface is visible below
+- [ ] Gripper fingers may appear at frame edges (normal — wide 75° FOV)
+- [ ] Rotate a left arm joint (use MuJoCo viewer's joint sliders or nudge): view changes
+- [ ] Robot arm/torso may be partially visible in background (acceptable)
+
+### Step 2 — Verify Right Wrist Camera
+
+```bash
+vla-viewer sim/assets/scenes/alex_lego_workspace.xml --camera right_wrist_cam
+```
+
+- [ ] Mirror perspective of left wrist cam (workspace from right hand)
+- [ ] View changes when right arm joints are moved
+- [ ] Does NOT change when only left arm moves (independent body attachment)
+
+### Step 3 — Verify Fixed Cameras
+
+```bash
+vla-viewer sim/assets/scenes/alex_lego_workspace.xml --camera overhead
+vla-viewer sim/assets/scenes/alex_lego_workspace.xml --camera third_person
+```
+
+For `overhead`:
+- [ ] Top-down view of full workspace (robot + table + baseplate visible)
+- [ ] Does NOT move when arm joints change
+- [ ] Wide coverage of the assembly area
+
+For `third_person`:
+- [ ] External side/angled view of the robot and workspace
+- [ ] Does NOT move when arm joints change
+- [ ] Robot body and workspace both visible
+
+### Step 4 — Run Full Validation Script
+
+```bash
+python scripts/validate_cameras.py
+```
+
+Check artifacts in `logs/camera_validation/`:
+
+| Artifact | What to look for |
+|----------|-----------------|
+| `overhead_rgb.png` | Top-down workspace view, robot visible |
+| `left_wrist_cam_rgb.png` | Close-up manipulation view from left arm |
+| `right_wrist_cam_rgb.png` | Close-up manipulation view from right arm |
+| `third_person_rgb.png` | External observer view of robot |
+| `overhead_depth.png` | Depth variation (darker=far, lighter=near or vice versa) |
+| `left_wrist_cam_depth.png` | Depth map of workspace from wrist |
+| `quad_view_video.mp4` | 2×2 grid: top-left=overhead, top-right=left_wrist, bottom-left=right_wrist, bottom-right=third_person |
+| `camera_metadata.json` | Intrinsics (fx,fy,cx,cy), extrinsics (pos,mat), body_attached flags |
+
+In `quad_view_video.mp4`:
+- [ ] All 4 tiles are non-black and show distinct perspectives
+- [ ] Top-right (left_wrist_cam) and bottom-left (right_wrist_cam) tiles change as arms move
+- [ ] Top-left (overhead) and bottom-right (third_person) tiles are stable
+
+In `camera_metadata.json`:
+- [ ] `left_wrist_cam.is_body_attached: true`
+- [ ] `right_wrist_cam.is_body_attached: true`
+- [ ] `overhead.is_body_attached: false`
+- [ ] `third_person.is_body_attached: false`
+- [ ] All cameras have `intrinsics.fx > 0` and `fovy > 0`
+
+### Step 5 — Verify Wrist Camera Orientation
+
+If the wrist cameras show only sky, ceiling, or looking backward into the arm:
+1. Open `sim/assets/robots/alex/alex.xml`
+2. Find the `left_wrist_cam` camera inside the `left_gripper` body
+3. The `xyaxes` attribute controls orientation. With `xyaxes="1 0 0 0 -1 0"`:
+   - Camera X (right in image) = gripper local +X
+   - Camera Y (up in image) = gripper local -Y
+   - Camera looks along gripper local +Z (toward fingertips)
+4. If orientation is wrong, adjust `xyaxes`. The fingers are in the +Z direction of
+   the `left_gripper` body frame.
+5. Use the viewer to verify: launch with `--camera left_wrist_cam` and check that
+   the table/workspace is visible when the arm is in the rest or pre-grasp pose.
+
+### What "correct" looks like
+- 4 distinct views covering the workspace from complementary angles
+- Wrist cameras provide close-up manipulation views (workspace, table, bricks visible)
+- Overhead provides spatial awareness of the full workspace and robot
+- Third-person provides an external observer perspective for debugging
+- All 4 views are 320×320 square images
+- Wrist camera images change when arm joints move; overhead/third_person stay static
+
+### What "wrong" looks like
+- Wrist camera shows only sky or arm interior (orientation wrong — fix `xyaxes`)
+- Wrist camera does not move when arm joints change (not body-attached — check MJCF body hierarchy)
+- Any view renders all-black (renderer issue or camera pointing at empty space)
+- Square images appear stretched or distorted (resolution mismatch)
+- `quad_view_video.mp4` shows swapped left/right wrist views (check CAMERA_NAMES order)

@@ -1,4 +1,4 @@
-"""Connector metadata for LEGO bricks (Phase 1.2.1).
+"""Connector metadata for LEGO bricks and baseplates (Phase 1.2.1+).
 
 Provides stable IDs and positions for studs and tubes, used for
 assembly verification, reward computation, and alignment checks.
@@ -16,6 +16,7 @@ from sim.lego.constants import (
     STUD_PITCH,
     TUBE_CAPSULE_HALF_HEIGHT,
     TUBE_RING_RADIUS,
+    BaseplateType,
     BrickType,
 )
 
@@ -103,7 +104,7 @@ def get_brick_connectors(brick: BrickType) -> BrickConnectors:
     for it in range(brick.n_tubes):
         x = 0.0  # centerline for 2-wide bricks
         y = -STUD_PITCH * (brick.ny - 2) / 2.0 + it * STUD_PITCH
-        z = -TUBE_CAPSULE_HALF_HEIGHT  # inside bottom face
+        z = TUBE_CAPSULE_HALF_HEIGHT  # inside brick cavity, above bottom face
         tubes.append(
             ConnectorPoint(
                 id=f"tube_{it}",
@@ -117,4 +118,58 @@ def get_brick_connectors(brick: BrickType) -> BrickConnectors:
         brick_name=brick.name,
         studs=tuple(studs),
         tubes=tuple(tubes),
+    )
+
+
+@dataclass(frozen=True)
+class BaseplateConnectors:
+    """Connector metadata for a baseplate (studs only, no tubes).
+
+    Attributes:
+        baseplate_name: e.g., "8x8".
+        studs: Tuple of ConnectorPoint for all studs.
+    """
+
+    baseplate_name: str
+    studs: tuple[ConnectorPoint, ...]
+
+    @property
+    def n_studs(self) -> int:
+        return len(self.studs)
+
+    def stud_positions_array(self) -> np.ndarray:
+        """Return (n_studs, 3) array of stud positions."""
+        return np.array([s.position for s in self.studs], dtype=np.float64)
+
+
+def get_baseplate_connectors(baseplate: BaseplateType) -> BaseplateConnectors:
+    """Compute connector metadata for a baseplate.
+
+    Stud grid centered on baseplate origin (center of bottom face).
+    Studs at Z = baseplate.thickness + STUD_HALF_HEIGHT (on top surface).
+
+    Args:
+        baseplate: BaseplateType definition.
+
+    Returns:
+        BaseplateConnectors with all stud positions.
+    """
+    studs: list[ConnectorPoint] = []
+    for ix in range(baseplate.nx_studs):
+        for iy in range(baseplate.ny_studs):
+            x = -STUD_PITCH * (baseplate.nx_studs - 1) / 2.0 + ix * STUD_PITCH
+            y = -STUD_PITCH * (baseplate.ny_studs - 1) / 2.0 + iy * STUD_PITCH
+            z = baseplate.thickness + STUD_HALF_HEIGHT
+            studs.append(
+                ConnectorPoint(
+                    id=f"stud_{ix}_{iy}",
+                    kind="stud",
+                    position=(x, y, z),
+                    radius=STUD_COLLISION_RADIUS,
+                )
+            )
+
+    return BaseplateConnectors(
+        baseplate_name=baseplate.name,
+        studs=tuple(studs),
     )
