@@ -1,20 +1,36 @@
-"""LEGO brick generation and metadata (Phase 1.2.1).
+"""LEGO brick/baseplate generation, contact physics, and metadata (Phase 1.2).
 
-Provides procedural MJCF generation for LEGO brick models,
-connector metadata, and mass computation.
+Provides procedural MJCF generation for LEGO brick and baseplate models,
+connector metadata, mass computation, and contact scene utilities.
 """
 
 from __future__ import annotations
 
+from sim.lego.baseplate_generator import (
+    generate_baseplate_body_xml,
+    generate_baseplate_mjcf,
+    write_baseplate_assets,
+)
 from sim.lego.brick_generator import (
+    add_lego_defaults,
     generate_brick_body_xml,
     generate_brick_mjcf,
     write_brick_assets,
 )
-from sim.lego.connector import BrickConnectors, ConnectorPoint, get_brick_connectors
+from sim.lego.connection_manager import BrickPairState, ConnectionManager
+from sim.lego.connector import (
+    BaseplateConnectors,
+    BrickConnectors,
+    ConnectorPoint,
+    get_baseplate_connectors,
+    get_brick_connectors,
+)
 from sim.lego.constants import (
+    BASEPLATE_THICKNESS,
+    BASEPLATE_TYPES,
     BRICK_HEIGHT,
     BRICK_TYPES,
+    DEFAULT_BASEPLATE_COLOR,
     DEFAULT_BRICK_COLOR,
     DENSITY_ABS,
     INTER_BRICK_GAP,
@@ -27,19 +43,76 @@ from sim.lego.constants import (
     TUBE_CAPSULE_RADIUS,
     TUBE_RING_RADIUS,
     WALL_THICKNESS,
+    BaseplateType,
     BrickType,
 )
-from sim.lego.mass import compute_brick_mass
+from sim.lego.contact_scene import (
+    check_stud_engagement,
+    generate_baseplate_insertion_scene,
+    generate_episode_scene,
+    generate_insertion_scene,
+    generate_stack_scene,
+    generate_workspace_scene,
+    load_baseplate_insertion_scene,
+    load_insertion_scene,
+    load_stack_scene,
+    setup_connection_manager,
+)
+from sim.lego.contact_utils import InsertionResult, apply_force_ramp, run_insertion
+from sim.lego.episode_manager import (
+    LEVEL_MULTI_STEP,
+    LEVEL_SINGLE_BRICK,
+    LEVEL_SINGLE_CONNECTION,
+    EpisodeInfo,
+    EpisodeManager,
+    ResetMetrics,
+    SpawnPose,
+)
+from sim.lego.mass import compute_baseplate_mass, compute_brick_mass
+from sim.lego.scripted_assembly import AssemblyStepLog, ScriptedAssembler
+from sim.lego.task import (
+    AssemblyGoal,
+    AssemblyResult,
+    PlacementResult,
+    PlacementTarget,
+    check_placement,
+    check_stability,
+    compute_brick_on_brick_target,
+    compute_target_position,
+    evaluate_assembly,
+    generate_assembly_goal,
+)
 
 __all__ = [
+    "AssemblyGoal",
+    "AssemblyResult",
+    "AssemblyStepLog",
+    "BASEPLATE_THICKNESS",
+    "BASEPLATE_TYPES",
     "BRICK_HEIGHT",
     "BRICK_TYPES",
+    "BaseplateConnectors",
+    "BaseplateType",
     "BrickConnectors",
+    "BrickPairState",
     "BrickType",
+    "ConnectionManager",
     "ConnectorPoint",
+    "DEFAULT_BASEPLATE_COLOR",
     "DEFAULT_BRICK_COLOR",
     "DENSITY_ABS",
+    "EpisodeInfo",
+    "EpisodeManager",
     "INTER_BRICK_GAP",
+    "InsertionResult",
+    "LEVEL_MULTI_STEP",
+    "LEVEL_SINGLE_BRICK",
+    "LEVEL_SINGLE_CONNECTION",
+    "PlacementResult",
+    "PlacementTarget",
+    "ResetMetrics",
+    "ScriptedAssembler",
+    "SpawnPose",
     "STUD_COLLISION_RADIUS",
     "STUD_HEIGHT",
     "STUD_PITCH",
@@ -49,9 +122,33 @@ __all__ = [
     "TUBE_CAPSULE_RADIUS",
     "TUBE_RING_RADIUS",
     "WALL_THICKNESS",
+    "add_lego_defaults",
+    "apply_force_ramp",
+    "check_placement",
+    "check_stability",
+    "check_stud_engagement",
+    "compute_baseplate_mass",
     "compute_brick_mass",
+    "compute_brick_on_brick_target",
+    "compute_target_position",
+    "evaluate_assembly",
+    "generate_assembly_goal",
+    "generate_baseplate_body_xml",
+    "generate_baseplate_insertion_scene",
+    "generate_baseplate_mjcf",
     "generate_brick_body_xml",
     "generate_brick_mjcf",
+    "generate_episode_scene",
+    "generate_insertion_scene",
+    "generate_stack_scene",
+    "generate_workspace_scene",
+    "get_baseplate_connectors",
     "get_brick_connectors",
+    "load_baseplate_insertion_scene",
+    "load_insertion_scene",
+    "load_stack_scene",
+    "run_insertion",
+    "setup_connection_manager",
+    "write_baseplate_assets",
     "write_brick_assets",
 ]

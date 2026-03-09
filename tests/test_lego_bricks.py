@@ -98,10 +98,11 @@ class TestConnectorMetadata:
             assert abs(s.position[2] - expected_z) < 1e-10
 
     @pytest.mark.parametrize("name", BRICK_TYPES.keys())
-    def test_tube_z_negative(self, name: str):
+    def test_tube_z_positive(self, name: str):
+        """Tubes are inside the brick cavity (positive Z, above bottom face)."""
         conn = get_brick_connectors(BRICK_TYPES[name])
         for t in conn.tubes:
-            assert t.position[2] < 0, f"Tube {t.id} z={t.position[2]} should be negative"
+            assert t.position[2] > 0, f"Tube {t.id} z={t.position[2]} should be positive"
 
     def test_stud_grid_symmetry_2x2(self):
         conn = get_brick_connectors(BRICK_TYPES["2x2"])
@@ -185,8 +186,8 @@ class TestBrickMJCFGeneration:
         b = BRICK_TYPES[name]
         xml = generate_brick_mjcf(b)
         model = mujoco.MjModel.from_xml_string(xml)
-        # floor(1) + shell_col(1) + shell_vis(1) + stud_col(n) + stud_vis(n) + tube_caps(n_t*8)
-        expected = 1 + 1 + 1 + b.n_studs + b.n_studs + b.n_tubes * TUBE_CAPSULE_COUNT
+        # floor(1) + shell_col(5: top+4walls) + shell_vis(1) + stud_col(n) + stud_vis(n) + tube_caps(n_t*8)
+        expected = 1 + 5 + 1 + b.n_studs + b.n_studs + b.n_tubes * TUBE_CAPSULE_COUNT
         assert model.ngeom == expected
 
     @pytest.mark.parametrize("name", BRICK_TYPES.keys())
@@ -223,7 +224,7 @@ class TestBrickContactClasses:
 
     def test_shell_contact_class(self):
         model = self._load_brick_model("2x4")
-        shell_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "brick_2x4_shell")
+        shell_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "brick_2x4_shell_top")
         assert shell_id >= 0
         assert model.geom_contype[shell_id] == 2
         assert model.geom_conaffinity[shell_id] == 3  # brick_surface: LEGO + robot
@@ -232,15 +233,15 @@ class TestBrickContactClasses:
         model = self._load_brick_model("2x4")
         stud_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "brick_2x4_stud_0_0")
         assert stud_id >= 0
-        assert model.geom_contype[stud_id] == 2
-        assert model.geom_conaffinity[stud_id] == 2  # stud_tube: LEGO-only
+        assert model.geom_contype[stud_id] == 6  # lego/stud
+        assert model.geom_conaffinity[stud_id] == 7  # stud: contacts tubes + surfaces
 
     def test_tube_capsule_contact_class(self):
         model = self._load_brick_model("2x4")
         cap_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "brick_2x4_tube_0_c0")
         assert cap_id >= 0
-        assert model.geom_contype[cap_id] == 2
-        assert model.geom_conaffinity[cap_id] == 2  # stud_tube: LEGO-only
+        assert model.geom_contype[cap_id] == 4  # lego/tube
+        assert model.geom_conaffinity[cap_id] == 4  # tube: contacts studs only
 
     def test_visual_no_collision(self):
         model = self._load_brick_model("2x2")

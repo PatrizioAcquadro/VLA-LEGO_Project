@@ -16,7 +16,7 @@
 
 ---
 
-## 0) Soft Real Press-Fit Definition (the “definitive” version for this project)
+## 1.2.0) Soft Real Press-Fit Definition (the “definitive” version for this project)
 ### What we will do
 Implement a **Soft Real Press-Fit** LEGO connection model: studs and tubes are represented with accurate geometry/topology, but the physics is made robust via **carefully designed compliance, tolerances, and contact conditioning** rather than hard interference.
 
@@ -51,7 +51,7 @@ True LEGO assembly is defined by **insertion forces**, **alignment**, and **mech
 
 ---
 
-## 1) Procedural LEGO Brick Models (2×2, 2×4, 2×6) — A+C Fusion
+## 1.2.1) Procedural LEGO Brick Models (2×2, 2×4, 2×6) — A+C Fusion
 ### What we will do
 Create **procedural (parametric) LEGO bricks** that generate:
 - **Accurate visual meshes with studs**
@@ -100,7 +100,7 @@ Procedural assets provide:
 
 ---
 
-## 2) Stud/Tube Contact Physics — Soft Real Press-Fit Implementation
+## 1.2.2) Stud/Tube Contact Physics — Soft Real Press-Fit Implementation
 ### What we will do
 Implement and tune contact physics to achieve press-fit behavior using:
 - physically plausible contact interactions,
@@ -147,7 +147,7 @@ This is the core of LEGO assembly realism. If it fails, the environment either b
 
 ---
 
-## 3) Baseplate & Workspace (Option A adapted for soft-real press-fit)
+## 1.2.3) Baseplate & Workspace (Option A adapted for soft-real press-fit)
 ### What we will do
 Create a baseplate that is **physically stable and press-fit compatible**, prioritizing realism while keeping the geometry and collisions solver-friendly.
 
@@ -179,7 +179,7 @@ The baseplate anchors the entire assembly task. It defines the reference frame f
 
 ---
 
-## 4) Multi-View Rendering & What to Save (best-for-project + startup)
+## 1.2.4) Multi-View Rendering & What to Save (best-for-project + startup)
 ### What we will do
 Implement a camera and data logging setup that maximizes:
 - learning signal (multi-view perception),
@@ -229,7 +229,7 @@ Startups care about **data** and **measurement**. Capturing richer modalities ea
 
 ---
 
-## 5) Block Spawning & Reset — Best long-term choice (work upfront that pays off)
+## 1.2.5) Block Spawning & Reset — Best long-term choice (work upfront that pays off)
 ### What we will do
 Implement a **high-reliability episode manager**: deterministic spawns, collision-free initialization, settle phase, curriculum hooks, and full reproducibility.
 
@@ -264,7 +264,7 @@ This is one of the strongest “engineering signals” for startups: the ability
 
 ---
 
-## 6) MVP-3 Task (multi-step stacking/assembly) — adapted to soft real press-fit
+## 1.2.6) MVP-3 Task (multi-step stacking/assembly) — adapted to soft real press-fit
 ### What we will do
 Implement an MVP that demonstrates true assembly: **multi-step stacking** of multiple bricks on the baseplate with real(soft) press-fit connections—suitable for compelling demos and scalable dataset generation.
 
