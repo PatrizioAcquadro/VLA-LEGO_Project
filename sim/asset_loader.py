@@ -13,10 +13,10 @@ Usage:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import mujoco
-
-from sim.mujoco_env import load_model
+if TYPE_CHECKING:
+    import mujoco
 
 ASSETS_DIR: Path = Path(__file__).resolve().parent / "assets"
 SCENES_DIR: Path = ASSETS_DIR / "scenes"
@@ -123,7 +123,7 @@ def resolve_lego_baseplate_path(baseplate_name: str) -> Path:
     return path.resolve()
 
 
-def load_scene(scene_name: str) -> mujoco.MjModel:
+def load_scene(scene_name: str) -> "mujoco.MjModel":
     """Load an MJCF scene by name.
 
     This is the primary entrypoint for loading simulation scenes.
@@ -139,5 +139,7 @@ def load_scene(scene_name: str) -> mujoco.MjModel:
         FileNotFoundError: If the scene file is not found.
         mujoco.FatalError: If the MJCF fails to parse.
     """
+    from sim.mujoco_env import load_model
+
     path = resolve_scene_path(scene_name)
     return load_model(path)

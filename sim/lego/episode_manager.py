@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 
@@ -208,9 +209,6 @@ class EpisodeManager:
         max_spawn_attempts: int = 50,
         random_yaw: bool = True,
     ) -> None:
-        if mujoco is None:  # pragma: no cover
-            raise RuntimeError("mujoco package is required for EpisodeManager")
-
         # Resolve brick slots
         if brick_slots is None:
             brick_slots = [brick_set[i % len(brick_set)] for i in range(max_bricks)]
@@ -244,6 +242,23 @@ class EpisodeManager:
         self._max_spawn_attempts = max_spawn_attempts
         self._random_yaw = random_yaw
 
+        self._template_path: Path | None = None
+        self._model = None
+        self._data = None
+        self._slot_qpos_addrs: list[int] = []
+        self._slot_vel_addrs: list[int] = []
+        self._slot_body_ids: list[int] = []
+        self._slot_geom_ids: list[list[int]] = []
+        self._slot_geom_ctypes: list[list[int]] = []
+        self._slot_geom_caffinities: list[list[int]] = []
+        self._metrics = ResetMetrics()
+        self._episode_count: int = 0
+
+        # MuJoCo is optional for spawn-sampling unit tests. Runtime simulation
+        # state is only initialized when the package is available.
+        if mujoco is None:  # pragma: no cover
+            return
+
         # Compile template scene once.
         # Write to file because <include file="...alex.xml"> requires path resolution.
         from sim.asset_loader import SCENES_DIR
@@ -264,14 +279,6 @@ class EpisodeManager:
         mujoco.mj_forward(self._model, self._data)
 
         # Resolve freejoint qpos and velocity addresses + body IDs for each slot
-        self._slot_qpos_addrs: list[int] = []
-        self._slot_vel_addrs: list[int] = []
-        self._slot_body_ids: list[int] = []
-        # Geom IDs + original contact bits per slot (for contact enable/disable)
-        self._slot_geom_ids: list[list[int]] = []
-        self._slot_geom_ctypes: list[list[int]] = []
-        self._slot_geom_caffinities: list[list[int]] = []
-
         for i, bt_name in enumerate(self._brick_slots):
             bt = BRICK_TYPES[bt_name]
             joint_name = f"brick_{i}_{bt.name}_joint"
@@ -302,8 +309,10 @@ class EpisodeManager:
         for i in range(self.max_bricks):
             self._disable_slot_contacts(i)
 
-        self._metrics = ResetMetrics()
-        self._episode_count: int = 0
+    def _require_simulation(self) -> None:
+        """Ensure MuJoCo-backed simulation state is available."""
+        if mujoco is None or self._model is None or self._data is None:
+            raise RuntimeError("mujoco package is required for EpisodeManager")
 
     # -----------------------------------------------------------------------
     # Properties
@@ -312,11 +321,15 @@ class EpisodeManager:
     @property
     def model(self) -> mujoco.MjModel:  # type: ignore[name-defined]
         """Compiled MuJoCo template model."""
+        self._require_simulation()
+        assert self._model is not None
         return self._model
 
     @property
     def data(self) -> mujoco.MjData:  # type: ignore[name-defined]
         """MuJoCo simulation data (current episode state)."""
+        self._require_simulation()
+        assert self._data is not None
         return self._data
 
     @property
@@ -371,6 +384,7 @@ class EpisodeManager:
             EpisodeInfo with seed, level, brick types, spawn poses, and
             settle metrics. ``settle_success=False`` on failure.
         """
+        self._require_simulation()
         self._episode_count += 1
         rng = np.random.Generator(np.random.PCG64(seed))
 
@@ -395,11 +409,13 @@ class EpisodeManager:
             )
 
         # Reset all physics state to initial reference configuration
-        mujoco.mj_resetData(self._model, self._data)
+        model = self.model
+        data = self.data
+        mujoco.mj_resetData(model, data)
 
         # Write spawn poses into qpos and park unused slots
         self._apply_spawn_poses(spawn_poses, n_active)
-        mujoco.mj_forward(self._model, self._data)
+        mujoco.mj_forward(model, data)
 
         # Settle phase: let bricks fall and stabilize
         settle_success, settle_steps = self._settle(n_active)
@@ -491,15 +507,17 @@ class EpisodeManager:
 
     def _enable_slot_contacts(self, slot_idx: int) -> None:
         """Restore original contact bits for a brick slot (makes it physically active)."""
+        model = self.model
         for j, g in enumerate(self._slot_geom_ids[slot_idx]):
-            self._model.geom_contype[g] = self._slot_geom_ctypes[slot_idx][j]
-            self._model.geom_conaffinity[g] = self._slot_geom_caffinities[slot_idx][j]
+            model.geom_contype[g] = self._slot_geom_ctypes[slot_idx][j]
+            model.geom_conaffinity[g] = self._slot_geom_caffinities[slot_idx][j]
 
     def _disable_slot_contacts(self, slot_idx: int) -> None:
         """Zero contact bits for a brick slot (makes it transparent to physics)."""
+        model = self.model
         for g in self._slot_geom_ids[slot_idx]:
-            self._model.geom_contype[g] = 0
-            self._model.geom_conaffinity[g] = 0
+            model.geom_contype[g] = 0
+            model.geom_conaffinity[g] = 0
 
     def _apply_spawn_poses(self, poses: list[SpawnPose], n_active: int) -> None:
         """Write spawn poses into data.qpos and update contact flags.
@@ -512,19 +530,21 @@ class EpisodeManager:
             poses: Spawn poses for active slots (length == n_active).
             n_active: Number of active slots.
         """
+        data = self.data
+
         # Enable contacts for active slots and write their spawn poses
         for i, pose in enumerate(poses):
             self._enable_slot_contacts(i)
             addr = self._slot_qpos_addrs[i]
-            self._data.qpos[addr : addr + 3] = pose.position
-            self._data.qpos[addr + 3 : addr + 7] = pose.quaternion
+            data.qpos[addr : addr + 3] = pose.position
+            data.qpos[addr + 3 : addr + 7] = pose.quaternion
 
         # Disable contacts for unused slots and park their positions
         for i in range(n_active, self.max_bricks):
             self._disable_slot_contacts(i)
             addr = self._slot_qpos_addrs[i]
-            self._data.qpos[addr : addr + 3] = _PARK_POS
-            self._data.qpos[addr + 3 : addr + 7] = _IDENTITY_QUAT
+            data.qpos[addr : addr + 3] = _PARK_POS
+            data.qpos[addr + 3 : addr + 7] = _IDENTITY_QUAT
 
     # -----------------------------------------------------------------------
     # Settle phase
@@ -542,10 +562,12 @@ class EpisodeManager:
         Returns:
             (success, steps_taken) — success=True if settled within budget.
         """
+        model = self.model
+        data = self.data
         active_body_ids = self._slot_body_ids[:n_active]
 
         for step in range(self._settle_max_steps):
-            mujoco.mj_step(self._model, self._data)
+            mujoco.mj_step(model, data)
 
             if (step + 1) % self._settle_check_interval != 0:
                 continue
@@ -554,14 +576,14 @@ class EpisodeManager:
             max_vel = 0.0
             for body_id in active_body_ids:
                 # data.cvel[body_id] = [ang_x, ang_y, ang_z, lin_x, lin_y, lin_z]
-                lin_speed = float(np.linalg.norm(self._data.cvel[body_id, 3:]))
+                lin_speed = float(np.linalg.norm(data.cvel[body_id, 3:]))
                 if lin_speed > max_vel:
                     max_vel = lin_speed
 
             # Penetration check: max negative contact distance
             max_pen = 0.0
-            for k in range(self._data.ncon):
-                dist = float(self._data.contact[k].dist)
+            for k in range(data.ncon):
+                dist = float(data.contact[k].dist)
                 if dist < 0.0 and -dist > max_pen:
                     max_pen = -dist
 

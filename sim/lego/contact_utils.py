@@ -36,7 +36,7 @@ def get_top_body_id(model, top_name: str = "top", brick_name: str = "2x2") -> in
     import mujoco
 
     body_name = f"{top_name}_{brick_name}"
-    return mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name)
+    return int(mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name))
 
 
 def get_top_joint_id(model, top_name: str = "top", brick_name: str = "2x2") -> int:
@@ -44,7 +44,7 @@ def get_top_joint_id(model, top_name: str = "top", brick_name: str = "2x2") -> i
     import mujoco
 
     joint_name = f"{top_name}_{brick_name}_joint"
-    return mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+    return int(mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name))
 
 
 def get_max_penetration(data) -> float:
@@ -329,7 +329,7 @@ def apply_force_ramp(
     body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name)
     initial_pos = data.xpos[body_id].copy()
 
-    dt = model.opt.timestep
+    dt = float(model.opt.timestep)
     current_force = 0.0
 
     while current_force < max_force:
@@ -349,7 +349,7 @@ def apply_force_ramp(
         if displacement > displacement_threshold:
             # Clear applied force
             data.xfrc_applied[body_id, :] = 0
-            return current_force
+            return float(current_force)
 
     # Clear applied force
     data.xfrc_applied[body_id, :] = 0
@@ -380,7 +380,7 @@ def measure_position_jitter(
     import mujoco
 
     body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name)
-    dt = model.opt.timestep
+    dt = float(model.opt.timestep)
     n_steps = int(duration_s / dt)
 
     positions: list[np.ndarray] = []
@@ -433,7 +433,7 @@ def measure_position_drift(
         mujoco.mj_step(model, data)
         if connection_manager is not None:
             connection_manager.update()
-        drift = np.linalg.norm(data.xpos[body_id] - initial_pos)
+        drift = float(np.linalg.norm(data.xpos[body_id] - initial_pos))
         max_drift = max(max_drift, drift)
 
     return float(max_drift)
