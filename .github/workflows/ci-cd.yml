@@ -1,6 +1,6 @@
 # ============================================================================
 # CI/CD Pipeline: Unified workflow for testing, building, and releasing
-# - CI jobs run on all pushes and PRs
+# - CI jobs run on pushes to main/tags and PRs targeting main
 # - CD jobs (container/apptainer) run only when:
 #   - Tags v* (releases)
 #   - workflow_dispatch (manual trigger)
@@ -12,10 +12,10 @@ name: CI/CD
 
 on:
   push:
-    branches: ['**']
+    branches: [main]
     tags: ['v*']
   pull_request:
-    branches: ['**']
+    branches: [main]
   workflow_dispatch:
 
 # Minimal permissions by default
