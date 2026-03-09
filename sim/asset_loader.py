@@ -123,7 +123,7 @@ def resolve_lego_baseplate_path(baseplate_name: str) -> Path:
     return path.resolve()
 
 
-def load_scene(scene_name: str) -> "mujoco.MjModel":
+def load_scene(scene_name: str) -> mujoco.MjModel:
     """Load an MJCF scene by name.
 
     This is the primary entrypoint for loading simulation scenes.
