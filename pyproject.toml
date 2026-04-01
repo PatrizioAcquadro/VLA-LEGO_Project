@@ -54,7 +54,16 @@ sim = [
     "imageio[ffmpeg]>=2.31.0",
 ]
 
-# Dev: everything (ci + train + sim + pre-commit)
+# VLM: HuggingFace backbone dependencies
+vlm = [
+    "transformers>=4.49.0",
+    "Pillow>=10.0.0",
+    "accelerate>=0.30.0",
+    "sentencepiece>=0.2.0",
+    "torchvision>=0.15.0",
+]
+
+# Dev: everything (ci + train + sim + vlm + pre-commit)
 dev = [
     # CI tools
     "pytest>=7.0.0",
@@ -64,11 +73,16 @@ dev = [
     "mypy>=1.0.0",
     # Training
     "wandb>=0.15.0",
-    "accelerate>=0.20.0",
+    "accelerate>=0.30.0",
     "deepspeed>=0.10.0",
     # Simulation
     "mujoco>=3.1.0,<4.0.0",
     "imageio[ffmpeg]>=2.31.0",
+    # VLM
+    "transformers>=4.49.0",
+    "Pillow>=10.0.0",
+    "sentencepiece>=0.2.0",
+    "torchvision>=0.15.0",
     # Dev-only
     "pre-commit>=3.0.0",
 ]
