@@ -13,6 +13,10 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "smoke: simulation smoke tests (Phase 0.2.4)")
     config.addinivalue_line("markers", "assets: asset loading and linting tests (Phase 0.2.5)")
     config.addinivalue_line("markers", "lego: LEGO brick tests (Phase 1.2.1)")
+    config.addinivalue_line(
+        "markers", "vlm: marks tests requiring transformers/VLM deps (Phase 3.1)"
+    )
+    config.addinivalue_line("markers", "action_head: action head tests (Phase 3.2)")
 
 
 def pytest_collection_modifyitems(config, items):
@@ -35,6 +39,19 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "mujoco" in item.keywords:
                 item.add_marker(skip_mujoco)
+
+    try:
+        import transformers  # noqa: F401
+
+        has_transformers = True
+    except ImportError:
+        has_transformers = False
+
+    if not has_transformers:
+        skip_vlm = pytest.mark.skip(reason="transformers not installed")
+        for item in items:
+            if "vlm" in item.keywords:
+                item.add_marker(skip_vlm)
 
 
 @pytest.fixture

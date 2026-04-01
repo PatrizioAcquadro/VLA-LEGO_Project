@@ -13,6 +13,7 @@ VLA-LEGO is a Vision-Language-Action system for bimanual robotic LEGO assembly. 
 python3 -m venv .venv && source .venv/bin/activate
 pip install --upgrade pip setuptools wheel
 pip install -e ".[dev]"
+pip install -e ".[vlm]"                                                        # VLM backbone deps (transformers, Pillow, sentencepiece, accelerate, torchvision)
 pre-commit install
 ```
 
@@ -51,6 +52,13 @@ python scripts/validate_episode_manager.py                                     #
 python scripts/validate_episode_manager.py --n-stress 100                      # stress test with 100 resets
 python scripts/validate_lego_task.py                                           # MVP-3 task validation (goal gen, scripted assembly, metrics)
 python scripts/validate_lego_task.py --n-stress 20                             # stress test with 20 assemblies
+python scripts/validate_vlm_backbone.py                                        # VLM backbone inference sanity check (8 checks)
+python scripts/validate_vlm_backbone.py --model-config vlm                     # with production config (A100)
+python scripts/profile_vlm_memory.py                                           # VLM VRAM profiling (auto-detects GPU tier)
+python scripts/profile_vlm_memory.py --quick                                   # quick mode (2 configs only)
+python scripts/profile_vlm_memory.py --model-config vlm                        # with production config (A100)
+python scripts/validate_action_head.py                                         # Action head + VLA model validation (10 checks)
+python scripts/validate_action_head.py --model-config vla                      # with production config (A100)
 ```
 
 ### Testing
@@ -75,6 +83,11 @@ pytest tests/test_episode_manager.py -v  # Episode manager: spawn, settle, curri
 pytest tests/test_episode_manager.py -v -m "not slow"  # episode manager (fast subset)
 pytest tests/test_lego_task.py -v        # MVP-3 task: goal gen, scripted assembly, metrics
 pytest tests/test_lego_task.py -v -m "not slow"  # task tests (fast subset)
+pytest tests/test_vlm_backbone.py -v     # VLM backbone tests (42 tests: config, loading, processor, inference)
+pytest tests/test_vlm_backbone.py -v -m "not slow and not gpu"  # VLM CPU-only tests (19 tests)
+pytest tests/test_action_head.py -v                              # Action head tests (88 tests: contract + flow matching + projectors, CPU-only)
+pytest tests/test_vla_model.py -v                                # VLA model tests (29 tests: 20 CPU + 9 GPU)
+pytest tests/test_vla_model.py -v -m "not slow and not gpu"      # VLA CPU-only tests (20 tests)
 ```
 
 ### Code Quality
@@ -109,7 +122,7 @@ sbatch infra/gilbreth/job_templates/06_smoke_sim_headless.sh   # headless sim sm
 
 ### Configuration
 All hyperparameters flow through Hydra configs in `configs/`. Key config groups:
-- `model`: base (512 hidden, 6 layers, 8 heads, GELU, ~25M params) or large (2048 hidden, 24 layers, 32 heads, SwiGLU, flow matching, ~1.2B params)
+- `model`: base (512 hidden, 6 layers, 8 heads, GELU, ~25M params) or large (2048 hidden, 24 layers, 32 heads, SwiGLU, flow matching, ~1.2B params) or vlm (Qwen3.5-4B, A100) or vlm_dev (Qwen3.5-4B, RTX 4090) or vla (Qwen3.5-4B + action head, A100) or vla_dev (4090)
 - `trainer`: default or debug (100 steps, fp32)
 - `cluster`: local or gilbreth (DeepSpeed, multi-GPU)
 
@@ -119,7 +132,8 @@ All hyperparameters flow through Hydra configs in `configs/`. Key config groups:
 - `ci` - linters + pytest (CI only)
 - `train` - wandb, accelerate, deepspeed
 - `sim` - `mujoco>=3.1.0,<4.0.0`, `imageio[ffmpeg]>=2.31.0`
-- `dev` - ci + train + sim + pre-commit (use this for local dev)
+- `vlm` - `transformers>=4.49.0`, `Pillow>=10.0.0`, `accelerate>=0.30.0`, `sentencepiece>=0.2.0`, `torchvision>=0.15.0` (Phase 3.1.0)
+- `dev` - ci + train + sim + vlm + pre-commit (use this for local dev)
 
 ### Console Scripts
 - `vla-train` - training entry point (`train.trainer:main`)
@@ -130,6 +144,160 @@ All hyperparameters flow through Hydra configs in `configs/`. Key config groups:
 
 ### Pytest Markers
 - `slow`, `gpu`, `mujoco`, `viewer`, `smoke`, `assets`, `lego` - auto-skipped when hardware/packages unavailable
+- `vlm` - auto-skipped when `transformers` not installed (Phase 3.1)
+- `action_head` - action head tests (Phase 3.2), no auto-skip (CPU-only tests use mock backbone)
+
+### VLM Backbone (Phase 3.1.1)
+- **Module**: `models/vlm_backbone.py` — lazy import (only when `architecture.type: "vlm"`)
+- **Model**: Qwen3.5-4B (`Qwen/Qwen3.5-4B`) via `AutoModelForImageTextToText.from_pretrained`
+- **Key classes**: `VLMBackbone(nn.Module)`, `VLMBackboneInfo` (frozen dataclass)
+- **Loading**: `load_vlm_backbone(cfg) → VLMBackbone` — handles dtype, device_map, freeze policy, verification
+- **Verification**: `verify_backbone(backbone) → bool` — checks param count (3.6B–5.5B), dtype, NaN/Inf, hidden_size
+- **Architecture constants (Qwen3.5-4B)**: `hidden_size=2560`, `num_hidden_layers=32`, `vocab_size=248320`, total params ~4.54B
+- **Vision encoder submodule**: `model.model.visual` (~334M params); frozen via `freeze_vision()`
+- **Phase 3.2 interface**: `backbone.get_hidden_states(input_ids, attention_mask, pixel_values, image_grid_thw) → (B, seq, 2560)`; `backbone.hidden_size` (int); `backbone.processor`
+- **`.to()` override**: No-op when `device_map="auto"` was used (trainer's `.to(device)` call is safe; Phase 3.3 will update trainer)
+- **Config routing**: `get_model(cfg)` in `models/utils.py` lazy-imports `load_vlm_backbone` for `architecture.type: "vlm"`
+- **Tests**: `tests/test_vlm_backbone.py` — 42 tests: `TestVLMBackboneConfig` (5, cpu), `TestVLMBackboneLoading` (8, `vlm,gpu,slow`), `TestVLMBackboneInfo` (2), `TestBackwardCompatibility` (2), `TestResolveDtype` (4), `TestProcessorInfo` (2, cpu), `TestContextBudget` (4, cpu), `TestProcessorFunctions` (8, `vlm,gpu,slow`), `TestVLMInference` (7, `vlm,gpu,slow`)
+- **SLURM**: `infra/gilbreth/job_templates/07_download_vlm_weights.sh` — pre-caches ~8 GB weights on scratch (no GPU needed)
+
+### Tokenizer & Processor (Phase 3.1.2)
+- **Dataclass**: `ProcessorInfo` (frozen) — vocab_size, special token IDs (bos/eos/pad/image/vision_start/vision_end), `estimated_vision_tokens_per_image`, `image_resolution`
+- **`estimate_vision_tokens(backbone, width, height) → int`**: measures actual vision tokens per image by running a dummy image through processor, counting `image_token_id` tokens
+- **`get_processor_info(backbone, image_resolution) → ProcessorInfo`**: extracts tokenizer metadata + measures vision token count
+- **`preprocess_images(backbone, images, text, device) → dict`**: numpy uint8 RGB (MuJoCo) or PIL → model-ready tensors (`input_ids`, `attention_mask`, `pixel_values`, `image_grid_thw`). Uses `processor.apply_chat_template()` with `{"type": "image"}` content markers
+- **`compute_context_budget(vision_tokens_per_image, ...) → dict`**: pure-function context window budget breakdown (vision + text + remaining for actions). Default: 4 images, 8192 max seq, ~245 text tokens
+- **Chat template format**: Qwen VL `<|vision_start|><|image_pad|>...<|vision_end|>` — image_pad count = vision tokens per image
+- **Phase 3.2 interface**: `ProcessorInfo.estimated_vision_tokens_per_image` for context budgeting; `preprocess_images()` for data pipeline input preparation
+
+### VLM Inference Sanity Check (Phase 3.1.3)
+- **Validation script**: `scripts/validate_vlm_backbone.py` — 8-check standalone validation with artifacts to `logs/vlm_backbone/`
+- **CLI**: `python scripts/validate_vlm_backbone.py [--model-config vlm_dev]` (defaults to vlm_dev)
+- **Image source**: MuJoCo sim images if available (alex_upper_body + MultiViewRenderer), synthetic fallback (320×320 random uint8)
+- **8 checks**: model loading, processor, text-only forward, single-image forward, multi-view forward, hidden state extraction, text generation, numerical sanity
+- **Artifacts**: `logs/vlm_backbone/validation_report.json`, `sample_generation.txt`, `hidden_states_shape.json`
+- **Tests**: `TestVLMInference` in `tests/test_vlm_backbone.py` — 7 tests (markers: `vlm,gpu,slow`); synthetic images only (no MuJoCo dependency in tests)
+- **Key assertions**: logit shape `(1, seq, 248320)`, hidden state shape `(1, seq, 2560)`, bf16 dtype, no NaN/Inf, non-empty generation, valid token IDs `[0, vocab_size)`
+- **EO-1 reference**: `docs/eo1-reference.md` — durable reference for EO-1 repo architecture, file layout, reusable patterns per phase
+
+### VLM Memory Profiling (Phase 3.1.4)
+- **Profiling script**: `scripts/profile_vlm_memory.py` — VRAM sweep with auto-detect GPU tier
+- **CLI**: `python scripts/profile_vlm_memory.py [--model-config vlm_dev] [--quick]`
+- **Auto-detect**: `torch.cuda.get_device_properties().total_mem` — <=32 GB → 4090-tier (7 configs), >32 GB → A100-tier (11 configs)
+- **OOM-safe**: each config wrapped in try/except, reports "OOM" and continues
+- **Metrics**: peak VRAM (`torch.cuda.max_memory_allocated()`), forward/backward wall time (ms), remaining VRAM, KV cache analytical estimate
+- **Training mode**: temporarily unfreezes backbone for full gradient computation (worst case); does NOT include optimizer states
+- **Artifacts**: `logs/vlm_memory/memory_profile.json` (raw), `memory_table.txt` (ASCII table), `action_head_budget.json` (remaining VRAM per training config)
+- **Phase 3.2 interface**: `action_head_budget.json` — remaining VRAM by (seq_len, batch_size) for action head sizing
+- **SLURM** (3.1.4b): `infra/gilbreth/job_templates/08_profile_vlm_memory.sh` — single A100, requires weights pre-cached via job 07
+
+### Action Chunk Contract (Phase 3.2.0)
+- **Module**: `models/action_head.py` — frozen constants, dataclasses, chunking utilities
+- **Frozen constants**: `ACTION_CHUNK_SIZE=16` (0.8 s at 20 Hz), `ACTION_DIM=17`, `STATE_DIM=52`, `TOKENS_PER_ACTION_STEP=1`, `TOKENS_PER_STATE=1`
+- **Note**: `ACTION_DIM` / `STATE_DIM` mirror `sim/action_space.py` / `sim/robot_state.py` but are independent (no mujoco import)
+- **`TokenType(IntEnum)`**: `TEXT=0`, `IMAGE=1`, `STATE=2`, `ACTION=3` — per-position loss routing for Transfusion dual loss
+- **`ActionChunkConfig`** (frozen dataclass): `chunk_size`, `action_dim`, `state_dim`, `tokens_per_action_step`, `tokens_per_state`; `.tokens_per_chunk` property; `.chunk_shape` property; `from_cfg()` classmethod
+- **`chunk_actions(actions, chunk_size) → (chunks, masks)`**: splits `(n_steps, 17)` into `(n_chunks, 16, 17)` + binary mask; zero-pads last chunk
+- **`chunk_actions_batched(actions, masks, chunk_size)`**: batch-level chunking for `(B, max_steps, 17)`
+- **`compute_action_context_tokens(n_steps, chunk_size) → int`**: total action tokens in VLM sequence
+- **Config**: `configs/model/action_head.yaml` — chunk contract, projector arch, timestep embedding dim (256), flow matching params (K=10, Euler, Beta(1.5, 1.0) time sampling), loss weights (lambda_text=1.0, lambda_action=1.0), inference (execute_steps=8), float32_head=true
+- **EO-1 adaptation notes**: EO-1 uses reversed time (t=0→data, t=1→noise); we use standard CFM (t=0→noise, t=1→data). EO-1 keeps action head in float32. EO-1 uses Beta(1.5, 1.0) for time sampling
+- **Tests**: `tests/test_action_head.py` — 88 tests: `TestActionChunkContract` (13), `TestContextBudget` (3), `TestTensorInterfaceShapes` (6), `TestFlowMatchingModule` (27), `TestRobotStateProjector` (11), `TestSinusoidalTimestepEmbedding` (6), `TestNoisyActionProjector` (12), `TestActionOutputHead` (10). All CPU-only
+- **Pytest marker**: `action_head` in `tests/conftest.py` (no auto-skip — CPU-only tests have no external deps)
+- **Phase 3.2.1+ interface**: `ActionChunkConfig` for component sizing; `TokenType` for loss routing; `chunk_actions()` for dataloader (Phase 3.3)
+
+### Flow Matching Module (Phase 3.2.1)
+- **Module**: `models/action_head.py` — `FlowMatchingConfig` (frozen dataclass) + `FlowMatchingModule(nn.Module)` (no learnable parameters)
+- **Time convention**: standard OT-CFM — t=0→noise, t=1→data (NOT EO-1's reversed convention)
+- **OT path**: `x_t = (1-t)*noise + t*x_data`; target velocity `u_t = x_data - noise` (constant along path)
+- **Time sampling**: Beta(1.5, 1.0) scaled to [time_min=0.001, time_max=0.999]; uniform fallback
+- **`FlowMatchingConfig`**: frozen, `from_cfg()` classmethod; defaults match `configs/model/action_head.yaml`
+- **`FlowMatchingModule` API**:
+  - `sample_timestep(batch_size, device) → (B, 1, 1)` — broadcasts over `(B, chunk_size, action_dim)`
+  - `interpolate(x_data, noise, t) → (B, C, D)` — straight-line OT path
+  - `target_velocity(x_data, noise) → (B, C, D)` — constant velocity field
+  - `loss(pred_v, target_v, mask=None) → scalar` — per-step MSE averaged over action_dim, masked mean over valid positions
+  - `denoise(predict_fn, shape, K, device, x_init=None) → (B, C, D)` — ODE integration from t=0→1; optional x_init for deterministic testing
+- **Solvers**: `euler` (default), `midpoint`, `rk4` — all exact for constant velocity (OT-CFM identity test passes for all three)
+- **`predict_fn` contract**: callable `(x_t, t) → velocity` where t is `(B, 1, 1)` — context baked in via closure at call site
+
+### Robot State Projector (Phase 3.2.2)
+- **Module**: `models/action_head.py` — `RobotStateProjector(nn.Module)`
+- **Architecture**: `LayerNorm(52)` → `Linear(52, H)` → `SiLU` → `Linear(H, H)` → unsqueeze → `(B, 1, H)`
+- **Input**: `(B, 52)` normalized robot state; **Output**: `(B, 1, H)` single token for VLM sequence injection
+- **Design note**: EO-1 uses simple `Linear(state_dim, hidden_size)`; we add LayerNorm + 2-layer MLP for heterogeneous 52-D components
+- **Constructor**: `RobotStateProjector(state_dim=52, hidden_dim=2560, activation="silu")`
+- **`from_cfg(cfg, hidden_dim)`**: takes action_head config dict + runtime `backbone.hidden_size`; `projector.hidden_dim: null` in yaml → resolved from `hidden_dim` arg
+- **Parameter count** (H=2560): LayerNorm 104 + Linear(52→2560) 135,680 + Linear(2560→2560) 6,556,160 = **6,691,944**
+- **Tests**: `tests/test_action_head.py::TestRobotStateProjector` — 11 tests (output shape, NaN, gradient flow, magnitude, batched, param count, from_cfg variants, invalid activation)
+- **Phase 3.2.3 interface**: `RobotStateProjector` output `(B, 1, H)` is concatenated with action tokens in sequence assembly (Phase 3.2.4)
+
+### Noisy Action Projector (Phase 3.2.3)
+- **Module**: `models/action_head.py` — `sinusoidal_timestep_embedding()` helper + `NoisyActionProjector(nn.Module)`
+- **`sinusoidal_timestep_embedding(t, dim) → (B, dim)`**: parameter-free sinusoidal encoding of scalar timestep t ∈ [0, 1]; formula `embed[2i]=sin(t/10000^(2i/dim))`, `embed[2i+1]=cos(...)` following EO-1's `embed_suffix()` convention; `dim` must be positive even
+- **`NoisyActionProjector` architecture**: sinusoidal embed `(B, 1)` → `(B, d_t)` → expand → `(B, 16, d_t)` → concat with noisy actions `(B, 16, 17+d_t)` → `Linear(273, H)` + `SiLU` + `Linear(H, H)` → `(B, 16, H)`
+- **Input**: `(B, chunk_size, 17)` noisy actions + `(B, 1)` timestep; **Output**: `(B, chunk_size, H)` action tokens for VLM sequence
+- **Constructor**: `NoisyActionProjector(action_dim=17, hidden_dim=2560, timestep_embed_dim=256, activation="silu")`
+- **`from_cfg(cfg, hidden_dim)`**: reads `action_dim`, `timestep_embed_dim`, `projector.activation` from action_head config; `hidden_dim` resolved at runtime
+- **Parameter count** (H=2560, d_t=256): Linear(273→2560) 701,440 + Linear(2560→2560) 6,556,160 = **7,257,600**
+- **Tests**: `tests/test_action_head.py::TestNoisyActionProjector` (12) + `TestSinusoidalTimestepEmbedding` (6)
+
+### Action Output Head (Phase 3.2.3)
+- **Module**: `models/action_head.py` — `ActionOutputHead(nn.Module)`
+- **Architecture**: `Linear(H, H)` + `SiLU` + `Linear(H, 17)` — EO-1's 2-layer MLP action head pattern
+- **Input**: `(B, chunk_size, H)` backbone hidden states at action positions; **Output**: `(B, chunk_size, 17)` velocity predictions
+- **Constructor**: `ActionOutputHead(action_dim=17, hidden_dim=2560, activation="silu")`
+- **`from_cfg(cfg, hidden_dim)`**: takes action_head config dict + runtime `backbone.hidden_size`
+- **Parameter count** (H=2560): Linear(2560→2560) 6,556,160 + Linear(2560→17) 43,537 = **6,599,697**
+- **Combined action head param count** (state projector + noisy action projector + output head): ~6.7M + ~7.3M + ~6.6M = **~20.5M** (~0.5% of 4B backbone)
+- **Tests**: `tests/test_action_head.py::TestActionOutputHead` — 10 tests (shape, NaN, gradient flow, magnitude, param count, round-trip compatibility, from_cfg variants, invalid activation)
+- **Phase 3.2.4 interface**: `NoisyActionProjector` + `ActionOutputHead` wired into `VLAModel` for action token embedding and velocity decoding
+
+### VLA Model Assembly (Phase 3.2.4)
+- **Module**: `models/vla_model.py` — `VLAModel(nn.Module)`, `load_vla_model(cfg)`
+- **Composes**: Phase 3.1 `VLMBackbone` (frozen) + Phase 3.2 action head components (`RobotStateProjector`, `NoisyActionProjector`, `ActionOutputHead`, `FlowMatchingModule`)
+- **Multimodal injection**: Scenario C (full embedding control) — manually assembles `inputs_embeds` from text, vision, state, and action embeddings; passes `inputs_embeds` to backbone with `input_ids=None`, `pixel_values=None`
+- **Qwen3.5-4B constraint**: XOR guard requires exactly one of `input_ids` or `inputs_embeds`; VLAModel extracts text embeddings + vision features separately, scatters vision at `image_token_id` positions, then assembles full sequence
+- **Position IDs**: Default to 1D sequential when `input_ids=None` (backbone fallback); loses 3D spatial RoPE for vision tokens — acceptable with frozen backbone, optimize in Phase 3.3
+- **Sequence layout**: `[text_with_vision(seq_text) | state(n_seg) | action(n_action_tokens)]`
+- **Training `forward(batch)`**: Transfusion dual loss — AR cross-entropy on text positions + flow matching velocity MSE on action positions → `{total_loss, text_loss, action_loss}`
+- **Inference `predict_actions(input_ids, attention_mask, robot_state, ...)`**: K-step ODE denoising (default K=10); context embeddings computed once, reused across denoising iterations → `(B, chunk_size, action_dim)`
+- **Float32 action head**: state projector, action projector, output head kept in float32 (EO-1 pattern); cast to backbone dtype (bf16) for sequence assembly, cast back to float32 for velocity prediction. Auto-placed on backbone device at init (handles `device_map="auto"`)
+- **VLMBackbone extensions** (Phase 3.2.4): `get_text_embeddings(input_ids)` → `(B, seq, H)`; `get_vision_features(pixel_values, image_grid_thw)` → list of `(n_tokens_i, H)`; `lm_head` property; `get_hidden_states(..., inputs_embeds=None)` and `forward(..., inputs_embeds=None)` support embedding mode
+- **Config routing**: `get_model(cfg)` in `models/utils.py` has `"vla"` branch (lazy import `load_vla_model`)
+- **Config files**: `configs/model/vla.yaml` (A100, flash_attention_2, max_seq=8192), `configs/model/vla_dev.yaml` (4090, sdpa, max_seq=4096) — self-contained with VLM + action_head sections
+- **Batch contract** (for Phase 3.3 dataloader): `input_ids (B, seq_text)`, `pixel_values` (optional), `image_grid_thw` (optional), `attention_mask (B, seq_total)`, `robot_states (B, n_seg, 52)`, `action_chunks (B, n_chunks, chunk_size, 17)`, `chunk_masks (B, n_chunks, chunk_size)`, `text_labels (B, seq_text)` with -100 at ignore positions
+- **Tests**: `tests/test_vla_model.py` — 29 tests: `TestVLAModelConstruction` (4), `TestSequenceAssembly` (3), `TestVLAModelForward` (4), `TestVLAModelGradients` (4), `TestVLAModelInference` (3), `TestBackwardCompatibility` (2) — all CPU-only with MockVLMBackbone; `TestVLAModelGPU` (9, `vlm,gpu,slow`) — real Qwen3.5-4B: loading, forward, gradients, inference, inputs_embeds
+- **Phase 3.3 interface**: `VLAModel.forward(batch) → {total_loss, text_loss, action_loss}`; `VLAModel.predict_actions() → (B, 16, 17)`; `freeze_backbone()`, `unfreeze_backbone()`, `freeze_vision()` delegation
+
+### End-to-End Validation (Phase 3.2.5)
+- **Validation script**: `scripts/validate_action_head.py` — 10-check validation with artifacts to `logs/action_head/`
+- **CLI**: `python scripts/validate_action_head.py [--model-config vla_dev]` (defaults to vla_dev)
+- **Dual-mode**: GPU+transformers → real Qwen3.5-4B backbone; CPU-only → self-contained mock backbone (checks 1-9)
+- **10 checks**: config parsing, component instantiation, FM math, projector shapes, output head shape, VLA training forward, ODE inference, gradient routing, numerical stability, memory overhead
+- **Artifacts**: `logs/action_head/validation_report.json` (all checks), `logs/action_head/param_counts.json` (per-component), `logs/action_head/memory_overhead.json` (VRAM delta, GPU only)
+- **Memory overhead measured on lab PC (RTX 4090)**: 0.750 GB — within 1 GB budget
+- **SLURM**: `infra/gilbreth/job_templates/09_validate_action_head.sh` — single A100, 30 min, requires weights pre-cached via job 07
+- **Test suite (Phase 3.2 complete)**: 88 tests in `tests/test_action_head.py` (CPU-only) + 29 tests in `tests/test_vla_model.py` (20 CPU + 9 GPU) = **117 total tests**
+
+### Loss Contract (Phase 4.1.0)
+- **Module**: `models/losses.py` — `LossOutput`, `verify_text_loss_inputs()`, `verify_action_loss_inputs()`; re-exports `TokenType` from `models/action_head.py`
+- **`LossOutput`** (dataclass): `loss: torch.Tensor` (differentiable) + `metrics: dict[str, float]` (detached monitoring). Standard return type for all loss modules (`VLATextLoss`, `VLAActionLoss`, `VLACombinedLoss` in Phase 4.1.1–4.1.3)
+- **`verify_text_loss_inputs(logits, labels)`**: assert-based shape checker — `logits (B, S, V)`, `labels (B, S) torch.long`; compiled away with `python -O`
+- **`verify_action_loss_inputs(pred_v, target_v, mask)`**: assert-based shape checker — `pred_v/target_v (B, T, D)` matching, optional `mask (B, T)` binary
+- **`TokenType`**: canonical definition stays in `models/action_head.py` (Phase 3.2.0); re-exported from `models/losses.py` for Phase 4.1+ consumers
+- **Config extension**: `configs/model/action_head.yaml`, `vla.yaml`, `vla_dev.yaml` `loss:` section extended with `balancing_strategy` ("fixed"|"normalized"|"uncertainty"), `ema_decay`, `text:` sub-config (`ignore_index`, `label_smoothing`), `action:` sub-config (`reduction`)
+- **Tracking mapping**: `LossOutput.loss` → `loss/total`, `VLATextLoss.loss` → `loss/ar`, `VLAActionLoss.loss` → `loss/fm`; metrics via `extra_metrics` param to `log_training_step()`
+- **Tests**: `tests/test_losses.py` — 26 tests: `TestTokenType` (2), `TestLossOutput` (3), `TestVerifyTextLossInputs` (6), `TestVerifyActionLossInputs` (7), `TestVLATextLoss` (8), `TestVLAActionLoss` (8). All CPU-only, no external deps
+- **Phase 4.1.1 interface**: `LossOutput` as standard return type; `verify_*` shape checkers for debug validation; extended loss config for module construction
+
+### VLAActionLoss (Phase 4.1.2)
+- **Module**: `models/losses.py` — `VLAActionLoss(nn.Module)`, zero learnable parameters
+- **`VLAActionLoss(action_dim=17)`**: `forward(pred_velocity, target_velocity, chunk_mask=None) → LossOutput`
+- **Masked MSE**: `(sq_error * mask_3d).sum() / (n_valid * action_dim)`; unmasked falls back to `sq_error.mean()`; all-masked guard returns `loss=0` with `requires_grad=True`
+- **`metrics`**: `per_joint_mse: list[float]` (len=action_dim), `mean_pred_velocity_norm: float`, `mean_target_velocity_norm: float`, `mask_fraction_valid: float`
+- **Per-joint ordering**: matches frozen 17-D action space — derive joint names from `sim.action_space.ARM_ACTUATOR_NAMES + GRIPPER_ACTUATOR_NAMES` at W&B logging time; do not hardcode in loss module
+- **Phase 4.1.3 interface**: `VLAActionLoss` output feeds into `VLACombinedLoss` alongside `VLATextLoss` output
 
 ### Training Pipeline
 1. `train/trainer.py:main()` is the Hydra entry point
