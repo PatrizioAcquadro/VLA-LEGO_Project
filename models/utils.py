@@ -34,6 +34,14 @@ def get_model(cfg: DictConfig) -> nn.Module:
         from models.transformer import TransformerModel
 
         return TransformerModel(cfg)
+    elif model_type == "vlm":
+        from models.vlm_backbone import load_vlm_backbone
+
+        return load_vlm_backbone(cfg)
+    elif model_type == "vla":
+        from models.vla_model import load_vla_model
+
+        return load_vla_model(cfg)
     else:
         raise ValueError(f"Unknown model type: {model_type}")
 
