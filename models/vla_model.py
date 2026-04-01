@@ -38,7 +38,8 @@ Usage::
 from __future__ import annotations
 
 import logging
-from typing import Any
+from collections.abc import Iterator
+from typing import Any, Protocol, cast
 
 import torch
 import torch.nn as nn
@@ -53,8 +54,46 @@ from models.action_head import (
     NoisyActionProjector,
     RobotStateProjector,
 )
+from models.vlm_backbone import VLMBackboneInfo
 
 logger = logging.getLogger(__name__)
+
+
+class VLABackbone(Protocol):
+    @property
+    def hidden_size(self) -> int: ...
+
+    @property
+    def info(self) -> VLMBackboneInfo: ...
+
+    @property
+    def lm_head(self) -> nn.Module: ...
+
+    def parameters(self, recurse: bool = True) -> Iterator[nn.Parameter]: ...
+
+    def get_text_embeddings(self, input_ids: torch.Tensor) -> torch.Tensor: ...
+
+    def get_vision_features(
+        self,
+        pixel_values: torch.Tensor,
+        image_grid_thw: torch.Tensor | None,
+    ) -> list[torch.Tensor]: ...
+
+    def get_hidden_states(
+        self,
+        input_ids: torch.Tensor | None = None,
+        attention_mask: torch.Tensor | None = None,
+        pixel_values: torch.Tensor | None = None,
+        image_grid_thw: torch.Tensor | None = None,
+        inputs_embeds: torch.Tensor | None = None,
+        **kwargs: Any,
+    ) -> torch.Tensor: ...
+
+    def freeze_backbone(self) -> None: ...
+
+    def unfreeze_backbone(self) -> None: ...
+
+    def freeze_vision(self) -> None: ...
 
 
 class VLAModel(nn.Module):
@@ -98,18 +137,18 @@ class VLAModel(nn.Module):
         # → (B, chunk_size, action_dim)
     """
 
-    def __init__(self, backbone: nn.Module, cfg: DictConfig) -> None:
+    def __init__(self, backbone: VLABackbone, cfg: DictConfig) -> None:
         super().__init__()
 
-        self.backbone = backbone
-        H = backbone.hidden_size  # type: ignore[union-attr]
+        self.backbone: VLABackbone = backbone
+        H: int = backbone.hidden_size
 
         ah_cfg = _extract_action_head_cfg(cfg)
 
         # Action head components (trainable, kept in float32)
-        self.state_projector = RobotStateProjector.from_cfg(ah_cfg, H)
-        self.action_projector = NoisyActionProjector.from_cfg(ah_cfg, H)
-        self.action_output_head = ActionOutputHead.from_cfg(ah_cfg, H)
+        self.state_projector: RobotStateProjector = RobotStateProjector.from_cfg(ah_cfg, H)
+        self.action_projector: NoisyActionProjector = NoisyActionProjector.from_cfg(ah_cfg, H)
+        self.action_output_head: ActionOutputHead = ActionOutputHead.from_cfg(ah_cfg, H)
 
         # Flow matching module (no learnable parameters)
         fm_cfg = ah_cfg.get("flow_matching") if ah_cfg else None
@@ -123,16 +162,16 @@ class VLAModel(nn.Module):
         # Float32 action head (EO-1 pattern for numerical stability)
         float32_head = bool((ah_cfg or {}).get("float32_head", True))
         if float32_head:
-            self.state_projector = self.state_projector.float()
-            self.action_projector = self.action_projector.float()
-            self.action_output_head = self.action_output_head.float()
+            self.state_projector.float()
+            self.action_projector.float()
+            self.action_output_head.float()
 
         # Move action head to same device as backbone (handles device_map="auto")
         bb_device = self._detect_backbone_device()
         if bb_device.type != "cpu":
-            self.state_projector = self.state_projector.to(bb_device)
-            self.action_projector = self.action_projector.to(bb_device)
-            self.action_output_head = self.action_output_head.to(bb_device)
+            self.state_projector.to(bb_device)
+            self.action_projector.to(bb_device)
+            self.action_output_head.to(bb_device)
 
         n_ah = self._count_action_head_params()
         logger.info(
@@ -146,7 +185,7 @@ class VLAModel(nn.Module):
     @property
     def hidden_size(self) -> int:
         """Hidden dimension of the VLM backbone."""
-        return self.backbone.hidden_size  # type: ignore[union-attr]
+        return self.backbone.hidden_size
 
     # --- Private helpers --------------------------------------------------------
 
@@ -194,8 +233,8 @@ class VLAModel(nn.Module):
         if not vision_features:
             return text_embeds
 
-        image_token_id = self.backbone.info.image_token_id  # type: ignore[union-attr]
-        image_mask = input_ids == image_token_id  # (B, seq_text) bool
+        image_token_id = self.backbone.info.image_token_id
+        image_mask = input_ids.eq(image_token_id)  # (B, seq_text) bool tensor
 
         # Concatenate all per-image features into a single flat tensor
         all_features = torch.cat(vision_features, dim=0).to(  # (total_vis, H)
@@ -307,13 +346,13 @@ class VLAModel(nn.Module):
         target_velocity = self.flow_matching.target_velocity(actions_flat, noise)
 
         # --- 2. Get text embeddings ---
-        text_embeds = self.backbone.get_text_embeddings(input_ids)  # type: ignore[union-attr]
+        text_embeds = self.backbone.get_text_embeddings(input_ids)
         seq_text = text_embeds.shape[1]
 
         # --- 3. Scatter vision features (optional) ---
         pixel_values = batch.get("pixel_values")
         if pixel_values is not None:
-            vision_features = self.backbone.get_vision_features(  # type: ignore[union-attr]
+            vision_features = self.backbone.get_vision_features(
                 pixel_values, batch.get("image_grid_thw")
             )
             text_embeds = self._scatter_vision_features(text_embeds, input_ids, vision_features)
@@ -333,14 +372,15 @@ class VLAModel(nn.Module):
         full_embeds = self.assemble_sequence(text_embeds, state_embeds, action_embeds)
 
         # --- 7. Forward through backbone (Scenario C) ---
-        hidden_states = self.backbone.get_hidden_states(  # type: ignore[union-attr]
+        hidden_states = self.backbone.get_hidden_states(
             inputs_embeds=full_embeds,
             attention_mask=batch.get("attention_mask"),
         )  # (B, seq_total, H)
 
         # --- 8. Text loss (AR cross-entropy) ---
         text_hidden = hidden_states[:, :seq_text, :]  # (B, seq_text, H)
-        text_logits = self.backbone.lm_head(text_hidden)  # type: ignore[union-attr]
+        lm_head = cast(nn.Module, self.backbone.lm_head)
+        text_logits = cast(torch.Tensor, lm_head(text_hidden))
         # (B, seq_text, vocab_size)
 
         text_labels = batch["text_labels"]  # (B, seq_text)
@@ -410,9 +450,9 @@ class VLAModel(nn.Module):
             K = self.flow_matching.config.n_denoising_steps
 
         # --- Compute context embeddings once (cacheable for KV-cache opt) ---
-        text_embeds = self.backbone.get_text_embeddings(input_ids)  # type: ignore[union-attr]
+        text_embeds = self.backbone.get_text_embeddings(input_ids)
         if pixel_values is not None:
-            vision_features = self.backbone.get_vision_features(  # type: ignore[union-attr]
+            vision_features = self.backbone.get_vision_features(
                 pixel_values, image_grid_thw
             )
             text_embeds = self._scatter_vision_features(text_embeds, input_ids, vision_features)
@@ -440,14 +480,14 @@ class VLAModel(nn.Module):
             seq_total = full_embeds.shape[1]
             attn_mask = torch.ones(B, seq_total, dtype=torch.long, device=device)
 
-            hidden = self.backbone.get_hidden_states(  # type: ignore[union-attr]
+            hidden = self.backbone.get_hidden_states(
                 inputs_embeds=full_embeds,
                 attention_mask=attn_mask,
             )
 
             action_start = seq_text + state_embeds.shape[1]
             action_hidden = hidden[:, action_start : action_start + chunk_size, :]
-            return self.action_output_head(action_hidden.float())
+            return cast(torch.Tensor, self.action_output_head(action_hidden.float()))
 
         action_chunk = self.flow_matching.denoise(
             predict_fn=predict_velocity,
@@ -462,21 +502,21 @@ class VLAModel(nn.Module):
 
     def freeze_backbone(self) -> None:
         """Freeze all backbone parameters."""
-        self.backbone.freeze_backbone()  # type: ignore[union-attr]
+        self.backbone.freeze_backbone()
 
     def unfreeze_backbone(self) -> None:
         """Unfreeze all backbone parameters."""
-        self.backbone.unfreeze_backbone()  # type: ignore[union-attr]
+        self.backbone.unfreeze_backbone()
 
     def freeze_vision(self) -> None:
         """Freeze backbone vision encoder only."""
-        self.backbone.freeze_vision()  # type: ignore[union-attr]
+        self.backbone.freeze_vision()
 
 
 # --- Config helpers -------------------------------------------------------------
 
 
-def _extract_action_head_cfg(cfg: DictConfig) -> dict | None:
+def _extract_action_head_cfg(cfg: DictConfig) -> dict[str, Any] | None:
     """Extract the action_head config section as a plain dict.
 
     Args:
@@ -487,7 +527,9 @@ def _extract_action_head_cfg(cfg: DictConfig) -> dict | None:
     """
     try:
         if hasattr(cfg, "model") and hasattr(cfg.model, "action_head"):
-            return OmegaConf.to_container(cfg.model.action_head, resolve=True)  # type: ignore[return-value]
+            resolved = OmegaConf.to_container(cfg.model.action_head, resolve=True)
+            if isinstance(resolved, dict):
+                return cast(dict[str, Any], resolved)
     except Exception:
         pass
     return None

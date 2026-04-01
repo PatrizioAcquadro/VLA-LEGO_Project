@@ -36,6 +36,8 @@ __all__ = [
     "VLAActionLoss",
 ]
 
+MetricValue = float | list[float]
+
 
 # --- LossOutput ---------------------------------------------------------------
 
@@ -51,8 +53,8 @@ class LossOutput:
 
     Args:
         loss: Scalar differentiable loss tensor for backprop.
-        metrics: Detached monitoring metrics as plain Python floats.
-                 Keys follow the ``loss/<name>`` W&B panel convention.
+        metrics: Detached monitoring metrics as plain Python floats or small
+                 float lists. Keys follow the ``loss/<name>`` W&B panel convention.
 
     Example::
 
@@ -62,7 +64,7 @@ class LossOutput:
     """
 
     loss: torch.Tensor
-    metrics: dict[str, float] = field(default_factory=dict)
+    metrics: dict[str, MetricValue] = field(default_factory=dict)
 
 
 # --- Shape verification utilities --------------------------------------------
@@ -341,10 +343,12 @@ class VLAActionLoss(nn.Module):
         mean_pred_norm = pred_velocity.detach().norm(dim=-1).mean().item()
         mean_target_norm = target_velocity.detach().norm(dim=-1).mean().item()
 
+        per_joint_values = [float(x) for x in per_joint.detach().tolist()]
+
         return LossOutput(
             loss=loss,
             metrics={
-                "per_joint_mse": per_joint.detach().tolist(),
+                "per_joint_mse": per_joint_values,
                 "mean_pred_velocity_norm": mean_pred_norm,
                 "mean_target_velocity_norm": mean_target_norm,
                 "mask_fraction_valid": mask_fraction,

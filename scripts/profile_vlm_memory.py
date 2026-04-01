@@ -480,8 +480,8 @@ def main() -> int:
     print()
     print(f"Artifacts saved to {out_dir}/")
     print(f"  memory_profile.json     — full results ({len(results)} configs)")
-    print(f"  memory_table.txt        — formatted table")
-    print(f"  action_head_budget.json — training VRAM budget")
+    print("  memory_table.txt        — formatted table")
+    print("  action_head_budget.json — training VRAM budget")
 
     torch.cuda.empty_cache()
 

@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import torch
 import torch.nn as nn
@@ -146,12 +146,14 @@ class VLMBackbone(nn.Module):
         Returns:
             Text embeddings of shape (B, seq_len, hidden_size).
         """
-        return self._model.get_input_embeddings()(input_ids)  # type: ignore[no-any-return]
+        model = cast(Any, self._model)
+        embedding_layer = cast(nn.Module, model.get_input_embeddings())
+        return cast(torch.Tensor, embedding_layer(input_ids))
 
     def get_vision_features(
         self,
         pixel_values: torch.Tensor,
-        image_grid_thw: torch.Tensor,
+        image_grid_thw: torch.Tensor | None,
     ) -> list[torch.Tensor]:
         """Extract vision features from raw pixel values via the backbone's vision encoder.
 
@@ -168,11 +170,12 @@ class VLMBackbone(nn.Module):
             ``(n_tokens_i, hidden_size)`` where ``n_tokens_i`` is the number of
             vision tokens for image i.
         """
-        outputs = self._model.model.get_image_features(  # type: ignore[union-attr]
+        model = cast(Any, self._model)
+        outputs = model.model.get_image_features(
             pixel_values=pixel_values,
             image_grid_thw=image_grid_thw,
         )
-        return outputs.pooler_output  # type: ignore[no-any-return]
+        return cast(list[torch.Tensor], outputs.pooler_output)
 
     @property
     def lm_head(self) -> torch.nn.Module:
@@ -181,7 +184,8 @@ class VLMBackbone(nn.Module):
         Used by VLAModel (Phase 3.2.4) to compute text logits for AR loss.
         Weight-tied with the text embedding layer.
         """
-        return self._model.lm_head  # type: ignore[no-any-return]
+        model = cast(Any, self._model)
+        return cast(nn.Module, model.lm_head)
 
     def get_hidden_states(
         self,
