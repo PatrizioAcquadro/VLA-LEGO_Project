@@ -130,8 +130,7 @@ def _make_profiling_inputs(
 
     if config.n_images > 0:
         images = [
-            np.random.randint(0, 255, (320, 320, 3), dtype=np.uint8)
-            for _ in range(config.n_images)
+            np.random.randint(0, 255, (320, 320, 3), dtype=np.uint8) for _ in range(config.n_images)
         ]
         base = preprocess_images(backbone, images, "x", device=device)
 
@@ -142,13 +141,9 @@ def _make_profiling_inputs(
             tokenizer = getattr(backbone.processor, "tokenizer", backbone.processor)
             pad_id = getattr(tokenizer, "pad_token_id", 0) or 0
             pad_len = config.seq_len - base_seq
-            pad_ids = torch.full(
-                (1, pad_len), pad_id, dtype=base["input_ids"].dtype, device=device
-            )
+            pad_ids = torch.full((1, pad_len), pad_id, dtype=base["input_ids"].dtype, device=device)
             input_ids = torch.cat([base["input_ids"], pad_ids], dim=1)
-            attn_pad = torch.zeros(
-                1, pad_len, dtype=base["attention_mask"].dtype, device=device
-            )
+            attn_pad = torch.zeros(1, pad_len, dtype=base["attention_mask"].dtype, device=device)
             attention_mask = torch.cat([base["attention_mask"], attn_pad], dim=1)
         else:
             input_ids = base["input_ids"][:, : config.seq_len]
@@ -162,20 +157,14 @@ def _make_profiling_inputs(
 
         # Replicate pixel_values and image_grid_thw across batch
         pv = base["pixel_values"]
-        inputs["pixel_values"] = pv.repeat(
-            config.batch_size, *([1] * (pv.ndim - 1))
-        )
+        inputs["pixel_values"] = pv.repeat(config.batch_size, *([1] * (pv.ndim - 1)))
         if "image_grid_thw" in base:
-            inputs["image_grid_thw"] = base["image_grid_thw"].repeat(
-                config.batch_size, 1
-            )
+            inputs["image_grid_thw"] = base["image_grid_thw"].repeat(config.batch_size, 1)
 
         return inputs
     else:
         # Text-only: random token IDs
-        input_ids = torch.randint(
-            0, 1000, (config.batch_size, config.seq_len), device=device
-        )
+        input_ids = torch.randint(0, 1000, (config.batch_size, config.seq_len), device=device)
         attention_mask = torch.ones_like(input_ids)
         return {"input_ids": input_ids, "attention_mask": attention_mask}
 
@@ -241,18 +230,22 @@ def _run_single_profile(
 
         peak_gb = torch.cuda.max_memory_allocated() / (1024**3)
         remaining_gb = total_mem_gb - peak_gb
-        kv_gb = _compute_kv_cache_gb(
-            backbone._model.config, config.seq_len, config.batch_size
-        )
+        kv_gb = _compute_kv_cache_gb(backbone._model.config, config.seq_len, config.batch_size)
 
         del inputs, forward_inputs
         gc.collect()
         torch.cuda.empty_cache()
 
         return ProfileResult(
-            config.seq_len, config.batch_size, config.mode, config.n_images,
-            round(peak_gb, 2), round(remaining_gb, 2), round(wall_ms, 1),
-            round(kv_gb, 3), "ok",
+            config.seq_len,
+            config.batch_size,
+            config.mode,
+            config.n_images,
+            round(peak_gb, 2),
+            round(remaining_gb, 2),
+            round(wall_ms, 1),
+            round(kv_gb, 3),
+            "ok",
         )
 
     except torch.cuda.OutOfMemoryError:
@@ -267,8 +260,15 @@ def _run_single_profile(
         torch.cuda.empty_cache()
 
         return ProfileResult(
-            config.seq_len, config.batch_size, config.mode, config.n_images,
-            round(peak_gb, 2), round(remaining_gb, 2), 0.0, 0.0, "OOM",
+            config.seq_len,
+            config.batch_size,
+            config.mode,
+            config.n_images,
+            round(peak_gb, 2),
+            round(remaining_gb, 2),
+            0.0,
+            0.0,
+            "OOM",
         )
 
 
@@ -324,8 +324,7 @@ def _format_table(results: list[ProfileResult], gpu_info: dict, weight_vram_gb: 
         lines.append("KV CACHE ANALYSIS (analytical estimate):")
         for r in ok_results:
             lines.append(
-                f"  seq={r.seq_len}, batch={r.batch_size}: "
-                f"{r.kv_cache_estimate_gb:.3f} GB"
+                f"  seq={r.seq_len}, batch={r.batch_size}: " f"{r.kv_cache_estimate_gb:.3f} GB"
             )
 
     # Notes

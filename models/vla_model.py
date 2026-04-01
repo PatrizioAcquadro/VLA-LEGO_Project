@@ -452,9 +452,7 @@ class VLAModel(nn.Module):
         # --- Compute context embeddings once (cacheable for KV-cache opt) ---
         text_embeds = self.backbone.get_text_embeddings(input_ids)
         if pixel_values is not None:
-            vision_features = self.backbone.get_vision_features(
-                pixel_values, image_grid_thw
-            )
+            vision_features = self.backbone.get_vision_features(pixel_values, image_grid_thw)
             text_embeds = self._scatter_vision_features(text_embeds, input_ids, vision_features)
 
         # State embedding: (B, 52) → (B, 1, H)
