@@ -1,5 +1,6 @@
 # Location metadata; the maintained SLURM templates request their own resources.
 name: gilbreth
 paths:
-  scratch: ${oc.env:VLA_SCRATCH_ROOT,/scratch/gilbreth/${oc.env:USER}/vla-lego}
+  # Set scratch explicitly on the cluster; the checkout fallback permits portable inspection.
+  scratch: ${oc.env:VLA_SCRATCH_ROOT,${paths.root}}
   cache: ${cluster.paths.scratch}/cache

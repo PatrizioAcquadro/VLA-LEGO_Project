@@ -131,6 +131,10 @@ credentials.json
 # Claude Code local state (private - never commit)
 # ============================================================================
 .claude/
+AGENTS.md
+agents.md
+CLAUDE.md
+claude.md
 
 # ============================================================================
 # Artifact Symlinks (point to SCRATCH on cluster)

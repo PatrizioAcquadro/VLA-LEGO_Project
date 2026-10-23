@@ -4,7 +4,7 @@
 # - CD jobs (container/apptainer) run only when:
 #   - Tags v* (releases)
 #   - workflow_dispatch (manual trigger)
-#   - Push to main with container-relevant changes (Dockerfile, pyproject.toml, apptainer.def)
+#   - Push to main with container-relevant changes (Dockerfile, pyproject.toml and baked helper scripts)
 # - SBOM generation runs only on tags v*
 # ============================================================================
 
@@ -65,6 +65,9 @@ jobs:
       - name: Run Black (formatting check)
         run: black --check --diff .
 
+      - name: Check documentation links
+        run: python tools/check_docs.py
+
 
   # --------------------------------------------------------------------------
   # Job: Type Checking
@@ -93,11 +96,13 @@ jobs:
         run: mypy sim models tracking --ignore-missing-imports
 
   # --------------------------------------------------------------------------
-  # Job: Unit Tests
+  # Job: Software and Headless Simulation
   # --------------------------------------------------------------------------
   test:
-    name: Unit Tests
+    name: Software and Headless Simulation
     runs-on: ubuntu-latest
+    env:
+      MUJOCO_GL: osmesa
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -109,11 +114,14 @@ jobs:
           cache: 'pip'
           cache-dependency-path: pyproject.toml
 
+      - name: Install CPU renderer
+        run: sudo apt-get update && sudo apt-get install -y libosmesa6 libglfw3
+
       - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
-          pip install -e ".[ci]"
+          pip install -e ".[ci,sim]"
 
       - name: Run unit tests
         run: |
@@ -149,36 +157,8 @@ jobs:
           python -c "import sim; print('sim OK')"
           python -c "import models; print('models OK')"
 
-      - name: Test config parsing
-        run: |
-          python -c "
-          from hydra import initialize, compose
-          from omegaconf import OmegaConf
-
-          with initialize(config_path='configs', version_base=None):
-              cfg = compose(config_name='config', overrides=['cluster=local'])
-              print(OmegaConf.to_yaml(cfg))
-              print('Config parsing OK')
-          "
-
       - name: Validate maintained configuration
         run: python -m scripts.validate_configs
-
-  simulation:
-    name: Headless Simulation (CPU renderer)
-    runs-on: ubuntu-latest
-    env:
-      MUJOCO_GL: osmesa
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - run: sudo apt-get update && sudo apt-get install -y libosmesa6 libglfw3
-      - run: |
-          pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
-          pip install -e ".[ci,sim]"
-      - run: pytest tests -q -m "not gpu and not slow and not viewer"
 
   package:
     name: Installed Wheel
@@ -198,7 +178,7 @@ jobs:
   # --------------------------------------------------------------------------
   ci-success:
     name: CI Success
-    needs: [lint, typecheck, test, smoke, simulation, package]
+    needs: [lint, typecheck, test, smoke, package]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -208,7 +188,6 @@ jobs:
              [[ "${{ needs.test.result }}" != "success" ]] || \
              [[ "${{ needs.smoke.result }}" != "success" ]] || \
              [[ "${{ needs.typecheck.result }}" != "success" ]] || \
-             [[ "${{ needs.simulation.result }}" != "success" ]] || \
              [[ "${{ needs.package.result }}" != "success" ]]; then
             echo "One or more required CI jobs failed"
             echo "lint: ${{ needs.lint.result }}"
