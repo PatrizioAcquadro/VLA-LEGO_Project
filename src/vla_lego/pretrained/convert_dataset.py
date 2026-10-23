@@ -18,6 +18,7 @@ def main() -> None:
         "--action-representation", choices=("absolute", "measured_arm_offset"), default="absolute"
     )
     parser.add_argument("--include-arm-velocity", action="store_true")
+    parser.add_argument("--reassessments", type=Path, nargs="*", default=[])
     args = parser.parse_args()
 
     import numpy as np
@@ -28,8 +29,35 @@ def main() -> None:
     admitted = []
     outcomes = []
     families: dict[str, str] = {}
+    reassessments = {}
+    recordings = {directory.resolve() for directory in args.recordings}
+    for path in args.reassessments:
+        assessment = json.loads(path.read_text())
+        source = Path(assessment["source_run"])
+        recording = (source / "recording").resolve()
+        original = json.loads((source / "report.json").read_text())
+        metadata = json.loads((recording / "episode.json").read_text())
+        if (
+            recording not in recordings
+            or recording in reassessments
+            or assessment["kind"] != "full_task_reference_score"
+            or not assessment["passed"]
+            or not all(assessment["checks"].values())
+            or not assessment.get("criterion_reassessment")
+            or original["kind"] != "physical_tower_reference"
+            or original["learned"]
+            or not original.get("completed_reference_sequence")
+            or assessment["samples"] != metadata["frames"]
+            or metadata.get("correction_source")
+        ):
+            raise ValueError(f"Reassessment does not admit this complete nominal recording: {path}")
+        reassessments[recording] = str(path.resolve())
     for directory in args.recordings:
         metadata = json.loads((directory / "episode.json").read_text())
+        original_success, original_role = metadata["verified_success"], metadata["supervision_role"]
+        reassessment = reassessments.get(directory.resolve())
+        if reassessment:
+            metadata = dict(metadata, verified_success=True, supervision_role="verified_nominal")
         family, split = metadata["generation_family"], metadata["split"]
         if family in families and families[family] != split:
             raise ValueError(f"Generation family spans splits: {family}")
@@ -54,8 +82,9 @@ def main() -> None:
             {
                 "recording": str(directory.resolve()),
                 "frames": metadata["frames"],
-                "physical_success": metadata["verified_success"],
-                "supervision_role": metadata["supervision_role"],
+                "physical_success": original_success,
+                "supervision_role": original_role,
+                "reassessment_report": reassessment,
                 "admission": reason,
                 "generation_family": family,
             }

@@ -1,6 +1,6 @@
 # Data strategy — planned
 
-Data coverage and correction quality are the central development priority. The native diagnostic collector now records causal nominal/corrective sensor–action pairs; there is no qualified assembly corpus or trained assembly policy. [Phases 3–5](implementation_phases/index.md) build this capability; large-scale collection waits for the teacher pilot and the selected deployable model/interface.
+Data coverage and correction quality are the central development priority. The native collector records causal nominal/corrective sensor–action pairs and one complete cooperative tower seed; there is no qualified assembly corpus or trained assembly policy. [Phases 3–5](implementation_phases/index.md) build this capability; large-scale collection waits for the teacher pilot and the selected deployable model/interface.
 
 ## Public sources and admission
 
@@ -38,6 +38,8 @@ No public foreign-robot actions are currently admitted as Alex action supervisio
 | NVIDIA PhysicalAI | Deferred for direct episode ingestion; identify a specific action-bearing release first. GR00T weights were acquired, but its backbone access remains unavailable. |
 | RoboTwin 2.0 | Deferred for direct episodes. Use its scene-variation principles within Isaac once the contact teacher is valid; do not introduce another task simulator. |
 | EgoDex / EgoScale | Deferred for direct human-data ingestion. No fabricated robot actions; data terms, supported objective and incremental benefit remain prerequisites. |
+
+The complete ninth tower reference is now explicitly admitted through its passing functional reassessment: 4,925 aligned frames in `tower-seed-0`, training only, converted to LeRobot with head RGB, 32 measured position/arm-velocity features and 16 actually applied joint/gripper commands. `convert_dataset --reassessments` checks that the positive assessment belongs to the requested complete nominal reference and covers its recorded frames. The conversion report preserves the original negative label and identifies the new assessment; raw reports and labels are untouched. This is one teacher seed, not independent coverage, a trained full-task policy or a qualified corpus.
 
 These are initial source decisions, not completion of Phase 3. The first required useful corpus remains physically executed Alex data with verified nominal/corrective/stop labels and grouped splits. Revisit additional public data when a measured pilot or development failure supports its value.
 
