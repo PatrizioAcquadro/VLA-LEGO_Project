@@ -20,6 +20,8 @@ def states(task, order=(0, 1, 2, 3, 4), levels=0):
         {
             "block_pose_w": [*p.xy_m, TABLE_TOP + p.spec.dimensions_m[2] / 2, 0, 0, 0, 1],
             "block_velocity_w": [0.0] * 6,
+            "motion_speed_max": [0.0, 0.0],
+            "motion_window_s": 0.05,
             "robot_contact_force_n": 0.0,
             "robot_contact_forces_n": [[0.0] * 3 for _ in PATHS],
             "block_contact_forces_n": [[0.0] * 3 for _ in range(count)],
@@ -47,8 +49,15 @@ def grip(rows, index, side):
     rows[index]["robot_contact_force_n"] = 0.8
 
 
-def construction(task, order=(0, 1, 2, 3, 4), *, release_samples=41, release_period=0.05):
-    scorer = TowerEvaluator(task, PATHS)
+def construction(
+    task,
+    order=(0, 1, 2, 3, 4),
+    *,
+    release_samples=41,
+    release_period=0.05,
+    motion_measurement="solver_velocity",
+):
+    scorer = TowerEvaluator(task, PATHS, motion_measurement=motion_measurement)
     scorer.update(0.0, states(task))
     approach = states(task, order, 3)
     approach[order[3]]["block_pose_w"][:3] = [
@@ -143,3 +152,47 @@ def test_grabbing_an_already_supported_upper_piece_is_not_a_placement():
     assert result["checks"]["ordered_supported_released_stable"]
     assert not result["checks"]["functional_cooperation"]
     assert not result["passed"]
+
+
+def test_pose_motion_protocol_does_not_use_unbiased_solver_velocity():
+    task = initial_tower_task()
+    scorer = construction(task, motion_measurement="pose_step_peaks")
+    start = scorer.previous_time + 0.05
+    for tick in range(41):
+        row = states(task, levels=5)
+        for state in row:
+            state["block_velocity_w"] = [0, 0, 0, 1, 0, 0]
+        scorer.update(start + tick * 0.05, row)
+    assert scorer.result()["passed"]
+
+
+def test_measured_motion_peak_rejects_an_interval_with_quiet_endpoint():
+    task = initial_tower_task()
+    scorer = construction(task, motion_measurement="pose_step_peaks")
+    row = states(task, levels=5)
+    row[4]["motion_speed_max"] = [0.02, 0]
+    scorer.update(scorer.previous_time + 0.05, row)
+    assert not scorer.result()["passed"]
+
+
+def test_motion_dwell_is_forty_intervals_not_forty_one():
+    task = initial_tower_task()
+    scorer = construction(task, motion_measurement="pose_step_peaks")
+    start = scorer.previous_time + 0.05
+    for tick in range(41):
+        row = states(task, levels=5)
+        if tick == 0:
+            row[4]["motion_speed_max"] = [0.02, 0]
+        scorer.update(start + tick * 0.05, row)
+    assert scorer.result()["passed"]
+
+
+def test_legacy_trace_cannot_silently_acquire_pose_motion_admission():
+    task = initial_tower_task()
+    scorer = TowerEvaluator(task, PATHS, motion_measurement="pose_step_peaks")
+    row = states(task)
+    for state in row:
+        state.pop("motion_speed_max")
+        state.pop("motion_window_s")
+    with pytest.raises(ValueError, match="fresh physics-step measurements"):
+        scorer.update(0.0, row)

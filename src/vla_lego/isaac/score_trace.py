@@ -34,7 +34,11 @@ def main() -> None:
             paths = row["robot"]["robot_contact_paths"]
             if evaluator is None:
                 contact_paths = paths
-                evaluator = TowerEvaluator(task, paths)
+                evaluator = TowerEvaluator(
+                    task,
+                    paths,
+                    motion_measurement=source.get("motion_measurement", "solver_velocity"),
+                )
             if paths != contact_paths:
                 raise ValueError("Contact-body ordering changed inside the source episode.")
             evaluator.update(row["time_s"], row["blocks"])

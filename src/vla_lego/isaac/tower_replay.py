@@ -17,6 +17,7 @@ def main() -> None:
     parser.add_argument("--solver-iterations", type=int, nargs=2, default=(8, 4))
     parser.add_argument("--baseline-replay", type=Path)
     parser.add_argument("--record", action="store_true")
+    parser.add_argument("--motion-measurement", choices=("solver_velocity", "pose_step_peaks"))
     args = parser.parse_args()
     source = json.loads((args.source_run / "report.json").read_text())
     recording = args.source_run / "recording"
@@ -27,11 +28,11 @@ def main() -> None:
     source_iterations = tuple(source.get("physics_solver_iterations", (8, 4)))
     iterations = tuple(args.solver_iterations)
     same_physics = iterations == source_iterations
-    if not same_physics:
+    source_measurement = source.get("motion_measurement", "solver_velocity")
+    motion_measurement = args.motion_measurement or source_measurement
+    if not same_physics or motion_measurement != source_measurement:
         if args.baseline_replay is None:
-            parser.error(
-                "A physics intervention requires --baseline-replay with exact native parity."
-            )
+            parser.error("An intervention requires --baseline-replay with exact native parity.")
         baseline = json.loads((args.baseline_replay / "report.json").read_text())
         if (
             not baseline.get("exact_native_parity")
@@ -52,6 +53,8 @@ def main() -> None:
         "source_solver_iterations": list(source_iterations),
         "physics_solver_iterations": list(iterations),
         "task": source["task"],
+        "motion_measurement": motion_measurement,
+        "source_motion_measurement": source_measurement,
     }
     app = recorder = None
     started = time.monotonic()
@@ -85,6 +88,7 @@ def main() -> None:
             placements=task.placements,
             assembly_xy_m=task.assembly_xy_m,
             solver_iterations=iterations,
+            measure_pose_motion=motion_measurement == "pose_step_peaks",
         )
         if source["robot_joint_names"] != env.robot.data.joint_names:
             raise ValueError("Source robot joint ordering differs from the native asset.")
@@ -96,7 +100,9 @@ def main() -> None:
         state_ids = [env.robot.data.joint_names.index(n) for n in metadata["state_names"]]
         limits = env.robot.data.joint_pos_limits.torch[0, action_ids].cpu().numpy()
         env.step(round(metadata["start_time_s"] / 0.005))
-        evaluator = TowerEvaluator(task, env.contact_robot_paths)
+        evaluator = TowerEvaluator(
+            task, env.contact_robot_paths, motion_measurement=motion_measurement
+        )
         evaluator.update(env.time, [env.task_truth(i) for i in range(len(env.blocks))])
         if args.record:
             # Replays are descendants: inherit the parent's family and split.
@@ -182,11 +188,13 @@ def main() -> None:
         env.capture()
         Image.fromarray(env.observe()["head_rgb"]).save(args.output_dir / "final.png")
         evaluation = evaluator.result()
+        exact = same_physics and all(v == 0 for v in errors.values())
         report.update(
             completed_reference_sequence=True,
             evaluation=evaluation,
-            passed=evaluation["passed"],
-            exact_native_parity=same_physics and all(v == 0 for v in errors.values()),
+            passed=evaluation["passed"]
+            and (motion_measurement == source_measurement or not same_physics or exact),
+            exact_native_parity=exact,
         )
     except Exception:
         report["error"] = traceback.format_exc()

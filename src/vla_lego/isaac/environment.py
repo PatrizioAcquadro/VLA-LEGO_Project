@@ -40,6 +40,7 @@ class AssemblyEnvironment:
         friction: tuple[float, float] = (0.6, 0.5),
         assembly_xy_m: tuple[float, float] | None = None,
         solver_iterations: tuple[int, int] = (8, 4),
+        measure_pose_motion: bool = False,
     ):
         import isaaclab.sim as sim_utils
         import omni.usd
@@ -243,6 +244,13 @@ class AssemblyEnvironment:
         self.physics_step = 0
         self.last_command_time = 0.0
         self.recorder: EpisodeRecorder | None = None
+        self.motion = None
+        if measure_pose_motion:
+            from vla_lego.isaac.motion import PoseMotionWindow
+
+            self.motion = PoseMotionWindow(
+                torch.stack([block.data.root_pose_w.torch[0] for block in self.blocks])
+            )
 
     def set_joint_targets(self, targets: dict[str, float]) -> None:
         """Named low-level targets, bounded by the shared robot's hard limits."""
@@ -281,6 +289,8 @@ class AssemblyEnvironment:
                     requested_action=self.requested_target[0, action_ids].detach().cpu().numpy(),
                     command_time_s=self.last_command_time,
                 )
+            if self.motion is not None and self.physics_step % 10 == 0:
+                self.motion.reset()
             gravity = self.robot.data.gravity_compensation_forces.torch[
                 :, self.robot.num_base_dofs :
             ][:, driven]
@@ -290,6 +300,12 @@ class AssemblyEnvironment:
             self.scene.update(DT)
             for sensor in self.block_contacts:
                 sensor.update(DT)
+            if self.motion is not None:
+                import torch
+
+                self.motion.update(
+                    torch.stack([block.data.root_pose_w.torch[0] for block in self.blocks]), DT
+                )
             self.physics_step += 1
             self.time = self.physics_step * DT
         if render:
@@ -323,7 +339,7 @@ class AssemblyEnvironment:
         block = self.blocks[block_index]
         matrix = sensor.data.force_matrix_w.torch[0, 0]
         robot_forces = matrix[: len(self.contact_robot_paths)]
-        return {
+        result = {
             "block_pose_w": block.data.root_pose_w.torch[0].tolist(),
             "block_velocity_w": block.data.root_vel_w.torch[0].tolist(),
             "robot_contact_force_n": float(robot_forces.norm(dim=-1).sum()),
@@ -335,6 +351,10 @@ class AssemblyEnvironment:
                 (sensor.data.net_forces_w.torch[0, 0] - matrix.sum(dim=0)).norm()
             ),
         }
+        if self.motion is not None:
+            result["motion_speed_max"] = self.motion.peaks[block_index].tolist()
+            result["motion_window_s"] = self.motion.duration_s
+        return result
 
     def robot_diagnostics(self) -> dict:
         """Control/contact evidence; never supplied as hidden task decisions."""

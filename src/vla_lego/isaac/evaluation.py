@@ -47,7 +47,16 @@ class TowerEvaluator:
     measured print/hardware ranges or a frozen final qualification protocol.
     """
 
-    def __init__(self, task: TowerTask, robot_contact_paths: list[str]):
+    def __init__(
+        self,
+        task: TowerTask,
+        robot_contact_paths: list[str],
+        *,
+        motion_measurement: str = "solver_velocity",
+    ):
+        if motion_measurement not in ("solver_velocity", "pose_step_peaks"):
+            raise ValueError("Unknown stability measurement protocol.")
+        self.motion_measurement = motion_measurement
         self.task = task
         candidates = [
             [i for i, placement in enumerate(task.placements) if placement.spec == target]
@@ -81,6 +90,24 @@ class TowerEvaluator:
     def _gripping(self, state: dict, side: str) -> bool:
         forces = [_norm(state["robot_contact_forces_n"][i]) for i in self.jaws[side]]
         return min(forces) > CONTACT_ZERO_N and sum(forces) > 0.5
+
+    def _stable(self, state: dict) -> bool:
+        if self.motion_measurement == "solver_velocity":
+            return (
+                _norm(state["block_velocity_w"][:3]) < 0.01
+                and _norm(state["block_velocity_w"][3:]) < 0.1
+            )
+        if "motion_speed_max" not in state or "motion_window_s" not in state:
+            raise ValueError("Pose-motion admission requires fresh physics-step measurements.")
+        speeds = state["motion_speed_max"]
+        return (
+            len(speeds) == 2
+            and all(math.isfinite(v) and v >= 0 for v in speeds)
+            and math.isfinite(state["motion_window_s"])
+            and abs(state["motion_window_s"] - PERIOD_S) < 1e-8
+            and speeds[0] < 0.01
+            and speeds[1] < 0.1
+        )
 
     def update(self, time_s: float, blocks: list[dict]) -> None:
         if len(blocks) != len(self.task.placements) or not math.isfinite(time_s):
@@ -128,11 +155,7 @@ class TowerEvaluator:
                     and _footprint_inside(self.task, index, state["block_pose_w"])
                     and support > CONTACT_ZERO_N
                 )
-            stable = all(
-                _norm(blocks[index]["block_velocity_w"][:3]) < 0.01
-                and _norm(blocks[index]["block_velocity_w"][3:]) < 0.1
-                for index in assignment
-            )
+            stable = all(self._stable(blocks[index]) for index in assignment)
             checks.append(
                 {
                     "finite": finite,
@@ -199,7 +222,17 @@ class TowerEvaluator:
         passing = [
             assignment
             for i, assignment in enumerate(self.assignments)
-            if complete_dwell and all(all(row[1][i].values()) for row in self.history)
+            if complete_dwell
+            and all(
+                all(
+                    value
+                    for key, value in row[1][i].items()
+                    # Forty motion intervals cover the same two seconds as
+                    # forty-one geometry/release points; do not add 50 ms.
+                    if key != "stable" or self.motion_measurement == "solver_velocity" or sample > 0
+                )
+                for sample, row in enumerate(self.history)
+            )
         ]
         checks = {
             "requested_pieces_present": bool(self.assignments),
@@ -210,6 +243,7 @@ class TowerEvaluator:
         }
         return {
             "passed": all(checks.values()),
+            "motion_measurement": self.motion_measurement,
             "checks": checks,
             "final_assignment_indices": list(passing[0]) if passing else None,
             "cooperation_events": list(self.events.values()),
