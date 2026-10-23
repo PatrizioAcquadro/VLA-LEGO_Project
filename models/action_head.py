@@ -141,9 +141,6 @@ class FlowMatchingConfig:
     solver: str = "euler"
     """ODE solver: ``"euler"`` | ``"midpoint"`` | ``"rk4"``."""
 
-    sigma_min: float = 0.001
-    """Lower bound on sampled timestep (avoids exact t=0 during training)."""
-
     time_sampling: str = "beta"
     """Timestep sampling distribution: ``"beta"`` | ``"uniform"``."""
 
@@ -175,7 +172,6 @@ class FlowMatchingConfig:
         return cls(
             n_denoising_steps=cfg.get("n_denoising_steps", 10),
             solver=cfg.get("solver", "euler"),
-            sigma_min=cfg.get("sigma_min", 0.001),
             time_sampling=cfg.get("time_sampling", "beta"),
             time_alpha=cfg.get("time_alpha", 1.5),
             time_beta=cfg.get("time_beta", 1.0),
@@ -196,7 +192,7 @@ class FlowMatchingModule(nn.Module):
     - **Time convention**: t=0 → noise, t=1 → data  (NOT EO-1's reversed convention)
     - **OT path**: ``x_t = (1-t) * noise + t * x_data``
     - **Target velocity**: ``u_t = x_data - noise``  (constant along OT path, independent of t)
-    - **Time sampling**: Beta(1.5, 1.0) following EO-1 (biases toward noisier timesteps)
+    - **Time sampling**: Beta(1.5, 1.0), favoring t closer to data
     - **Solvers**: Euler (default), midpoint, RK4 — all exact for constant velocity fields
 
     Has no learnable parameters. All computation is deterministic given config.
