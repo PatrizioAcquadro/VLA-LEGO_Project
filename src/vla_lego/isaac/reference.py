@@ -48,6 +48,8 @@ class PhysicalReference:
                     "time_s": self.env.time,
                     "tools": {side: self.ctrl.pose(side)[0].tolist() for side in self.solvers},
                     "robot": self.env.robot_diagnostics(),
+                    "applied_joint_target": self.env.target[0].tolist(),
+                    "requested_joint_target": self.env.requested_target[0].tolist(),
                     "blocks": truth,
                 }
             )

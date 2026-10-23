@@ -61,6 +61,8 @@ The explicit reference probe uses only robot actuation and contacts under gravit
 
 The finite tower reach screens retained 8/20 solved poses with fixed top-down orientation, 48/60 additional yaw candidates, and 14/16 source/upper-clearance candidates after moving the far purple source inward. Rotated grasps admit the higher levels. A subsequent full robot sequence physically grasped/lifted all five pieces but failed assembly: adjacent overhead grippers displaced the blue stabilizer block during green placement. The green piece ended outside the tower; zero qualifying cooperation intervals were recorded. Eight side-stabilizer IK poses solved for both arms, but physical side stabilization and full-task admission remain separate work.
 
+`vla_lego.isaac.tower_reference` now runs the five-piece contact-only sequence and the independent full-task evaluator online. Eight reference attempts remain retained. The eighth completed all five ordered, supported levels, released every object and passed the final two-second stability dwell. The corrected stabilizer exit rises above the entire existing stack before moving laterally; the earlier low exit knocked two levels off. Despite simultaneous bilateral grasp/load contact during the fourth placement, the fixed cooperation criterion still failed because loaded alignment did not remain within the provisional 3 mm geometry range. Both online and independent offline scoring agree: **not admitted as a complete cooperative demonstration**. These are teacher results, with no learned task success or qualification.
+
 ```bash
 bash scripts/isaac-run.sh -m vla_lego.isaac.grasp_probe \
   --output-dir outputs/grasp-001 --cache-dir outputs/converted-assets
