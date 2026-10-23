@@ -146,7 +146,7 @@ def main() -> None:
             grasp = [block[0], block[1], block[2] + 0.06]
             if not move("descend", "left", grasp, 5):
                 raise RuntimeError("Reference descent did not converge")
-            env.set_joint_targets({"left_WSG32_JAW_OPENING": 0.0})
+            env.set_joint_targets({"left_WSG32_JAW_OPENING": 0.018})
             env.step(200)
             grasp_truth = env.task_truth()
             lifted = move("lift", "left", [grasp[0], grasp[1], grasp[2] + 0.10], 6)
