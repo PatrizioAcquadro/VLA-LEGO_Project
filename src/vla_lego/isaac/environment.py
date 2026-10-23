@@ -39,6 +39,7 @@ class AssemblyEnvironment:
         mass_scale: float = 1.0,
         friction: tuple[float, float] = (0.6, 0.5),
         assembly_xy_m: tuple[float, float] | None = None,
+        solver_iterations: tuple[int, int] = (8, 4),
     ):
         import isaaclab.sim as sim_utils
         import omni.usd
@@ -73,6 +74,14 @@ class AssemblyEnvironment:
             raise ValueError("Mass scale must be positive and finite.")
         if len(friction) != 2 or any(not math.isfinite(v) or v < 0 for v in friction):
             raise ValueError("Static/dynamic friction must be finite and non-negative.")
+        if (
+            len(solver_iterations) != 2
+            or any(not isinstance(v, int) for v in solver_iterations)
+            or not 1 <= solver_iterations[0] <= 255
+            or not 0 <= solver_iterations[1] <= 255
+        ):
+            raise ValueError("PhysX solver iterations require position 1..255 and velocity 0..255.")
+        self.solver_iterations = solver_iterations
         self.sim = sim_utils.SimulationContext(
             sim_utils.SimulationCfg(
                 dt=DT,
@@ -82,8 +91,8 @@ class AssemblyEnvironment:
                     solver_type=1,
                     solve_articulation_contact_last=True,
                     enable_external_forces_every_iteration=True,
-                    min_position_iteration_count=8,
-                    min_velocity_iteration_count=4,
+                    min_position_iteration_count=solver_iterations[0],
+                    min_velocity_iteration_count=solver_iterations[1],
                 ),
             )
         )
@@ -95,8 +104,8 @@ class AssemblyEnvironment:
         cfg.pedestal.spawn.usd_dir = str(cache_dir / "pedestal")
         cfg.robot.spawn.articulation_props = PhysxArticulationRootPropertiesCfg(
             enabled_self_collisions=True,
-            solver_position_iteration_count=8,
-            solver_velocity_iteration_count=4,
+            solver_position_iteration_count=solver_iterations[0],
+            solver_velocity_iteration_count=solver_iterations[1],
         )
         cfg.robot.init_state.joint_pos = {
             **dict.fromkeys((*ARM_JOINTS, "NECK_Z", "NECK_Y"), 0.0),
