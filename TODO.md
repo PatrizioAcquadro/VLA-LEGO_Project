@@ -14,4 +14,4 @@ Requested publication: push this feature branch after validation and verify the 
 - [x] 1. Organize tests by subsystem and consolidate repository utilities under scripts.
 - [x] 2. Update package installation, containers, CI and canonical documentation.
 - [x] 3. Validate imports, installed wheel, native GPU/model/simulation behavior and software checks.
-- [ ] 4. Create validated local commits for publication.
+- [x] 4. Create validated local commits for publication.
