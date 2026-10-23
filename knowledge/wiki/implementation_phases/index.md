@@ -29,4 +29,4 @@ The [website roadmap](https://websitepresentation.vercel.app/roadmap) and histor
 
 Foundation and simulation → one real demonstration → pilot dataset → grounded annotations/interleaving → integrated losses and single-GPU training/resume → qualified distributed training → learned task evaluation → adaptation and physical-transfer studies.
 
-Model component development can proceed alongside data work. Passing a component forward or producing attractive diagnostic videos does not satisfy the downstream dataset/training/task gates. Refer to the separate [repository cleanup specification](../../repository-cleanup.md) for this audit's completed implementation scope.
+Model component development can proceed alongside data work. Passing a component forward or producing attractive diagnostic videos does not satisfy the downstream dataset/training/task gates. Completed repository cleanup is recorded in [history](../history.md) and [validation](../validation.md).

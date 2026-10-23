@@ -14,6 +14,12 @@ Ordinary code, plans and run-specific instructions are retained by Git. The base
 
 Robot extraction sources and transformations remain fully tracked in [asset provenance](../../src/vla_lego/sim/assets/robots/alex/PROVENANCE.md). They have a continuing scientific and maintenance purpose.
 
+## Completed repository cleanup
+
+The earlier cleanup retired synthetic training/evaluation and LEGO retention mechanisms, consolidated diagnostics, and moved the maintained runtime into one installable namespace. Its source-layout, package and container results remain in [validation](validation.md); consequential decisions remain in the [log](log.md).
+
+The completed implementation specification is recoverable at `445536818b399f456a38aea16e788c3d94da59de:knowledge/repository-cleanup.md`. Its former branch/publication permissions and phase numbering are historical, not instructions for future work. Ordinary cleanup chronology is kept in Git rather than duplicated in the active wiki.
+
 ## Recovering original plans
 
 ```bash
