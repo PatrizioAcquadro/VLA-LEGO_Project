@@ -54,7 +54,7 @@ def main() -> None:
         from PIL import Image
 
         from vla_lego.isaac.environment import TABLE_TOP, AssemblyEnvironment
-        from vla_lego.isaac.evaluation import TowerEvaluator
+        from vla_lego.isaac.evaluation import COOPERATION_S, PERIOD_S, TowerEvaluator
         from vla_lego.isaac.recording import EpisodeRecorder
         from vla_lego.isaac.reference import PhysicalReference
         from vla_lego.isaac.task import initial_tower_task
@@ -315,29 +315,29 @@ def main() -> None:
                     )
                 reference.move(f"{prefix}_place", side, [*task.assembly_xy_m, release_z], yaw)
                 if level == cooperative_level:
-                    # Transfer load through actual upper/lower contact before
-                    # release, using teacher evidence rather than a hidden policy aid.
-                    for descent in range(1, 7):
-                        if (
-                            env.task_truth(index)["block_contact_forces_n"][
-                                indices[cooperative_level - 1]
-                            ][2]
-                            > 0.05
-                        ):
+                    # A single contact sample can precede a bounce. Establish
+                    # persistent load transfer with the same bounded robot descent.
+                    for descent in range(7):
+                        for _ in range(math.ceil(COOPERATION_S / PERIOD_S) + 2):
+                            reference.wait(1, f"{prefix}_cooperative_load_transfer")
+                            coordinated = any(
+                                event["stabilizer"] == stabilizer_side
+                                and event["upper_level"] == cooperative_level
+                                for event in evaluator.result()["cooperation_events"]
+                            )
+                            if coordinated:
+                                break
+                        if coordinated:
                             break
-                        reference.move(
-                            f"{prefix}_touch_{descent}",
-                            side,
-                            [*task.assembly_xy_m, release_z - descent * 0.001],
-                            yaw,
-                        )
-                    if (
-                        env.task_truth(index)["block_contact_forces_n"][
-                            indices[cooperative_level - 1]
-                        ][2]
-                        <= 0.05
-                    ):
-                        raise RuntimeError("No physical load transfer at cooperative placement.")
+                        if descent < 6:
+                            reference.move(
+                                f"{prefix}_touch_{descent + 1}",
+                                side,
+                                [*task.assembly_xy_m, release_z - (descent + 1) * 0.001],
+                                yaw,
+                            )
+                    if not coordinated:
+                        raise RuntimeError("No persistent physical cooperative load transfer.")
                 reference.wait(5 if args.event_settling else 20, f"{prefix}_supported_hold")
                 reference.grip(f"{prefix}_release", side, None)
                 retreat_z = release_z + target.dimensions_m[2] / 2 + 0.025
