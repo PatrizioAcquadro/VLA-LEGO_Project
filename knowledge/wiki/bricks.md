@@ -35,7 +35,7 @@ These are lightweight, easily separable gravity blocks, without studs, sockets, 
 
 The shared Alex measurements record about 70 mm fully open inner finger spacing. This is a geometric reference, not usable clearance for every approach or an established safe grasp envelope. Confirm actual fingertips, orientation and access. Treat print material, wall/infill settings and contact calibration as a consistent initial manufacturing choice before adding variation.
 
-No STL has been imported or printed by this revision. The earlier optional printing reference is replaced by this catalog; its unverified training terms are not a dependency.
+The two seed STLs have now been imported unchanged from upstream commit `59bebe7e`, with the source license and [asset provenance](../../src/vla_lego/isaac/assets/blocks/PROVENANCE.md). Both are exactly 12-triangle centered cuboids in meters; native Isaac uses analytically identical primitives. `vla_lego.isaac.catalog` crosses both geometries, scales 0.8/1.0 and all six colors (24 combinations). The provisional effective bulk density gives 25 g for a 40 mm cube and about 58.7 g for the large prism; these are assumptions, not printed measurements. No physical print or contact calibration is claimed. The earlier optional printing reference is replaced by this catalog; its unverified training terms are not a dependency.
 
 ## Existing MuJoCo behavior
 

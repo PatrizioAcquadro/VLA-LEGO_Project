@@ -39,6 +39,7 @@ def main() -> None:
             and (
                 path.suffix in {".py", ".yaml", ".xml", ".obj", ".stl"}
                 or path.name == "PROVENANCE.md"
+                or path.name.startswith("LICENSE")
             )
         }
         with ZipFile(wheel) as archive:

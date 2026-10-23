@@ -59,6 +59,7 @@ namespaces = false
 [tool.setuptools.package-data]
 "vla_lego.sim" = ["assets/**/*.xml", "assets/**/*.obj", "assets/**/*.stl", "assets/**/PROVENANCE.md"]
 "vla_lego.configs" = ["**/*.yaml"]
+"vla_lego.isaac" = ["assets/**/*.stl", "assets/**/PROVENANCE.md", "assets/**/LICENSE*.txt"]
 
 # ============================================================================
 # Tool Configurations

@@ -1,13 +1,13 @@
 # Status
 
-Reviewed October 23, 2026. The persistent implementation goal covers [Phases 0–6](implementation_phases/index.md). Phase 0's native simulation foundation is verified on Blackwell; Phase 1 minimum grasp/release is next. No trained assembly checkpoint or qualified corpus exists. Prior component evidence is preserved in [validation](validation.md).
+Reviewed October 23, 2026. The persistent implementation goal covers [Phases 0–6](implementation_phases/index.md). Phase 0's native simulation foundation and a Phase 1 minimum single-block reference are verified on Blackwell. No trained assembly checkpoint or qualified corpus exists. Prior component evidence is preserved in [validation](validation.md).
 
 ## Implementation progress
 
 | Phase | Verified state and remaining work |
 |---|---|
 | 0 | Native CUDA PhysX scene consumes shared Alex003 WSG32/UMI, measured pedestal and official head ZED without copied task robot assets. Gravity/table support, both jaw commands, fixed root, finite states and visible block passed. Ownership, separate environments and staged retirement documented in [foundations](foundations.md). |
-| 1 | One diagnostic cube and provisional furniture/contact parameters. Physical grasp, transport, release, full cooperative tower and calibrated evaluator are not yet demonstrated. |
+| 1 | One complete contact-only single-block reference after four retained failed development attempts: about 98 mm lift, transport, release and 2 s stable dwell. Shared TCP/Jacobian/FK validated. Two source STLs and the 24-combination simulation catalog imported with license. Five-block cooperative reference, broader reach/contact calibration and evaluator remain open; [evidence and limits](foundations.md#tcp-control-and-single-block-reference). |
 | 2 | GR00T installed; inference blocked by demonstrated gated-backbone HTTP 403. SmolVLA's actual pretrained weights passed CUDA prediction on recorded Alex sensors; predictions were not executed. [Model evidence](models.md#native-feasibility-work--october-23-2026). Alex adaptation, final interfaces, Orin execution and physical WSG32 readiness remain open. |
 | 3–6 | Teacher, pilot/corpus, training and autonomous qualification remain pending. |
 
@@ -38,7 +38,7 @@ Native evidence is retained locally in `outputs/blackwell/foundation-001` throug
 
 ## Immediate priorities and unresolved facts
 
-1. Begin Phase 0 ownership/environment cleanup and Phase 1 minimum Isaac scene. Retire legacy paths only as replacements become operational.
+1. Expand the verified single-block reference into the cooperative five-block task and calibrate coverage/contact assumptions. Retire legacy paths only as replacements become operational.
 2. Resolve the Orin software compatibility path and actual WSG32 command/feedback interface early. Simulated gripper readiness does not establish physical integration.
 3. Calibrate the initial printed set and physically executed cooperative teacher, then select the model using a bounded pilot. Large-scale collection waits for both Phase 2 and Phase 3.
 4. Iterate coverage, fine-tuning and corrections toward the [qualification targets](validation.md#assembly-qualification-targets).

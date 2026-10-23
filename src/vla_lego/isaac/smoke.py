@@ -112,7 +112,7 @@ def main() -> None:
         (args.output_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(report), flush=True)
         if app is not None:
-            app.close()
+            app.close(exit_code=0 if report.get("passed") else 1)
     if not report["passed"]:
         raise SystemExit(1)
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
+from vla_lego.isaac.catalog import BlockSpec
+
 ARM_JOINTS = tuple(
     f"{side}_{joint}"
     for side in ("LEFT", "RIGHT")
@@ -21,7 +23,8 @@ ARM_JOINTS = tuple(
 JAW_JOINTS = ("left_WSG32_JAW_OPENING", "right_WSG32_JAW_OPENING")
 DT = 1 / 200
 TABLE_TOP = 0.80  # Provisional task furniture; not a physical measurement.
-BLOCK_SIZE = 0.04
+DIAGNOSTIC_BLOCK = BlockSpec("cube", "small", "red")
+BLOCK_SIZE = DIAGNOSTIC_BLOCK.dimensions_m[0]
 
 
 class AssemblyEnvironment:
@@ -41,13 +44,14 @@ class AssemblyEnvironment:
         )
         from isaaclab.assets import AssetBaseCfg, RigidObjectCfg
         from isaaclab.scene import InteractiveScene
-        from isaaclab.sensors import Camera
+        from isaaclab.sensors import Camera, ContactSensor, ContactSensorCfg
         from isaaclab_physx.physics import PhysxCfg
         from isaaclab_physx.sim.schemas import (
             PhysxArticulationRootPropertiesCfg,
             PhysxCollisionPropertiesCfg,
             PhysxRigidBodyPropertiesCfg,
         )
+        from pxr import Usd, UsdPhysics
 
         if not torch.cuda.is_available():
             raise RuntimeError("Native CUDA is required; CPU fallback is not supported.")
@@ -96,16 +100,17 @@ class AssemblyEnvironment:
         cfg.block = RigidObjectCfg(
             prim_path="{ENV_REGEX_NS}/Block",
             spawn=sim_utils.CuboidCfg(
-                size=(BLOCK_SIZE,) * 3,
+                size=DIAGNOSTIC_BLOCK.dimensions_m,
                 rigid_props=PhysxRigidBodyPropertiesCfg(disable_gravity=False),
                 collision_props=PhysxCollisionPropertiesCfg(contact_offset=0.001, rest_offset=0.0),
-                mass_props=sim_utils.MassPropertiesCfg(mass=0.025),
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.8, 0.03, 0.03)),
+                mass_props=sim_utils.MassPropertiesCfg(mass=DIAGNOSTIC_BLOCK.mass_kg),
+                activate_contact_sensors=True,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=DIAGNOSTIC_BLOCK.rgb),
                 physics_material=sim_utils.RigidBodyMaterialCfg(
                     static_friction=0.6, dynamic_friction=0.5, restitution=0.0
                 ),
             ),
-            init_state=RigidObjectCfg.InitialStateCfg(pos=(0.52, 0.15, TABLE_TOP + 0.08)),
+            init_state=RigidObjectCfg.InitialStateCfg(pos=(0.45, 0.15, TABLE_TOP + 0.08)),
         )
         cfg.zed_model, camera_cfg, _ = make_zed_x_mini_cfgs(
             "{ENV_REGEX_NS}/ZED_X_Mini", resolution="SVGA"
@@ -118,6 +123,23 @@ class AssemblyEnvironment:
         self.scene = InteractiveScene(cfg)
         self.robot, self.block = self.scene["robot"], self.scene["block"]
         self.stage = omni.usd.get_context().get_stage()
+        self.contact_robot_paths = [
+            str(prim.GetPath())
+            for prim in Usd.PrimRange(self.stage.GetPrimAtPath("/World/envs/env_0/Robot"))
+            if prim.HasAPI(UsdPhysics.RigidBodyAPI)
+        ]
+        # The generic helper stops at the first rigid ancestor; this articulated
+        # URDF nests link prims, so each link must be activated explicitly.
+        for body_path in self.contact_robot_paths:
+            sim_utils.activate_contact_sensors(body_path, stage=self.stage)
+        self.block_contact = ContactSensor(
+            ContactSensorCfg(
+                prim_path="/World/envs/env_0/Block",
+                filter_prim_paths_expr=self.contact_robot_paths,
+                update_period=0.0,
+                history_length=1,
+            )
+        )
         author_alex_purdue_zed_x_mini_mount(
             self.stage, "/World/envs/env_0/Robot", "/World/envs/env_0/ZED_X_Mini"
         )
@@ -126,6 +148,13 @@ class AssemblyEnvironment:
         )
         self.camera = Camera(camera_cfg)
         self.sim.reset()
+        from isaaclab_physx.physics import PhysxManager
+
+        self.robot_contact_view = PhysxManager.get_physics_sim_view().create_rigid_contact_view(
+            self.contact_robot_paths, filter_patterns=[[] for _ in self.contact_robot_paths]
+        )
+        if self.robot_contact_view.sensor_count != len(self.contact_robot_paths):
+            raise RuntimeError("Incomplete native robot contact reporting.")
         self.scene.reset()
         self.target = self.robot.data.default_joint_pos.torch.clone()
         self.robot.set_joint_position_target_index(target=self.target)
@@ -157,6 +186,7 @@ class AssemblyEnvironment:
             self.scene.write_data_to_sim()
             self.sim.step(render=render and tick == count - 1)
             self.scene.update(DT)
+            self.block_contact.update(DT)
             self.time += DT
         if render:
             self.sim.forward()
@@ -177,7 +207,26 @@ class AssemblyEnvironment:
 
     def task_truth(self) -> dict:
         """Privileged diagnostic/evaluator channel, excluded from observe()."""
+        matrix = self.block_contact.data.force_matrix_w.torch[0, 0]
         return {
             "block_pose_w": self.block.data.root_pose_w.torch[0].tolist(),
             "block_velocity_w": self.block.data.root_vel_w.torch[0].tolist(),
+            "robot_contact_force_n": float(matrix.norm(dim=-1).sum()),
+            # PhysX GPU filters cannot target the static table. Retain the residual
+            # as environmental contact, with geometry establishing table support.
+            "nonrobot_contact_force_n": float(
+                (self.block_contact.data.net_forces_w.torch[0, 0] - matrix.sum(dim=0)).norm()
+            ),
+        }
+
+    def robot_diagnostics(self) -> dict:
+        """Control/contact evidence; never supplied as hidden task decisions."""
+        import warp as wp
+
+        forces = wp.to_torch(self.robot_contact_view.get_net_contact_forces(dt=DT)).reshape(-1, 3)
+        return {
+            "joint_position": self.robot.data.joint_pos.torch[0].tolist(),
+            "applied_joint_effort": self.robot.data.applied_torque.torch[0].tolist(),
+            "robot_contact_paths": self.contact_robot_paths,
+            "robot_contact_forces_n": forces.tolist(),
         }

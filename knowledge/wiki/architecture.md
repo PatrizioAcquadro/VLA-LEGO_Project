@@ -2,7 +2,7 @@
 
 ## Planned robot and ownership
 
-The future environment uses the shared [Alex asset repository](https://github.com/PatrizioAcquadro/purdue-alex-assets), available locally at `/home/pacquadr/Desktop/Alex`. The inspected revision `9ac4bd4` provides `ihmc_alex_isaaclab`, including the fixed-base Purdue WSG32/UMI profile, pedestal and head ZED integration. Its documented target is Isaac Sim 6.0.1 / Isaac Lab release/3.0.0-beta2; project integration remains future work.
+The native foundation uses the shared [Alex asset repository](https://github.com/PatrizioAcquadro/purdue-alex-assets), available locally at `/home/pacquadr/Desktop/Alex`. Revision `9ac4bd4` provides `ihmc_alex_isaaclab`, including the fixed-base Purdue WSG32/UMI profile, pedestal and head ZED integration. Its documented target is Isaac Sim 6.0.1 / Isaac Lab release/3.0.0-beta2; [native integration and single-block reference evidence](foundations.md) are verified on Blackwell, while the complete cooperative task remains under development.
 
 | Element | Design and boundary |
 |---|---|

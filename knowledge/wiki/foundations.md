@@ -27,6 +27,33 @@ Use a new output directory for each attempt. The probe writes a separate deploya
 
 The low-level joint API currently validates finite positions against the shared URDF limits. Actuator effort/velocity limits are enforced by that shared configuration. Collision-aware Cartesian control, stale-command handling and the finalized VLA interface remain implementation work; do not expose this diagnostic joint API to a physical robot.
 
+## TCP control and single-block reference
+
+`vla_lego.isaac.control` composes the shared WSG32 TCP with live link poses, shifts the native link-origin Jacobian to the TCP, and realizes named tool requests with damped least squares and bounded pilot joint speed. `kinematics` derives a seven-joint chain and limits directly from that same URDF for GPU multi-start IK. Native FK parity was about 0.5 micrometers and 1 microradian; seven physically executed small joint probes showed at most about 0.10 mm linearization residual. These validate coordinate/control components, not a collision-aware planner.
+
+The explicit reference probe uses only robot actuation and contacts under gravity. Both arms move to staging poses; the left arm then grasps a loose 40 mm cube, lifts, transports, places, opens and retreats. The reference alone reads block truth. Head RGB and 18 named arm/neck/WSG32 leader signals remain separate; follower simulation joints are excluded from deployable observations.
+
+```bash
+bash scripts/isaac-run.sh -m vla_lego.isaac.grasp_probe \
+  --output-dir outputs/grasp-001 --cache-dir outputs/converted-assets
+```
+
+Five development attempts were retained before this first complete result:
+
+| Attempt | Outcome and observed mechanism |
+|---|---|
+| `grasp-001` | Aborted at an unsolved near-body fixed-orientation raise, before grasp. |
+| `grasp-002` | Both staging poses passed, but joint-linear approach collided with the table edge; pregrasp failed. |
+| `grasp-003` | Added high lateral waypoints; all pregrasp poses passed, then the lower target failed bounded IK. |
+| `grasp-004` | Moved the loose cube into the lower grasp workspace. Descent stalled against the table; contact/geometry audit identified fingertip extent beyond TCP. |
+| `grasp-005` | Complete reference grasp/lift/transport/release. Lift about 98 mm; final position about `(0.4794,0.2318,0.8200)` m, approximately 2 mm from requested XY. All ten samples over 2 s released dwell passed, with zero robot contact and environmental contact about 0.245 N. Wall time to report before app close was 115.6 s. Lift and retreat images were inspected. |
+
+This is **one complete single-block reference out of five development attempts**, not learned success or full Phase 1 completion. Earlier attempts used distinct diagnosed configurations; do not pool them into a qualification rate or discard them. The successful reference still commands strong jaw closure and shows high-frequency angular velocity during holding; bounded force/contact calibration remains necessary before corpus scaling.
+
+Native collider readback measured UMI contact geometry along TCP X from about −48.9 to +71.5 mm, with a 70 mm inner opening. For the top-down 40 mm cube, a TCP 60 mm above object center leaves about 8.5 mm fingertip/table clearance while overlapping about 31.5 mm of the block side. This is task calibration against existing geometry, not a changed shared frame or physical measurement. The evaluator uses provisional component thresholds: 5 mm tool-position admission, 10 mm destination XY, 3 mm supported Z, linear/angular speed below 0.01 m/s and 0.1 rad/s, and numerical-zero robot force over a 2 s dwell. They are not calibrated final campaign tolerances.
+
+Contact readback explicitly activates every nested articulated link. The generic activation helper stops at the first rigid ancestor and missed nested links in this asset. Static-table GPU pair filtering is unsupported; the report retains supported robot contact pairs and the remaining environmental force rather than inventing a measured table-only force. Probe shutdown preserves nonzero exit status on failure. Full traces, reports and failures live in `outputs/blackwell/grasp-*`, `ik-*`, `jacobian-*` and `finger-geometry-*`, mirrored from Blackwell.
+
 ## Staged retirement
 
 | Retained path | Active consumer | Replacement required before removal |

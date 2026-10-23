@@ -8,7 +8,7 @@
 
 The target is an ordered five-block tower built by **Alex003**, selecting the requested colors and sizes among distractors with genuine cooperation between both arms. The new roadmap uses Isaac Sim/Lab and a robot-pretrained VLA, then transfers to Purdue Alex with inference entirely on the onboard Jetson AGX Orin.
 
-**Current stage:** the repository still implements the MuJoCo/Alex V1 environment and Qwen3.5-4B components described below. Isaac/Alex003 integration, demonstration collection, pretrained VLA adaptation and learned assembly remain planned. See [status and open questions](knowledge/wiki/status.md) for the capability boundary.
+**Current stage:** native Isaac/Alex003 now consumes shared WSG32/UMI, pedestal and head-ZED assets and has a contact-only single-block grasp/lift/transport/release reference. SmolVLA pretrained CUDA tensor inference is verified; Alex adaptation, full cooperative towers and learned assembly remain unfinished. The MuJoCo/Qwen baseline below remains available during migration. See [status and open questions](knowledge/wiki/status.md) and [native operations/evidence](knowledge/wiki/foundations.md).
 
 | Alex in MuJoCo | Lightweight-brick tower |
 |:---:|:---:|
