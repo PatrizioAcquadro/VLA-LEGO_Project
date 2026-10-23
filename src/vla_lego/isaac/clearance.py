@@ -22,17 +22,6 @@ def arm_clearance(env, solver, side: str):
 
     stage = env.stage
     transforms = UsdGeom.XformCache()
-    bounds = UsdGeom.BBoxCache(
-        0,
-        [
-            UsdGeom.Tokens.default_,
-            UsdGeom.Tokens.proxy,
-            UsdGeom.Tokens.render,
-            UsdGeom.Tokens.guide,
-        ],
-        False,
-        True,
-    )
 
     def body_named(name):
         return next(
@@ -75,15 +64,15 @@ def arm_clearance(env, solver, side: str):
                 faces = vertices[np.asarray(triangles)]
                 normals = np.cross(faces[:, 1] - faces[:, 0], faces[:, 2] - faces[:, 0])
             elif prim.IsA(UsdGeom.Cube):
-                box = (
-                    bounds.ComputeRelativeBound(prim, relative)
-                    if relative
-                    else bounds.ComputeWorldBound(prim)
-                ).ComputeAlignedRange()
+                half = UsdGeom.Cube(prim).GetSizeAttr().Get() / 2
+                # Collision-only furniture can be invisible to a render BBoxCache.
                 vertices = np.asarray(
-                    list(itertools.product(*zip(box.GetMin(), box.GetMax(), strict=True)))
+                    [
+                        matrix.Transform(Gf.Vec3d(*point))
+                        for point in itertools.product((-half, half), repeat=3)
+                    ]
                 )
-                normals = np.eye(3)
+                normals = np.asarray([matrix.TransformDir(Gf.Vec3d(*axis)) for axis in np.eye(3)])
             else:
                 raise RuntimeError(f"Unsupported native clearance primitive: {prim.GetTypeName()}")
             lengths = np.linalg.norm(normals, axis=1)
@@ -104,9 +93,21 @@ def arm_clearance(env, solver, side: str):
                 moving[name] = geometry
     if not moving:
         raise RuntimeError("Native arm collision geometry unavailable")
+    pedestal = stage.GetPrimAtPath("/World/envs/env_0/PurduePedestal")
+    if not pedestal:
+        raise RuntimeError("Native pedestal unavailable for arm clearance")
+    furniture = [
+        prim
+        for prim in Usd.PrimRange(pedestal, Usd.TraverseInstanceProxies())
+        if prim.HasAPI(UsdPhysics.RigidBodyAPI)
+    ]
     obstacles = [
         (body.GetName(), points, axes)
-        for body in (stage.GetPrimAtPath("/World/envs/env_0/Table"), body_named("PEDESTAL_LINK"))
+        for body in (
+            stage.GetPrimAtPath("/World/envs/env_0/Table"),
+            body_named("PEDESTAL_LINK"),
+            *furniture,
+        )
         for points, axes in parts(body)
     ]
     adjacent = set()
