@@ -9,7 +9,7 @@ from collections import Counter
 from pathlib import Path
 
 from vla_lego.isaac.environment import ARM_JOINTS, JAW_JOINTS
-from vla_lego.isaac.pilot import COLLECTION_CONDITION, PilotCase, load_cases
+from vla_lego.isaac.pilot import BUILD_REGION, COLLECTION_CONDITION, PilotCase, load_cases
 from vla_lego.pretrained.decisions import DECISION_NAMES
 
 
@@ -66,6 +66,7 @@ def audit_episode(directory: Path, case: PilotCase) -> dict:
     decisions: Counter = Counter()
     masked = count = 0
     previous = None
+    previous_action = None
     allowed = {
         "frame",
         "observation_time_s",
@@ -113,6 +114,12 @@ def audit_episode(directory: Path, case: PilotCase) -> dict:
             ):
                 if len(row[key]) != width or not all(math.isfinite(v) for v in row[key]):
                     raise ValueError("Invalid recorded state/action")
+            if previous_action is not None and any(
+                abs(a - b) > (0.025 if i < 14 else 0.020) + 1e-5
+                for i, (a, b) in enumerate(zip(row["action"], previous_action, strict=True))
+            ):
+                raise ValueError("Applied commands exceed the native 20 Hz joint/jaw target rate")
+            previous_action = row["action"]
             if (
                 not (directory / "recording" / row["head_rgb"]).is_file()
                 or len(truth["blocks"]) != 8
@@ -147,6 +154,47 @@ def audit_episode(directory: Path, case: PilotCase) -> dict:
         "family": case.row["family"],
         "split": case.row["split"],
         "category": case.category,
+        "stabilizer": case.row["stabilizer"],
+        "error": case.row["error"],
+    }
+
+
+def spatial_coverage(episodes: dict) -> dict:
+    """Summarize achieved base positions, never requested teacher coordinates."""
+    groups: dict[str, list] = {}
+    x0, x1, y0, y1 = BUILD_REGION
+    for row in episodes.values():
+        xy = row["final_base_xy_m"]
+        if xy is None:
+            continue
+        for group in (
+            "all",
+            f"split/{row['split']}",
+            f"family/{row['family']}",
+            f"stabilizer/{row['stabilizer']}",
+            f"category/{row['category']}",
+            f"error/{row['error']}",
+        ):
+            groups.setdefault(group, []).append(xy)
+    result = {}
+    for group, points in groups.items():
+        cells: Counter = Counter()
+        for x, y in points:
+            ix = max(0, min(2, int(3 * (x - x0) / (x1 - x0))))
+            iy = max(0, min(2, int(3 * (y - y0) / (y1 - y0))))
+            cells[f"x{ix}/y{iy}"] += 1
+        result[group] = {
+            "episodes": len(points),
+            "x_range_m": [min(p[0] for p in points), max(p[0] for p in points)],
+            "y_range_m": [min(p[1] for p in points), max(p[1] for p in points)],
+            "mean_xy_m": [sum(p[i] for p in points) / len(points) for i in (0, 1)],
+            "cells_3x3": dict(cells),
+            "outside_3cm_of_previous_center": sum(math.dist(p, (0.4, 0)) > 0.03 for p in points),
+        }
+    return {
+        "allowed_region_xy_m": BUILD_REGION,
+        "groups": result,
+        "stop_episodes_have_no_final_tower_position": True,
     }
 
 
@@ -202,6 +250,8 @@ def main() -> None:
         "cooperative_placement_levels": dict(cooperative_levels),
         "recovery_levels": dict(recovery_levels),
     }
+    result["spatial_coverage"] = spatial_coverage(result["episodes"])
+    result["collection_condition"] = COLLECTION_CONDITION
     result["collection_yield"] = {
         "usable_cases": len(result["episodes"]),
         "attempts": len(result["attempts"]),
