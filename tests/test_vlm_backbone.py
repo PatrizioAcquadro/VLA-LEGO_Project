@@ -20,7 +20,6 @@ from hydra import compose, initialize
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.vlm
 class TestVLMBackboneConfig:
     """Config parsing and dataclass construction — CPU-safe, no weights needed."""
 
@@ -155,7 +154,6 @@ class TestVLMBackboneLoading:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.vlm
 class TestVLMBackboneInfo:
     """Dataclass serialization and immutability checks."""
 
@@ -206,7 +204,6 @@ class TestVLMBackboneInfo:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.vlm
 class TestResolveDtype:
     """Unit tests for the internal _resolve_dtype helper."""
 
@@ -237,7 +234,6 @@ class TestResolveDtype:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.vlm
 class TestProcessorInfo:
     """ProcessorInfo dataclass construction and immutability."""
 
@@ -288,7 +284,6 @@ class TestProcessorInfo:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.vlm
 class TestContextBudget:
     """Context window budget computation — pure function, no model needed."""
 
@@ -654,3 +649,36 @@ class TestVLMInference:
         logits_f32 = outputs["logits"].float()
         assert not torch.isnan(logits_f32).any(), "NaN in logits"
         assert not torch.isinf(logits_f32).any(), "Inf in logits"
+
+
+@pytest.mark.parametrize("method", ["forward", "get_hidden_states"])
+@pytest.mark.parametrize("explicit_types", [False, True])
+def test_image_token_types_reach_native_model(method, explicit_types):
+    """Preserve processor output and support existing image-only four-key callers."""
+    from types import SimpleNamespace
+
+    from models.vlm_backbone import VLMBackbone, VLMBackboneInfo
+
+    class NativeRecorder(torch.nn.Module):
+        def forward(self, **kwargs):
+            self.received = kwargs
+            return SimpleNamespace(
+                logits=torch.zeros(1, 4, 16), hidden_states=[torch.zeros(1, 4, 8)]
+            )
+
+    native = NativeRecorder()
+    info = VLMBackboneInfo("test", 0, 0, 8, 1, 16, "float32", 8, 1, 7, 8, 9)
+    backbone = VLMBackbone(native, None, info)
+    ids = torch.tensor([[1, 7, 7, 3]])
+    types = torch.tensor([[0, 1, 1, 0]])
+    inputs = {
+        "input_ids": ids,
+        "pixel_values": torch.zeros(1),
+        "image_grid_thw": torch.tensor([[1, 2, 2]]),
+    }
+    if explicit_types:
+        inputs["mm_token_type_ids"] = types
+    getattr(backbone, method)(**inputs)
+    torch.testing.assert_close(native.received["mm_token_type_ids"], types)
+    if explicit_types:
+        assert native.received["mm_token_type_ids"] is types

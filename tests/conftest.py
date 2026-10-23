@@ -12,7 +12,6 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "viewer: marks tests requiring display/viewer")
     config.addinivalue_line("markers", "smoke: simulation smoke tests (Phase 0.2.4)")
     config.addinivalue_line("markers", "assets: asset loading and linting tests (Phase 0.2.5)")
-    config.addinivalue_line("markers", "lego: LEGO brick tests (Phase 1.2.1)")
     config.addinivalue_line(
         "markers", "vlm: marks tests requiring transformers/VLM deps (Phase 3.1)"
     )

@@ -47,7 +47,7 @@ class EpisodeManager:
                 self._set_pose(target.brick_index, target.position, target.yaw)
         else:
             rng = np.random.default_rng(seed)
-            occupied = []
+            occupied: list[tuple[np.ndarray, np.ndarray]] = []
             for i, spec in enumerate(self.bricks):
                 yaw = float(rng.uniform(-np.pi, np.pi))
                 sx, sy = spec.size[:2]

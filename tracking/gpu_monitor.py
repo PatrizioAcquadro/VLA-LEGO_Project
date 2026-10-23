@@ -247,7 +247,7 @@ class GPUMonitor:
         keys = self._history[0].keys()
 
         for key in keys:
-            values = [s.get(key) for s in self._history if s.get(key) is not None]
+            values = [value for sample in self._history if (value := sample.get(key)) is not None]
             if values:
                 summary[f"{key}_mean"] = sum(values) / len(values)
                 summary[f"{key}_max"] = max(values)

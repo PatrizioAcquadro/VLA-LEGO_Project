@@ -223,6 +223,12 @@ class VLMBackbone(nn.Module):
         Returns:
             Last hidden state tensor of shape (B, seq_len, hidden_size).
         """
+        if (
+            input_ids is not None
+            and image_grid_thw is not None
+            and "mm_token_type_ids" not in kwargs
+        ):
+            kwargs["mm_token_type_ids"] = (input_ids == self.info.image_token_id).long()
         if inputs_embeds is not None:
             # Scenario C: full embedding control — state/action tokens already injected
             outputs = self._model(
@@ -254,7 +260,7 @@ class VLMBackbone(nn.Module):
     ) -> dict[str, torch.Tensor | None]:
         """Forward pass returning dict with logits and hidden states.
 
-        Returns a dict compatible with the existing TransformerModel interface:
+        Returns logits and final hidden states:
             {"logits": (B, seq_len, vocab_size), "hidden_states": (B, seq_len, hidden_size)}
 
         Args:
@@ -272,6 +278,12 @@ class VLMBackbone(nn.Module):
         Returns:
             Dict with "logits" and "hidden_states" tensors.
         """
+        if (
+            input_ids is not None
+            and image_grid_thw is not None
+            and "mm_token_type_ids" not in kwargs
+        ):
+            kwargs["mm_token_type_ids"] = (input_ids == self.info.image_token_id).long()
         if inputs_embeds is not None:
             outputs = self._model(
                 input_ids=None,
@@ -379,7 +391,7 @@ def load_vlm_backbone(cfg: DictConfig) -> VLMBackbone:
     model = AutoModelForImageTextToText.from_pretrained(
         model_id,
         revision=revision,
-        torch_dtype=torch_dtype,
+        dtype=torch_dtype,
         device_map=vlm_cfg.device_map,
         trust_remote_code=vlm_cfg.trust_remote_code,
         attn_implementation=vlm_cfg.attn_implementation,

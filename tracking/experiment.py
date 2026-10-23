@@ -80,7 +80,7 @@ class ExperimentTracker:
         self.gpu_stats_interval = gpu_stats_interval
         self.enabled = enabled
         self._offline_mode = False
-        self._run = None
+        self._run: Any = None
         self._run_id: str | None = None
         self._step_counter = 0
 
@@ -167,7 +167,7 @@ class ExperimentTracker:
         # Merge config with metadata
         full_config = {
             **self.config,
-            "tags": generate_tags_dict(**self.tags),
+            "tags": generate_tags_dict(extra=self.tags),
             "metadata": metadata,
         }
 
@@ -207,7 +207,7 @@ class ExperimentTracker:
                     self._run = wandb.init(mode="online", **init_kwargs)
                     self._offline_mode = False
                     print(f"[ExperimentTracker] Online: {self._run.get_url()}")
-                except (wandb.errors.CommError, Exception) as e:
+                except Exception as e:
                     # Fallback to offline mode
                     warnings.warn(
                         f"W&B online mode failed ({e}). Falling back to offline mode.",
@@ -369,11 +369,7 @@ class ExperimentTracker:
             warnings.warn(f"wandb not installed: {e}. Cannot log config artifact.", stacklevel=2)
             return
 
-        try:
-            import yaml
-        except ImportError as e:
-            warnings.warn(f"pyyaml not installed: {e}. Cannot log config artifact.", stacklevel=2)
-            return
+        from omegaconf import OmegaConf
 
         try:
             # Create artifact
@@ -385,7 +381,7 @@ class ExperimentTracker:
 
             # Write config to temp file
             with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-                yaml.dump(config, f, default_flow_style=False)
+                f.write(OmegaConf.to_yaml(OmegaConf.create(config)))
                 temp_path = f.name
 
             artifact.add_file(temp_path, name="config.yaml")
@@ -580,7 +576,8 @@ class ExperimentTracker:
         """
         if self._run is not None and not self._offline_mode:
             try:
-                return self._run.get_url()
+                url = self._run.get_url()
+                return str(url) if url is not None else None
             except Exception:
                 pass
         return None

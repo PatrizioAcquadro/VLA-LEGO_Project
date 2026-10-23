@@ -90,7 +90,7 @@ def get_learning_rate(
 
     if hasattr(optimizer, "param_groups"):
         if len(optimizer.param_groups) > param_group:
-            return optimizer.param_groups[param_group].get("lr", 0.0)
+            return float(optimizer.param_groups[param_group].get("lr", 0.0))
     return 0.0
 
 
@@ -260,7 +260,9 @@ def extract_loss_components(
     # Handle total loss
     if isinstance(loss, dict):
         # Loss is a dictionary - extract components
-        if "total" in loss:
+        if "total_loss" in loss:
+            metrics["loss/total"] = _to_float(loss["total_loss"])
+        elif "total" in loss:
             metrics["loss/total"] = _to_float(loss["total"])
         elif "loss" in loss:
             metrics["loss/total"] = _to_float(loss["loss"])
@@ -271,8 +273,9 @@ def extract_loss_components(
 
         # Extract named components
         for key, value in loss.items():
-            if key not in ("total", "loss"):
-                metrics[f"loss/{key}"] = _to_float(value)
+            if key not in ("total", "loss", "total_loss"):
+                name = {"text_loss": "ar", "action_loss": "fm"}.get(key, key)
+                metrics[f"loss/{name}"] = _to_float(value)
     else:
         metrics["loss/total"] = _to_float(loss)
 
@@ -310,7 +313,7 @@ def aggregate_metrics(
         return {}
 
     # Collect all keys
-    all_keys = set()
+    all_keys: set[str] = set()
     for m in metrics_list:
         all_keys.update(m.keys())
 
@@ -334,23 +337,19 @@ def aggregate_metrics(
 
 def filter_metrics(
     metrics: dict[str, Any],
-    include_none: bool = False,
 ) -> dict[str, float]:
     """
     Filter metrics dictionary to only include valid numeric values.
 
     Args:
         metrics: Raw metrics dictionary.
-        include_none: Whether to include None values.
 
     Returns:
         Filtered metrics dictionary.
     """
-    result = {}
+    result: dict[str, float] = {}
     for key, value in metrics.items():
         if value is None:
-            if include_none:
-                result[key] = None
             continue
 
         try:

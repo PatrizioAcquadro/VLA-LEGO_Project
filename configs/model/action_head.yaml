@@ -29,7 +29,7 @@ action_head:
     sigma_min: 0.001            # minimum noise scale
 
     # Time sampling (training): Beta(alpha, beta) scaled to [time_min, time_max]
-    # Following EO-1: Beta(1.5, 1.0) biases toward noisier timesteps
+    # Beta(1.5, 1.0) favors larger t (closer to data in this implementation)
     time_sampling: "beta"
     time_alpha: 1.5
     time_beta: 1.0
@@ -40,13 +40,6 @@ action_head:
   loss:
     lambda_text: 1.0            # AR text loss weight (Transfusion dual loss)
     lambda_action: 1.0          # FM action loss weight
-    balancing_strategy: "fixed"  # fixed | normalized | uncertainty
-    ema_decay: 0.999            # for "normalized" strategy
-    text:
-      ignore_index: -100
-      label_smoothing: 0.0
-    action:
-      reduction: "mean"         # mean over valid positions and dimensions
 
   # --- Inference -------------------------------------------------------------
   inference:

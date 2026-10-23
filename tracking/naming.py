@@ -279,7 +279,7 @@ def parse_run_name(run_name: str) -> dict[str, str | None]:
     """
     parts = run_name.split("_")
 
-    result = {
+    result: dict[str, str | None] = {
         "model": None,
         "objective": None,
         "dataset": None,
