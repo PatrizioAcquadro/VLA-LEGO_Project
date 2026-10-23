@@ -32,6 +32,14 @@ class PhysicalReference:
         self.stages: list[dict] = []
         self.max_limit_projection = 0.0
         self.event_settling = event_settling
+        self.hold_targets: dict[str, list[float]] = {}
+
+    def admit_stabilizer_clearance(self, side: str) -> None:
+        from vla_lego.isaac.clearance import arm_clearance
+
+        self.solvers[side].configuration_admission = arm_clearance(
+            self.env, self.solvers[side], side
+        )
 
     def grasp_yaw(self, side: str, preferred: float, waypoints: list[list[float]]) -> float:
         """Choose a reachable equivalent jaw approach for square-section blocks."""
@@ -81,6 +89,8 @@ class PhysicalReference:
         if self.env.recorder is not None:
             self.env.recorder.stage = stage
         for _ in range(ticks):
+            if self.hold_targets:
+                self.ctrl.command(self.hold_targets, integrate_target=True, advance=False)
             self.env.step(10)
             self.sample(stage)
 
@@ -93,7 +103,7 @@ class PhysicalReference:
             if quiet >= 3:
                 break
 
-    def joint_move(self, stage: str, side: str, goal) -> None:
+    def joint_move(self, stage: str, side: str, goal, *, settle_at_end: bool = True) -> None:
         import torch
 
         if self.env.recorder is not None:
@@ -110,8 +120,13 @@ class PhysicalReference:
         for tick in range(ticks):
             q = torch.lerp(start, goal, (tick + 1) / ticks).clamp(limits[:, 0], limits[:, 1])
             self.env.set_joint_targets(dict(zip(self.solvers[side].names, q.tolist(), strict=True)))
+            holding = {s: p for s, p in self.hold_targets.items() if s != side}
+            if holding:
+                self.ctrl.command(holding, integrate_target=True, advance=False)
             self.env.step(10)
             self.sample(stage)
+        if not settle_at_end:
+            return
         if self.event_settling:
             self.settle(ids, 0.02, 40, stage + "_settle")
         else:
@@ -157,13 +172,14 @@ class PhysicalReference:
                     self.env.target.new_tensor([*intermediate, *orientation]),
                     self.env.robot.data.joint_pos.torch[0, ids],
                 )
-                self.joint_move(stage, side, solution)
+                self.joint_move(stage, side, solution, settle_at_end=not self.event_settling)
         solution = self.solvers[side].solve(
             self.env.target.new_tensor(desired), self.env.robot.data.joint_pos.torch[0, ids]
         )
         self.joint_move(stage, side, solution)
         for _ in range(200):
-            feedback = self.ctrl.command({side: desired}, integrate_target=True)[side]
+            targets = {**self.hold_targets, side: desired}
+            feedback = self.ctrl.command(targets, integrate_target=True)[side]
             self.sample(stage + "_refine")
             if feedback["position_error_m"] < 0.003 and feedback["rotation_error_rad"] < 0.04:
                 break

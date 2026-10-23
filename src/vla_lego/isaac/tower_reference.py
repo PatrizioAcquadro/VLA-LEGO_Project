@@ -69,6 +69,15 @@ def main() -> None:
         task = pilot_case.task() if pilot_case else initial_tower_task(mirror=args.mirror)
         cooperative_level = pilot_case.cooperative_level if pilot_case else 3
         stabilizer_quaternion = [0.0, 0.0, 0.0, 1.0]
+        stabilizer_clear_quaternion = [
+            0.0,
+            -math.sin(math.radians(10)),
+            0.0,
+            math.cos(math.radians(10)),
+        ]
+        stabilizer_clear_z = (
+            TABLE_TOP + sum(t.dimensions_m[2] for t in task.targets[: cooperative_level + 1]) + 0.04
+        )
         roles: tuple[tuple[str, int], ...] = (
             ("left", 0),
             ("right", 180),
@@ -196,55 +205,177 @@ def main() -> None:
                     expected_bottom += task.targets[prior].dimensions_m[2]
 
             def engage_stabilizer():
-                nonlocal stabilizer_quaternion
-                # Restrain the lower stack using actual bilateral jaw contact. This
-                # keeps both gripper housings out of the upper placement path.
-                lower = env.task_truth(indices[cooperative_level - 1])["block_pose_w"][:3]
-                stabilizer_pose = [
-                    lower[0] - 0.01,
-                    lower[1],
-                    lower[2] + (0.010 if pilot_case and cooperative_level == 2 else 0.0),
-                ]
-                if pilot_case:
-                    _, joint_ids, _ = reference.ctrl.frames[stabilizer_side]
-                    seed = env.robot.data.joint_pos.torch[0, joint_ids]
-                    for roll_deg in (
-                        0,
-                        20 if stabilizer_side == "left" else -20,
-                        -20 if stabilizer_side == "left" else 20,
-                    ):
-                        half = math.radians(roll_deg) / 2
-                        candidate = [math.sin(half), 0, 0, math.cos(half)]
-                        try:
-                            reference.solvers[stabilizer_side].solve(
-                                env.target.new_tensor([*stabilizer_pose, *candidate]), seed
-                            )
-                            stabilizer_quaternion = candidate
-                            break
-                        except RuntimeError:
-                            continue
-                    else:
-                        raise RuntimeError(
-                            "No reachable physical stabilizer approach at the actual tower"
-                        )
-                for name, xyz in (
+                nonlocal stabilizer_quaternion, stabilizer_clear_quaternion, stabilizer_clear_z
+                from isaaclab.utils.math import quat_apply, quat_mul
+
+                from vla_lego.isaac.evaluation import _corners
+
+                state = env.task_truth(indices[cooperative_level - 1])
+                lower = state["block_pose_w"][:3]
+                nominal_width = task.targets[cooperative_level - 1].dimensions_m[1]
+                width = nominal_width
+                stabilizer_pose = [lower[0] - 0.01, lower[1], lower[2]]
+                approach = (
                     ("high", [lower[0] - 0.01, stabilizer_y, 1.02]),
                     ("center", [lower[0] - 0.01, lower[1], 1.02]),
                     ("above", [lower[0] - 0.01, lower[1], lower[2] + 0.06]),
                     ("grasp", stabilizer_pose),
-                ):
+                )
+                if pilot_case:
+                    reference.admit_stabilizer_clearance(stabilizer_side)
+                    _, joint_ids, _ = reference.ctrl.frames[stabilizer_side]
+                    selected = None
+                    failures = []
+                    preferred_sign = -1 if stabilizer_side == "left" else 1
+                    angles = (
+                        0,
+                        preferred_sign * 20,
+                        -preferred_sign * 20,
+                        preferred_sign * 35,
+                        -preferred_sign * 35,
+                        preferred_sign * 60,
+                        -preferred_sign * 60,
+                        preferred_sign * 70,
+                        -preferred_sign * 70,
+                        preferred_sign * 90,
+                        -preferred_sign * 90,
+                    )
+                    for yaw_deg in angles:
+                        for pitch_deg, reach in ((0, 0.045), (10, 0.060)):
+                            yaw, pitch = math.radians(yaw_deg) / 2, math.radians(pitch_deg) / 2
+                            candidate = quat_mul(
+                                env.target.new_tensor([0, 0, math.sin(yaw), math.cos(yaw)]),
+                                env.target.new_tensor([0, math.sin(pitch), 0, math.cos(pitch)]),
+                            )
+                            finger = quat_apply(
+                                candidate, env.target.new_tensor([1.0, 0, 0])
+                            ).tolist()
+                            axis = quat_apply(
+                                candidate, env.target.new_tensor([0.0, 1, 0])
+                            ).tolist()
+                            projections = [
+                                sum(v * a for v, a in zip(corner, axis, strict=True))
+                                for corner in _corners(
+                                    task.targets[cooperative_level - 1].dimensions_m,
+                                    state["block_pose_w"],
+                                )
+                            ]
+                            gap = max(projections) - min(projections)
+                            if gap > 0.070:
+                                continue
+                            pose = [v - reach * d for v, d in zip(lower, finger, strict=True)]
+                            orientation = candidate.tolist()
+                            path = (
+                                ("high", [0.40, stabilizer_y, 1.02]),
+                                ("above", [pose[0], pose[1], pose[2] + 0.06]),
+                                ("grasp", pose),
+                            )
+                            seed = env.robot.data.joint_pos.torch[0, joint_ids]
+                            phase = "approach"
+                            try:
+                                for name, xyz in path:
+                                    phase = name
+                                    rotation = [0.0, 0, 0, 1.0] if name == "high" else orientation
+                                    seed = reference.solvers[stabilizer_side].solve(
+                                        env.target.new_tensor([*xyz, *rotation]), seed
+                                    )
+                                phase = "retract"
+                                seed = reference.solvers[stabilizer_side].solve(
+                                    env.target.new_tensor(
+                                        [pose[0], pose[1], pose[2] + 0.06, *orientation]
+                                    ),
+                                    seed,
+                                )
+                                clear_z = (
+                                    TABLE_TOP
+                                    + sum(
+                                        t.dimensions_m[2]
+                                        for t in task.targets[: cooperative_level + 1]
+                                    )
+                                    + 0.06
+                                )
+                                retreat = None
+                                for clear_pitch in (0, -20, 20):
+                                    half = math.radians(clear_pitch) / 2
+                                    rotation = quat_mul(
+                                        candidate,
+                                        env.target.new_tensor(
+                                            [0, math.sin(half), 0, math.cos(half)]
+                                        ),
+                                    ).tolist()
+                                    branch = seed
+                                    try:
+                                        for xyz in (
+                                            [pose[0], pose[1], clear_z],
+                                            [pose[0], stabilizer_y, clear_z],
+                                        ):
+                                            branch = reference.solvers[stabilizer_side].solve(
+                                                env.target.new_tensor([*xyz, *rotation]), branch
+                                            )
+                                        retreat = rotation
+                                        break
+                                    except RuntimeError:
+                                        continue
+                                if retreat is None:
+                                    raise RuntimeError("No collision-free withdrawal orientation")
+                                selected = path, orientation, pose, gap, retreat, clear_z
+                                break
+                            except RuntimeError as error:
+                                failures.append(
+                                    {
+                                        "yaw_deg": yaw_deg,
+                                        "pitch_deg": pitch_deg,
+                                        "phase": phase,
+                                        "reason": str(error),
+                                    }
+                                )
+                        if selected is not None:
+                            break
+                    report["stabilizer_planning_failures"] = failures
+                    if selected is None:
+                        raise RuntimeError(
+                            "No collision-free full stabilizer approach at the actual tower"
+                        )
+                    (
+                        approach,
+                        stabilizer_quaternion,
+                        stabilizer_pose,
+                        width,
+                        stabilizer_clear_quaternion,
+                        stabilizer_clear_z,
+                    ) = selected
+                for name, xyz in approach:
                     reference.move(
                         f"stabilizer_{name}",
                         stabilizer_side,
                         xyz,
-                        quaternion_xyzw=stabilizer_quaternion,
+                        quaternion_xyzw=(
+                            [0.0, 0, 0, 1.0]
+                            if pilot_case and name == "high"
+                            else stabilizer_quaternion
+                        ),
                         linear=pilot_case is not None and name == "grasp",
                     )
-                reference.grip(
-                    "stabilizer_close",
-                    stabilizer_side,
-                    task.targets[cooperative_level - 1].dimensions_m[1],
-                )
+                if pilot_case:
+                    reference.hold_targets[stabilizer_side] = [
+                        *stabilizer_pose,
+                        *stabilizer_quaternion,
+                    ]
+                for closure in range(18):
+                    reference.grip(
+                        "stabilizer_close" if closure == 0 else "stabilizer_acquire_contact",
+                        stabilizer_side,
+                        max(nominal_width, width - closure * 0.002),
+                    )
+                    reference.wait(3, "stabilizer_confirm_contact")
+                    if any(
+                        evaluator._gripping(env.task_truth(i), stabilizer_side)
+                        for i in indices[:cooperative_level]
+                    ):
+                        break
+                    verify_support(cooperative_level - 1, "stabilizer acquisition")
+                    if not pilot_case or width - closure * 0.002 <= nominal_width:
+                        raise RuntimeError("No actual bilateral stabilizer contact")
                 return stabilizer_pose
 
             for side in ("left", "right"):
@@ -394,10 +525,18 @@ def main() -> None:
                 )
                 reference.park(side)
                 reference.wait(10, f"{prefix}_support_check")
-                verify_support(level, prefix)
+                # A held piece may settle when the restraining jaws withdraw.
+                # Require actual load support now and full geometry after withdrawal.
+                verify_support(level - 1 if level == cooperative_level else level, prefix)
                 if level == cooperative_level:
+                    if (
+                        env.task_truth(index)["block_contact_forces_n"][indices[level - 1]][2]
+                        <= 1e-6
+                    ):
+                        raise RuntimeError("Lost physical support before stabilizer withdrawal")
                     if stabilizer_pose is None:
                         raise RuntimeError("Missing physical stabilizer setup.")
+                    reference.hold_targets.pop(stabilizer_side, None)
                     reference.grip("stabilizer_release", stabilizer_side, None)
                     reference.move(
                         "stabilizer_retract",
@@ -408,25 +547,15 @@ def main() -> None:
                     reference.move(
                         "stabilizer_clear_tower",
                         stabilizer_side,
-                        [*stabilizer_pose[:2], bottom + target.dimensions_m[2] + 0.04],
+                        [*stabilizer_pose[:2], stabilizer_clear_z],
                         # Pitch up 20 degrees to keep the proximal wrist reachable.
-                        quaternion_xyzw=[
-                            0,
-                            -math.sin(math.radians(10)),
-                            0,
-                            math.cos(math.radians(10)),
-                        ],
+                        quaternion_xyzw=stabilizer_clear_quaternion,
                     )
                     reference.move(
                         "stabilizer_exit",
                         stabilizer_side,
-                        [stabilizer_pose[0], stabilizer_y, bottom + target.dimensions_m[2] + 0.04],
-                        quaternion_xyzw=[
-                            0,
-                            -math.sin(math.radians(10)),
-                            0,
-                            math.cos(math.radians(10)),
-                        ],
+                        [stabilizer_pose[0], stabilizer_y, stabilizer_clear_z],
+                        quaternion_xyzw=stabilizer_clear_quaternion,
                     )
                     reference.park(stabilizer_side)
                     verify_support(level, "stabilizer withdrawal")

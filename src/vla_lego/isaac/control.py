@@ -81,6 +81,7 @@ class ToolController:
         *,
         period_s: float = 0.05,
         integrate_target: bool = False,
+        advance: bool = True,
     ) -> dict:
         """Absolute TCP poses in meters/XYZW; bounded joint speed at each tick."""
         import torch
@@ -140,5 +141,6 @@ class ToolController:
                 "requested_pose": desired[0].tolist(),
                 "joint_targets": q[0].tolist(),
             }
-        self.env.step(round(period_s / DT))
+        if advance:
+            self.env.step(round(period_s / DT))
         return feedback
