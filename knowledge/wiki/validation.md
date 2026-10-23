@@ -20,7 +20,7 @@ The first native multimodal smoke failed because current Transformers required i
 
 The first Docker build encountered an externally managed Python installation; the image now installs in a venv. Dependency checking then exposed an unused inherited build-tool constraint; removing that tool made `pip check` pass. Build logs retain both diagnosis and corrected result. The first CPU/OSMesa test attempt also exposed a missing `USER` assumption in the Gilbreth preset; portable location fallback fixed it, and all 449 selected tests then passed.
 
-Not verified here: interactive GUI operation, independent SDK FK parity, physical printed-brick grasps/dynamics, a real demonstration dataset, multimodal training convergence, learned assembly success, A100 memory/throughput, multi-GPU resume, Apptainer, SLURM execution, hosted CI or publication. Full-backbone training memory cannot be inferred from frozen inference memory.
+Not verified here: interactive GUI operation, independent SDK FK parity, physical printed-brick grasps/dynamics, a real demonstration dataset, multimodal training convergence, learned assembly success, A100 memory/throughput, multi-GPU resume, Apptainer, SLURM execution or container/release publication. Full-backbone training memory cannot be inferred from frozen inference memory.
 
 Historical robotics and model measurements are summarized in [history](history.md). Do not present the former LEGO retention proxy, historical “complete” reports or a synthetic loss decrease as evidence of lightweight-brick policy readiness.
 
@@ -33,3 +33,5 @@ Report implementation, component validation, task performance and physical quali
 After migration to `src/vla_lego`, the complete native CUDA/EGL suite still passes all 481 tests, including the 32 native model GPU checks. The installed wheel contains exactly the 71 expected Python/configuration/asset files from `src/`, and its probe passes outside the checkout. `make check` passes with the new namespace, subsystem test directories and 100 current local documentation links. Evidence: `outputs/src-native-tests.log`, `outputs/src-package-check.log` and `outputs/src-quality-check.log`.
 
 The dependency-only Docker image was rebuilt with `/workspace/src` exposure and exported the robot/tower/triangle GPU diagnostics successfully (`outputs/src-container-demo/`). All five installed CLIs resolve to `vla_lego.*` and the strict asset linter passes. Obsolete generated root-level egg metadata was removed after it was found shadowing current entry-point metadata; no tracked evidence was changed.
+
+The feature branch is published. Hosted CI runs on branch pushes; [GitHub Actions](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/actions/workflows/ci-cd.yml) is the source for the current revision's status. A branch push does not publish a container or merge main.

@@ -13,7 +13,7 @@ Reviewed on October 23, 2026, against the maintained source and local validation
 | Loss modules | Standalone text/action losses and masks implemented. Combined modular objective and production integration remain incomplete. |
 | Data collection, annotations, temporal interleaving | Planned; no maintained collector or qualified brick dataset. |
 | Training and learned policy evaluation | Planned; synthetic placeholder trainer/evaluator retired. No learned brick success claim. |
-| Packaging and infrastructure | sdist-to-wheel probe and local GPU Docker demo pass; CI definition updated. Hosted CI, Apptainer and Gilbreth/A100 execution not verified in this audit. |
+| Packaging and infrastructure | sdist-to-wheel probe and local GPU Docker demo pass. Hosted checks run on feature-branch pushes; see [GitHub Actions](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/actions/workflows/ci-cd.yml) for the current revision. Apptainer and Gilbreth/A100 execution remain unverified. |
 | Physical transfer, LIBERO, few-shot experiments | Not implemented or measured. |
 
 ## Next development sequence
