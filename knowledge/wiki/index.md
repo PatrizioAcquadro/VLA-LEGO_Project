@@ -2,7 +2,7 @@
 
 The target is an **ordered five-block tower**, built autonomously by Alex003 from pieces of different colors and sizes among distractors, with genuine cooperation between the arms. Develop it in Isaac Sim/Lab, then transfer it to Purdue Alex with VLA inference entirely on the onboard Jetson AGX Orin.
 
-The repository currently contains MuJoCo/Alex V1 and untrained Qwen-based components. The Isaac/Alex003 task, data collection, trained assembly policy and real deployment are **planned**, not implemented by this documentation revision.
+The repository retains MuJoCo/Alex V1 and untrained Qwen-based components. A native CUDA Isaac/Alex003 foundation now loads shared WSG32/UMI and head ZED assets, furniture and a loose block; grasping, the complete task, data collection, trained assembly policy and real deployment remain unfinished. See [foundation operations and migration](foundations.md) and [status](status.md).
 
 ## Start here
 

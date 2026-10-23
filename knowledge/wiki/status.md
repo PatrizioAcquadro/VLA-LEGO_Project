@@ -1,6 +1,17 @@
 # Status
 
-Reviewed October 23, 2026. This revision implements the **documentation roadmap only**. All [new phases](implementation_phases/index.md) remain planned. Prior component evidence is preserved in [validation](validation.md), without being relabeled as Isaac, Alex003 or learned assembly success.
+Reviewed October 23, 2026. The persistent implementation goal covers [Phases 0–6](implementation_phases/index.md). Phase 0's native simulation foundation is verified on Blackwell; Phase 1 minimum grasp/release is next. No trained assembly checkpoint or qualified corpus exists. Prior component evidence is preserved in [validation](validation.md).
+
+## Implementation progress
+
+| Phase | Verified state and remaining work |
+|---|---|
+| 0 | Native CUDA PhysX scene consumes shared Alex003 WSG32/UMI, measured pedestal and official head ZED without copied task robot assets. Gravity/table support, both jaw commands, fixed root, finite states and visible block passed. Ownership, separate environments and staged retirement documented in [foundations](foundations.md). |
+| 1 | One diagnostic cube and provisional furniture/contact parameters. Physical grasp, transport, release, full cooperative tower and calibrated evaluator are not yet demonstrated. |
+| 2 | Official GR00T N1.7 source acquired; isolated dependency installation in progress. No model inference, Alex adaptation, Orin run or physical WSG32 readiness claimed. |
+| 3–6 | Teacher, pilot/corpus, training and autonomous qualification remain pending. |
+
+Native evidence is retained locally in `outputs/blackwell/foundation-001` through `foundation-005` and on Blackwell in `/home/pacquadr/projects/vla-lego/outputs`. Attempts 001–002 failed during bootstrap/configuration. Attempt 003 passed physical component checks but visual inspection found the table outside the image; 004 preserved the failed visibility check. Attempt 005 passed all nine component/visibility checks (5.04 simulated seconds; 16.29 s to report before app close), and its head image was inspected. This is component readiness only. Actual printed-block measurements, physical WSG32 command/feedback/stop and concurrent Orin timing remain open; the user's exception permits independent simulation work with declared assumptions.
 
 ## Existing implementation
 
