@@ -91,6 +91,7 @@ dev = [
 vla-viewer = "sim.viewer:main"
 vla-lint-assets = "sim.asset_linter_cli:main"
 vla-gen-bricks = "sim.bricks.cli:main"
+vla-demo = "sim.demo:main"
 
 [project.urls]
 Repository = "https://github.com/PatrizioAcquadro/VLA-LEGO_Project"
