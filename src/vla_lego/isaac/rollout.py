@@ -31,6 +31,7 @@ def main() -> None:
         "tick_budget": args.ticks,
         "learned_completion_signal": False,
         "autonomy_started": False,
+        "head_capture_hz": 20,
     }
     app = None
     connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -48,6 +49,7 @@ def main() -> None:
         connection.connect(str(args.socket))
         env = AssemblyEnvironment(args.cache_dir.resolve())
         env.step(400)
+        report["robot_joint_names"] = env.robot.data.joint_names
         action_names = (*ARM_JOINTS, *JAW_JOINTS)
         action_ids = [env.robot.data.joint_names.index(name) for name in action_names]
         limits = env.robot.data.joint_pos_limits.torch[0, action_ids].cpu().numpy()
@@ -63,8 +65,9 @@ def main() -> None:
         report["autonomy_started"] = True
         with (args.output_dir / "trace.jsonl").open("w") as trace:
             for tick in range(args.ticks):
+                # Match the collection camera stream even between model replans.
+                env.capture()
                 if not chunk:
-                    env.capture()
                     observation = env.observe()
                     send_message(
                         connection,
