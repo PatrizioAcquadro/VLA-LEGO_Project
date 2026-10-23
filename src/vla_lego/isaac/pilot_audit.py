@@ -8,12 +8,20 @@ import math
 from collections import Counter
 from pathlib import Path
 
+from vla_lego.isaac.environment import ARM_JOINTS, JAW_JOINTS
 from vla_lego.isaac.pilot import PilotCase, load_cases
+from vla_lego.pretrained.decisions import DECISION_NAMES
 
 
 def audit_episode(directory: Path, case: PilotCase) -> dict:
     report = json.loads((directory / "report.json").read_text())
     metadata = json.loads((directory / "recording/episode.json").read_text())
+    if (
+        metadata["fps"] != 20
+        or metadata["state_names"] != [*ARM_JOINTS, "NECK_Z", "NECK_Y", *JAW_JOINTS]
+        or metadata["action_names"] != [*ARM_JOINTS, *JAW_JOINTS]
+    ):
+        raise ValueError("Episode differs from the recorded named Alex interface")
     if report.get("pilot_case") != case.row or metadata.get("collection_case") != case.row:
         raise ValueError("Recorded case differs from the approved case/split")
     if (metadata["generation_family"], metadata["split"]) != (
@@ -179,6 +187,20 @@ def main() -> None:
         "attempts": len(result["attempts"]),
     }
     args.output.write_text(json.dumps(result, indent=2) + "\n")
+    if result["episodes"]:
+        positions = [*ARM_JOINTS, "NECK_Z", "NECK_Y", *JAW_JOINTS]
+        interface = {
+            "action_representation": "absolute",
+            "action_joint_names": [*ARM_JOINTS, *JAW_JOINTS],
+            "position_names": positions,
+            "state_names": positions + [f"{name}_VELOCITY" for name in ARM_JOINTS],
+            "include_arm_velocity": True,
+            "control_hz": 20,
+            "task_decision_names": list(DECISION_NAMES),
+        }
+        args.output.with_name("alex_interface.json").write_text(
+            json.dumps(interface, indent=2) + "\n"
+        )
     print(
         json.dumps(
             {
