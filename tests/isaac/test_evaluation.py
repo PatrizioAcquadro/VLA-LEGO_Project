@@ -267,3 +267,36 @@ def test_marker_free_invalid_site_and_unwithdrawn_hands_are_rejected():
         tool_positions={"left": [0.35, 0.06, 0.9], "right": [0, -0.5, 1.2]},
     )
     assert not scorer.result()["passed"]
+
+
+@pytest.mark.parametrize(
+    "final_flat,gap,passed", [(True, 0.0, True), (False, 0.0, False), (True, 0.02, False)]
+)
+def test_cooperative_contact_uses_actual_surface_and_keeps_final_geometry(final_flat, gap, passed):
+    task = initial_tower_task()
+    scorer = TowerEvaluator(task, PATHS, motion_measurement="pose_dwell")
+    scorer.update(0, states(task))
+    approach = states(task, levels=3)
+    approach[3]["block_pose_w"][:3] = [*task.assembly_xy_m, scorer.expected_z[3] + 0.03]
+    approach[3]["nonrobot_contact_force_n"] = 0
+    grip(approach, 2, "left")
+    grip(approach, 3, "right")
+    scorer.update(0.05, approach)
+    contact = states(task, levels=4)
+    angle = 0.16
+    height, width = task.targets[3].dimensions_m[2], task.targets[3].dimensions_m[1]
+    contact[3]["block_pose_w"][2] += (
+        height * (math.cos(angle) - 1) + width * math.sin(angle)
+    ) / 2 + gap
+    contact[3]["block_pose_w"][3:] = [math.sin(angle / 2), 0, 0, math.cos(angle / 2)]
+    grip(contact, 2, "left")
+    grip(contact, 3, "right")
+    for tick in range(6):
+        scorer.update(0.1 + tick * 0.05, contact)
+    released = states(task, levels=5)
+    if not final_flat:
+        released[3]["block_pose_w"] = contact[3]["block_pose_w"][:]
+    for tick in range(41):
+        scorer.update(0.4 + tick * 0.05, released)
+    assert scorer.result()["passed"] == passed
+    assert bool(scorer.result()["cooperation_events"]) == (gap == 0)

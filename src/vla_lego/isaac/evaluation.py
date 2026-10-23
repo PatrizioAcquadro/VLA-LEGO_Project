@@ -229,7 +229,28 @@ class TowerEvaluator:
                             progress["approach"] = True
                         if (
                             progress["approach"]
-                            and all(placed[: upper_level + 1])
+                            and all(placed[:upper_level])
+                            and abs(
+                                min(
+                                    c[2]
+                                    for c in _corners(
+                                        self.task.placements[
+                                            assignment[upper_level]
+                                        ].spec.dimensions_m,
+                                        upper["block_pose_w"],
+                                    )
+                                )
+                                - max(
+                                    c[2]
+                                    for c in _corners(
+                                        self.task.placements[
+                                            assignment[upper_level - 1]
+                                        ].spec.dimensions_m,
+                                        blocks[assignment[upper_level - 1]]["block_pose_w"],
+                                    )
+                                )
+                            )
+                            < POSITION_TOLERANCE_M
                             and support > 0.05
                         ):
                             if progress["contact_start"] is None:
