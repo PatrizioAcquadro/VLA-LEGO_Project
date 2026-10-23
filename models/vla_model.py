@@ -18,7 +18,7 @@ assembles the full embedding sequence manually:
 
 Position IDs default to 1D sequential when inputs_embeds is provided without
 input_ids (backbone fallback). Loses 3D spatial RoPE for vision tokens —
-acceptable with frozen backbone; optimize in Phase 3.3 if needed.
+a known integration limitation to evaluate in Phase 3.2 before training.
 
 Usage::
 

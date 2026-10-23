@@ -22,76 +22,31 @@ classifiers = [
 ]
 
 dependencies = [
-    "torch>=2.0.0",
-    "numpy>=1.24.0",
-    "hydra-core>=1.3.0",
-    "omegaconf>=2.3.0",
-    "tqdm>=4.65.0",
-    "einops>=0.6.0",
-    "safetensors>=0.3.0",
+    "torch>=2.10,<2.11",
+    "numpy>=1.24",
+    "hydra-core>=1.3",
+    "omegaconf>=2.3",
 ]
 
 [project.optional-dependencies]
-# CI: minimal deps for testing (no training deps)
-ci = [
-    "pytest>=7.0.0",
-    "ruff>=0.1.0",
-    "black>=23.0.0",
-    "isort>=5.12.0",
-    "mypy>=1.0.0",
-]
-
-# Training: distributed training dependencies
-train = [
-    "wandb>=0.15.0",
-    "accelerate>=0.20.0",
-    "deepspeed>=0.10.0",
-]
-
-# Simulation: MuJoCo and sim dependencies
-sim = [
-    "mujoco>=3.1.0,<4.0.0",
-    "imageio[ffmpeg]>=2.31.0",
-]
-
-# VLM: HuggingFace backbone dependencies
+ci = ["pytest>=7", "ruff==0.15.3", "black==26.1.0", "mypy>=1", "build>=1"]
+sim = ["mujoco>=3.1,<4", "imageio[ffmpeg]>=2.31"]
 vlm = [
-    "transformers>=4.49.0",
-    "Pillow>=10.0.0",
-    "accelerate>=0.30.0",
-    "sentencepiece>=0.2.0",
-    "torchvision>=0.15.0",
+    "transformers>=5.20,<6",
+    "Pillow>=10",
+    "accelerate>=1,<2",
+    "sentencepiece>=0.2",
+    "torchvision>=0.25,<0.26",
 ]
-
-# Dev: everything (ci + train + sim + vlm + pre-commit)
-dev = [
-    # CI tools
-    "pytest>=7.0.0",
-    "ruff>=0.1.0",
-    "black>=23.0.0",
-    "isort>=5.12.0",
-    "mypy>=1.0.0",
-    # Training
-    "wandb>=0.15.0",
-    "accelerate>=0.30.0",
-    "deepspeed>=0.10.0",
-    # Simulation
-    "mujoco>=3.1.0,<4.0.0",
-    "imageio[ffmpeg]>=2.31.0",
-    # VLM
-    "transformers>=4.49.0",
-    "Pillow>=10.0.0",
-    "sentencepiece>=0.2.0",
-    "torchvision>=0.15.0",
-    # Dev-only
-    "pre-commit>=3.0.0",
-]
+tracking = ["wandb>=0.15"]
+dev = ["vla-lego[ci,sim,vlm,tracking]", "pre-commit>=3"]
 
 [project.scripts]
 vla-viewer = "sim.viewer:main"
 vla-lint-assets = "sim.asset_linter_cli:main"
 vla-gen-bricks = "sim.bricks.cli:main"
 vla-demo = "sim.demo:main"
+vla-validate-model = "models.validate:main"
 
 [project.urls]
 Repository = "https://github.com/PatrizioAcquadro/VLA-LEGO_Project"
@@ -99,6 +54,11 @@ Repository = "https://github.com/PatrizioAcquadro/VLA-LEGO_Project"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["sim*", "models*", "tracking*", "configs*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+sim = ["assets/**/*.xml", "assets/**/*.obj", "assets/**/*.stl", "assets/**/PROVENANCE.md"]
+configs = ["**/*.yaml"]
 
 # ============================================================================
 # Tool Configurations
@@ -117,12 +77,6 @@ exclude = '''
     | __pycache__
 )/
 '''
-
-[tool.isort]
-profile = "black"
-line_length = 100
-known_first_party = ["sim", "models", "tracking", "configs"]
-skip = [".git", ".venv", "build", "dist"]
 
 [tool.ruff]
 line-length = 100

@@ -37,9 +37,15 @@ def scene_xml(bricks: Sequence[BrickSpec], *, include_robot: bool = True) -> str
         raise ValueError("An episode needs at least one brick")
     if include_robot:
         root = ET.parse(SCENES_DIR / "alex_upper_body.xml").getroot()
-        root.find("compiler").set("meshdir", str(ROBOTS_DIR / "alex"))
-        root.find("include").set("file", str(ROBOTS_DIR / "alex" / "alex.xml"))
-        world = root.find("worldbody")
+        compiler, include, world = (
+            root.find("compiler"),
+            root.find("include"),
+            root.find("worldbody"),
+        )
+        if compiler is None or include is None or world is None:
+            raise ValueError("Alex scene must contain compiler, include and worldbody")
+        compiler.set("meshdir", str(ROBOTS_DIR / "alex"))
+        include.set("file", str(ROBOTS_DIR / "alex" / "alex.xml"))
     else:
         root = ET.Element("mujoco", model="lightweight_bricks")
         ET.SubElement(root, "option", timestep="0.002", integrator="implicitfast")
@@ -77,7 +83,7 @@ def scene_xml(bricks: Sequence[BrickSpec], *, include_robot: bool = True) -> str
         rgba="0.55 0.46 0.35 1",
         friction="0.6 0.005 0.0001",
     )
-    qpos = []
+    qpos: list[float] = []
     bottom = TABLE_TOP
     for i, spec in enumerate(bricks):
         z = bottom + spec.size[2] / 2

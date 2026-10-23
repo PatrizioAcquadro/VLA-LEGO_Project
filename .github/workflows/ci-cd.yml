@@ -57,7 +57,7 @@ jobs:
       - name: Install linting tools
         run: |
           pip install --upgrade pip
-          pip install "ruff==0.14.14" black isort
+          pip install "ruff==0.15.3" "black==26.1.0"
 
       - name: Run Ruff (linting)
         run: ruff check . --output-format=github
@@ -65,16 +65,13 @@ jobs:
       - name: Run Black (formatting check)
         run: black --check --diff .
 
-      - name: Run isort (import sorting check)
-        run: isort --check-only --diff .
 
   # --------------------------------------------------------------------------
-  # Job: Type Checking (Advisory - does not block CI)
+  # Job: Type Checking
   # --------------------------------------------------------------------------
   typecheck:
-    name: Type Check (Advisory)
+    name: Type Check
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -89,6 +86,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
+          pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
           pip install -e ".[ci]"
 
       - name: Run mypy
@@ -114,13 +112,13 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
+          pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
           pip install -e ".[ci]"
 
       - name: Run unit tests
         run: |
           pytest tests/ -v \
             --tb=short \
-            --ignore=tests/integration \
             -m "not slow and not gpu"
 
   # --------------------------------------------------------------------------
@@ -143,6 +141,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
+          pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
           pip install -e ".[ci]"
 
       - name: Test imports
@@ -165,37 +164,41 @@ jobs:
       - name: Validate maintained configuration
         run: python -m scripts.validate_configs
 
-  # --------------------------------------------------------------------------
-  # Job: Config Validation
-  # --------------------------------------------------------------------------
-  config-check:
-    name: Validate Configs
+  simulation:
+    name: Headless Simulation (CPU renderer)
     runs-on: ubuntu-latest
+    env:
+      MUJOCO_GL: osmesa
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
-          cache-dependency-path: pyproject.toml
+      - run: sudo apt-get update && sudo apt-get install -y libosmesa6 libglfw3
+      - run: |
+          pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[ci,sim]"
+      - run: pytest tests -q -m "not gpu and not slow and not viewer"
 
-      - name: Install dependencies
-        run: |
-          pip install -e ".[ci]"
-
-      - name: Validate all config combinations
-        run: |
-          python -m scripts.validate_configs
+  package:
+    name: Installed Wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: |
+          pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[ci,sim]"
+      - run: python tools/check_install.py
 
   # --------------------------------------------------------------------------
   # Job: CI Success Gate (required for branch protection and CD gating)
   # --------------------------------------------------------------------------
   ci-success:
     name: CI Success
-    needs: [lint, test, smoke, config-check]
+    needs: [lint, typecheck, test, smoke, simulation, package]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -204,12 +207,14 @@ jobs:
           if [[ "${{ needs.lint.result }}" != "success" ]] || \
              [[ "${{ needs.test.result }}" != "success" ]] || \
              [[ "${{ needs.smoke.result }}" != "success" ]] || \
-             [[ "${{ needs.config-check.result }}" != "success" ]]; then
+             [[ "${{ needs.typecheck.result }}" != "success" ]] || \
+             [[ "${{ needs.simulation.result }}" != "success" ]] || \
+             [[ "${{ needs.package.result }}" != "success" ]]; then
             echo "One or more required CI jobs failed"
             echo "lint: ${{ needs.lint.result }}"
             echo "test: ${{ needs.test.result }}"
             echo "smoke: ${{ needs.smoke.result }}"
-            echo "config-check: ${{ needs.config-check.result }}"
+            echo "typecheck: ${{ needs.typecheck.result }}"
             exit 1
           fi
           echo "All required CI checks passed!"
@@ -249,6 +254,7 @@ jobs:
               - 'pyproject.toml'
               - '.dockerignore'
               - 'scripts/container-entrypoint.sh'
+              - 'scripts/container-dependencies.py'
 
   # --------------------------------------------------------------------------
   # Job: Determine if Container Build is Needed

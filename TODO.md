@@ -12,7 +12,7 @@ Pre-existing user changes to preserve:
 - [x] 0. Retire synthetic training, evaluation and their exclusive consumers.
 - [x] 1. Replace LEGO-specific simulation with lightweight bricks, resets and task evaluation.
 - [x] 2. Consolidate simulation demos and retain meaningful behavioral tests.
-- [ ] 3. Align packaging, configuration, containers and CI with maintained workflows.
+- [x] 3. Align packaging, configuration, containers and CI with maintained workflows.
 - [ ] 4. Consolidate canonical knowledge and all implementation plans, including historical outcomes and the future LEGO extension.
 - [ ] 5. Replace tracked assistant instructions with compact ignored local guidance.
 - [ ] 6. Complete proportional software, package, simulation and GPU validation; record limits and local commits.
