@@ -39,6 +39,10 @@ The full `make check` invocation encounters two pre-existing, ignored history-pr
 
 ## Existing local component evidence — October 23, 2026
 
+The new native `isaac.evaluation.TowerEvaluator` scores privileged history independently of policy control. Its provisional simulation rubric checks loose initial pieces, visible-attribute matching with interchangeable equivalent instances, ordered physical support, footprints inside the assembly square, all-object robot release and two seconds of sampled stability. Cooperation is detected from actual bilateral hand contacts, an unsupported upper approach and load transfer while the lower structure is constrained; teacher stage labels do not determine the result. These component ranges await full-task and print/contact calibration before qualification freeze.
+
+Ten analytical unit cases passed, covering interchangeable pieces, wrong color/size/order, prearranged goals, decorative grasping, held distractors and insufficient dwell evidence. These fixtures are logic tests, not physical demonstrations. Separate replay scoring rejected retained native `tower-reference-003`, `004` and `005`: their partial robot sequences did not establish the required full tower and cooperation. No passing assembly or qualification result follows from the scorer implementation alone.
+
 The results below predate this roadmap revision and apply to the retained MuJoCo/Qwen implementation. They were not rerun as Isaac/Alex003 or pretrained-policy experiments.
 
 | Check | Result and boundary |
