@@ -1,6 +1,6 @@
 # Data strategy — planned
 
-Data coverage and correction quality are the central development priority. There is currently no maintained collector, qualified assembly corpus or trained policy. [Phases 3–5](implementation_phases/index.md) build this capability; large-scale collection waits for the teacher pilot and the selected deployable model/interface.
+Data coverage and correction quality are the central development priority. The native diagnostic collector now records causal nominal/corrective sensor–action pairs; there is no qualified assembly corpus or trained assembly policy. [Phases 3–5](implementation_phases/index.md) build this capability; large-scale collection waits for the teacher pilot and the selected deployable model/interface.
 
 ## Public sources and admission
 
