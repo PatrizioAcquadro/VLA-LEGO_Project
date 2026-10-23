@@ -2,7 +2,25 @@
 
 ## Planned pretrained VLA selection
 
-Use a model with existing robotic pretraining, then adapt it to Alex003. The decision is conditional on task behavior and onboard execution, not a mandatory comparison of every architecture. No candidate below is integrated or qualified in this repository yet.
+Use a model with existing robotic pretraining, then adapt it to Alex003. The decision is conditional on task behavior and onboard execution, not a mandatory comparison of every architecture. SmolVLA now has a native sensor-to-action tensor smoke; no candidate is Alex-trained or task-qualified yet.
+
+## Native feasibility work — October 23, 2026
+
+The official GR00T source at `944fe70` and its base checkpoint were acquired on Blackwell, with the upstream Python 3.12 environment isolated from Isaac. Installation initially failed because a required Git LFS wheel was a pointer; transferring that official wheel resolved it. Native inference then failed before producing actions: `nvidia/Cosmos-Reason2-2B` requires gated Hugging Face access. A read-only check using the already authenticated local account also returned HTTP 403. User access is requested; no credentials are printed or access restrictions bypassed. This remains an access prerequisite for this GR00T path, alongside the unresolved Orin host compatibility described below.
+
+That observed limitation justifies exercising the roadmap's compact alternative. LeRobot source `f9e9d739` was installed with `smolvla` and `training` extras in a separate Blackwell environment. The actual `lerobot/smolvla_base` checkpoint (450,046,176 parameters) ran four native CUDA predictions from a recorded Alex head image and 18 named joint/leader signals. All four `(1,50,16)` chunks were finite; none was executed. Load was 49.24 s; inference calls were 347.1, 83.9, 82.5 and 82.4 ms; peak allocated CUDA memory was 0.906 GiB. These are Blackwell component measurements with raw diagnostic inputs, not Alex adaptation, meaningful task behavior, final normalization or Orin-equivalent timing.
+
+Reproduce the smoke in the compatible isolated LeRobot environment, exposing this repository's `src` on `PYTHONPATH`:
+
+```bash
+python -m vla_lego.pretrained.smolvla_probe \
+  --model-path lerobot/smolvla_base \
+  --observation outputs/foundation-005/observation.npz \
+  --image outputs/foundation-005/head.png \
+  --output-dir outputs/smolvla-native-001
+```
+
+The observation/image come from [the native foundation probe](foundations.md). Use new output directories. Local evidence is `outputs/blackwell/smolvla-native-001`; Blackwell's isolated source/environment are under `/home/pacquadr/projects/vla-lego/dependencies/lerobot`. Its upstream setup used `uv sync --locked --extra smolvla --extra training` with Python 3.12. Do not install the legacy Qwen dependency set into that environment. The provisional 16 output dimensions have no physical action mapping in this smoke and must not drive a robot. Final selection, Alex statistics/interface and pilot adaptation remain Phase 2–3 work.
 
 | Candidate | Why consider it | Decision boundary |
 |---|---|---|
