@@ -415,7 +415,7 @@ class TestProcessorFunctions:
 
         images = [np.random.randint(0, 255, (320, 320, 3), dtype=np.uint8) for _ in range(4)]
         result = preprocess_images(
-            backbone, images, "The robot is performing a LEGO assembly task."
+            backbone, images, "The robot is performing a lightweight brick assembly task."
         )
 
         assert "input_ids" in result
@@ -496,7 +496,7 @@ class TestVLMInference:
     """
 
     PROMPT = (
-        "The robot is performing a LEGO assembly task. "
+        "The robot is performing a lightweight brick assembly task. "
         "Describe what you see and what the robot should do next."
     )
 
