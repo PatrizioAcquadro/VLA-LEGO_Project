@@ -24,6 +24,18 @@ def pick_fault(reference, case: PilotCase, task: TowerTask, target_index: int) -
         if wrong
         else source[1] + (-0.09 if abs(source[1]) > 0.3 else 0.09) * (1 if source[1] > 0 else -1)
     )
+    yaw = reference.grasp_yaw(
+        side,
+        yaw,
+        [
+            [0.40, 0.40 if side == "left" else -0.40, 1.05],
+            [min(source[0], 0.46), y, 1.02],
+            [source[0], y, source[2] + 0.10],
+            [source[0], y, source[2] + 0.06],
+            [source[0], y, source[2] + 0.16],
+            [source[0], y, 1.02],
+        ],
+    )
     prefix = f"level{case.error_level}_fault_{'wrong_piece' if wrong else 'missed_grasp'}"
     recorder.positive_imitation = False
     for phase, xyz in (
@@ -59,8 +71,19 @@ def pick_fault(reference, case: PilotCase, task: TowerTask, target_index: int) -
     reference.grip(prefix + "_correct_open", side, None)
     reference.move(prefix + "_correct_retreat", side, [source[0], y, 1.02], yaw)
     reference.park(side)
-    if wrong and abs(env.task_truth(index)["block_pose_w"][2] - source[2]) > 0.01:
-        raise RuntimeError("Wrong piece was not returned to table support.")
+    if wrong:
+        from vla_lego.isaac.environment import TABLE_TOP
+        from vla_lego.isaac.evaluation import _corners
+
+        returned = env.task_truth(index)
+        bottom = min(p[2] for p in _corners(placement.spec.dimensions_m, returned["block_pose_w"]))
+        event["returned_table_support"] = (
+            returned["nonrobot_contact_force_n"] > 1e-6
+            and returned["robot_contact_force_n"] < 1e-6
+            and abs(bottom - TABLE_TOP) < 0.003
+        )
+        if not event["returned_table_support"]:
+            raise RuntimeError("Wrong piece was not returned to table support.")
     recorder.fault_verified = True
     return event
 
