@@ -20,7 +20,7 @@ Maintained tests, formatting/lint, configuration composition, clean package inst
 
 ## State
 
-Implementation in progress. The active checklist is the repository `TODO.md`.
+Implementation completed locally. The completed checklist is the repository `TODO.md`. This does not complete the future research phases or authorize integration/publication.
 
 ## Operational validation ownership
 
@@ -40,4 +40,8 @@ Action-space, robot-state, camera and kinematics operator validators remain main
 
 The old `validate_action_head.py` and `validate_vlm_backbone.py` operator scripts are therefore replaced by `vla-validate-model`. Their native model/gradient/freeze/processor checks remain in the GPU tests, and their useful operational role is covered by the new scene-to-model smoke. The duplicate production mock/automatic CPU fallback is retired. The only executable caller, the Gilbreth validation job, now invokes `models.validate`. Historical reports remain historical; no previous measurement is relabeled as a new result.
 
-Packaging/configuration milestone: all eight model/cluster compositions, Ruff, source formatting and mypy (34 files) pass. The full native suite passes 485 tests, including 32 real-model GPU tests. The sdist-to-wheel probe imports packaged code outside the checkout and validates bundled assets/configuration and all five CLIs. Runtime dependencies are reused for this probe; Docker separately resolves and checks dependencies. The locally built Docker image passes `pip check` and the robot/tower/triangle demo on the RTX 4090 (MuJoCo 3.17.0, Python 3.12). The host uses Python 3.10 and MuJoCo 3.5.0. Apptainer, Gilbreth/A100, multi-GPU execution and hosted GitHub Actions have not been executed.
+Packaging/configuration milestone: all eight model/cluster compositions, Ruff, source formatting and mypy (34 files) pass. The final maintained native suite passes 481 tests, including 32 real-model GPU tests. The sdist-to-wheel probe imports packaged code outside the checkout and validates bundled assets/configuration and all five CLIs. Runtime dependencies are reused for this probe; Docker separately resolves and checks dependencies. The locally built Docker image passes `pip check` and the robot/tower/triangle demo on the RTX 4090 (MuJoCo 3.17.0, Python 3.12). The host uses Python 3.10 and MuJoCo 3.5.0. Apptainer, Gilbreth/A100, multi-GPU execution and hosted GitHub Actions have not been executed.
+
+Documentation is consolidated into nine phase files (0–8) covering all 22 original subphases, plus canonical operating topics, status and a concise decision log. Historical drafts are recoverable from Git. The old tracked assistant file is removed; the compact local `AGENTS.md` is ignored. The remaining Phase 2 collection, Phase 4 training integration and physical/cluster qualification are explicitly future work.
+
+Final portable checks: `make check` passes, all 102 local documentation links/anchors resolve, nine phase files contain all 22 unique original subphase IDs, and the separate CPU/OSMesa container suite passes 449 tests with 32 GPU tests explicitly deselected. A missing `USER` assumption discovered in that container check was removed from location configuration; failed and corrected logs are preserved. The tracked working tree is intended to be clean after the documentation commit, while ignored local guidance and evidence remain local.
