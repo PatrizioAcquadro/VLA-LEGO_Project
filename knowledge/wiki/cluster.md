@@ -6,20 +6,20 @@ All commands in this page run from a source checkout. Image names and scheduler 
 
 ```bash
 docker build -t vla-lego:local .
-VLA_DOCKER_IMAGE=vla-lego:local scripts/docker-run.sh python -m sim.demo --output-dir outputs/docker-demo-001
+VLA_DOCKER_IMAGE=vla-lego:local scripts/docker-run.sh python -m vla_lego.sim.demo --output-dir outputs/docker-demo-001
 ```
 
-The image contains dependencies, not project source. The wrapper mounts the current checkout at `/workspace` and requests the GPU. Use module commands because the source is mounted rather than installed: `python -m sim.demo`, `python -m models.validate`, `python -m scripts.validate_configs`.
+The image contains dependencies, not project source. The wrapper mounts the current checkout at `/workspace` and requests the GPU. Use module commands because the source is mounted rather than installed: `python -m vla_lego.sim.demo`, `python -m vla_lego.models.validate`, `python scripts/validate_configs.py`.
 
 Docker and Apptainer definitions share dependency extraction from `pyproject.toml`. The base is PyTorch 2.10/CUDA 12.8; dependencies are installed in a venv that reuses base PyTorch. The unused inherited `spin` build tool is removed because its Click constraint conflicts with the current Hugging Face stack. Builds run `pip check`. No source checkout, credentials or model weights are baked into the image; the Docker build context is allowlisted.
 
-The entrypoint requires the mount, exposes it on `PYTHONPATH`, prints runtime/revision information and executes the requested command. Host GPU support requires a functioning NVIDIA container runtime. The default registry tag may be older than this branch; build locally to test this source/dependency pair. W&B variables passed through the wrapper affect only explicitly requested tracker initialization.
+The entrypoint requires the mount, exposes only `/workspace/src` on `PYTHONPATH`, prints runtime/revision information and executes the requested command. Host GPU support requires a functioning NVIDIA container runtime. The default registry tag may be older than this branch; build locally to test this source/dependency pair. W&B variables passed through the wrapper affect only explicitly requested tracker initialization.
 
 ## Apptainer
 
 ```bash
 apptainer build vla-lego.sif apptainer.def
-VLA_APPTAINER_SIF=vla-lego.sif scripts/apptainer-run.sh python -m sim.demo --output-dir outputs/apptainer-demo-001
+VLA_APPTAINER_SIF=vla-lego.sif scripts/apptainer-run.sh python -m vla_lego.sim.demo --output-dir outputs/apptainer-demo-001
 ```
 
 Build on a machine where Apptainer and the required build permissions are available. The wrapper uses `--nv`, mounts the checkout and optionally binds `VLA_SCRATCH_ROOT`. The CI conversion path builds a SIF from the published Docker digest; edits only to `apptainer.def` do not trigger that Docker path. Neither local SIF building nor cluster execution was validated in this audit.

@@ -3,5 +3,5 @@
 !Dockerfile
 !pyproject.toml
 !scripts/
-!scripts/container-dependencies.py
+!scripts/container_dependencies.py
 !scripts/container-entrypoint.sh

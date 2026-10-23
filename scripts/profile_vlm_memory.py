@@ -29,7 +29,6 @@ import numpy as np
 import torch
 
 _ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_ROOT))
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +125,7 @@ def _make_profiling_inputs(
     then pads input_ids to the target seq_len and replicates across batch.
     For text-only configs: creates random token IDs at the target shape.
     """
-    from models.vlm_backbone import preprocess_images
+    from vla_lego.models.vlm_backbone import preprocess_images
 
     if config.n_images > 0:
         images = [
@@ -389,11 +388,11 @@ def main() -> int:
 
     # --- Load backbone ---
     print("Loading backbone...")
-    from hydra import compose, initialize
+    from hydra import compose, initialize_config_module
 
-    from models.vlm_backbone import load_vlm_backbone
+    from vla_lego.models.vlm_backbone import load_vlm_backbone
 
-    with initialize(config_path="../configs", version_base=None):
+    with initialize_config_module(config_module="vla_lego.configs", version_base=None):
         cfg = compose(
             config_name="config",
             overrides=[f"model={args.model_config}", "cluster=local"],

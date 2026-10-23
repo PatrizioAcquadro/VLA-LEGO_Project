@@ -25,6 +25,19 @@ The demo exports robot motion and prearranged tower/triangle layouts. It is a si
 
 ## Source layout
 
-`sim/` owns simulation and bricks; `models/` owns VLM/VLA components and losses; `tracking/` provides optional experiment integration; `configs/` contains packaged configuration; `scripts/` and `infra/` provide operator workflows; `tests/` and `tools/` validate maintained behavior and packaging. [Knowledge](knowledge/wiki/index.md) is canonical; Git preserves ordinary source history.
+```text
+src/vla_lego/       Runtime package
+  sim/             MuJoCo, control, cameras, bricks and assets
+  models/          Qwen/VLA components and losses
+  tracking/        Optional experiment integration
+  configs/         Packaged Hydra configuration
+tests/             Simulation, model and tracking regression suites
+scripts/           Diagnostics, quality checks and container utilities
+infra/gilbreth/    Scheduler jobs and environment setup
+knowledge/         Canonical guides, status and nine phase plans
+.github/workflows/ Automated checks and gated publication
+```
 
-[MIT license](LICENSE). Robot asset sources and modifications are recorded in [provenance](sim/assets/robots/alex/PROVENANCE.md).
+Install before running tests or scripts. Python imports use `vla_lego.*`; the `vla-*` CLI names are unchanged. `make check`, `make test` and `make package` provide the main development checks. Git preserves ordinary source history.
+
+[MIT license](LICENSE). Robot asset sources and modifications are recorded in [provenance](src/vla_lego/sim/assets/robots/alex/PROVENANCE.md).

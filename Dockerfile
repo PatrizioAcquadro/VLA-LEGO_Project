@@ -7,11 +7,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -m pip uninstall --break-system-packages -y spin
 RUN python -m venv --system-site-packages /opt/vla-env
 ENV PATH="/opt/vla-env/bin:${PATH}"
-COPY pyproject.toml scripts/container-dependencies.py /tmp/
-RUN python /tmp/container-dependencies.py /tmp/pyproject.toml > /tmp/requirements.txt && \
+COPY pyproject.toml scripts/container_dependencies.py /tmp/
+RUN python /tmp/container_dependencies.py /tmp/pyproject.toml > /tmp/requirements.txt && \
     python -m pip install --no-cache-dir -r /tmp/requirements.txt && \
     python -m pip check && \
-    rm /tmp/pyproject.toml /tmp/container-dependencies.py /tmp/requirements.txt
+    rm /tmp/pyproject.toml /tmp/container_dependencies.py /tmp/requirements.txt
 COPY scripts/container-entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 MUJOCO_GL=egl

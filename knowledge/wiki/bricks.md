@@ -4,7 +4,7 @@
 
 Current bricks are lightweight, variable-size cuboids that can be picked, placed and stacked under gravity. They have no studs, sockets, baseplate locking, magnetic connection, weld or retention assistance. Actual LEGO is deferred to its [extension plan](implementation_phases/phase-8-transfer-handoff.md#future-extension-real-lego).
 
-`BrickSpec` validates positive finite XYZ dimensions in metres, mass in kilograms and RGBA color. The initial catalog is [packaged YAML](../../configs/bricks/default.yaml):
+`BrickSpec` validates positive finite XYZ dimensions in metres, mass in kilograms and RGBA color. The initial catalog is [packaged YAML](../../src/vla_lego/configs/bricks/default.yaml):
 
 | Piece | XYZ dimensions | Effective mass |
 |---|---|---|

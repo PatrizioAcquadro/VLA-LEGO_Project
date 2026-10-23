@@ -1,6 +1,6 @@
 # ============================================================================
 # CI/CD Pipeline: Unified workflow for testing, building, and releasing
-# - CI jobs run on pushes to main/tags and PRs targeting main
+# - CI jobs run on branch pushes/tags and PRs targeting main
 # - CD jobs (container/apptainer) run only when:
 #   - Tags v* (releases)
 #   - workflow_dispatch (manual trigger)
@@ -12,7 +12,7 @@ name: CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: ["**"]
     tags: ['v*']
   pull_request:
     branches: [main]
@@ -66,7 +66,7 @@ jobs:
         run: black --check --diff .
 
       - name: Check documentation links
-        run: python tools/check_docs.py
+        run: python scripts/check_docs.py
 
 
   # --------------------------------------------------------------------------
@@ -93,7 +93,7 @@ jobs:
           pip install -e ".[ci]"
 
       - name: Run mypy
-        run: mypy sim models tracking --ignore-missing-imports
+        run: mypy src/vla_lego --ignore-missing-imports
 
   # --------------------------------------------------------------------------
   # Job: Software and Headless Simulation
@@ -154,11 +154,11 @@ jobs:
 
       - name: Test imports
         run: |
-          python -c "import sim; print('sim OK')"
-          python -c "import models; print('models OK')"
+          python -c "import vla_lego.sim; print('sim OK')"
+          python -c "import vla_lego.models; print('models OK')"
 
       - name: Validate maintained configuration
-        run: python -m scripts.validate_configs
+        run: python scripts/validate_configs.py
 
   package:
     name: Installed Wheel
@@ -171,7 +171,7 @@ jobs:
       - run: |
           pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
           pip install -e ".[ci,sim]"
-      - run: python tools/check_install.py
+      - run: python scripts/check_install.py
 
   # --------------------------------------------------------------------------
   # Job: CI Success Gate (required for branch protection and CD gating)
@@ -233,7 +233,7 @@ jobs:
               - 'pyproject.toml'
               - '.dockerignore'
               - 'scripts/container-entrypoint.sh'
-              - 'scripts/container-dependencies.py'
+              - 'scripts/container_dependencies.py'
 
   # --------------------------------------------------------------------------
   # Job: Determine if Container Build is Needed

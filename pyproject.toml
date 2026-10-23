@@ -29,7 +29,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-ci = ["pytest>=7", "ruff==0.15.3", "black==26.1.0", "mypy>=1", "build>=1"]
+ci = ["pytest>=7", "ruff==0.15.3", "black==26.1.0", "mypy>=1", "build>=1", "setuptools>=61", "wheel"]
 sim = ["mujoco>=3.1,<4", "imageio[ffmpeg]>=2.31"]
 vlm = [
     "transformers>=5.20,<6",
@@ -42,23 +42,23 @@ tracking = ["wandb>=0.15"]
 dev = ["vla-lego[ci,sim,vlm,tracking]", "pre-commit>=3"]
 
 [project.scripts]
-vla-viewer = "sim.viewer:main"
-vla-lint-assets = "sim.asset_linter_cli:main"
-vla-gen-bricks = "sim.bricks.cli:main"
-vla-demo = "sim.demo:main"
-vla-validate-model = "models.validate:main"
+vla-viewer = "vla_lego.sim.viewer:main"
+vla-lint-assets = "vla_lego.sim.asset_linter_cli:main"
+vla-gen-bricks = "vla_lego.sim.bricks.cli:main"
+vla-demo = "vla_lego.sim.demo:main"
+vla-validate-model = "vla_lego.models.validate:main"
 
 [project.urls]
 Repository = "https://github.com/PatrizioAcquadro/VLA-LEGO_Project"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["sim*", "models*", "tracking*", "configs*"]
+where = ["src"]
+include = ["vla_lego*"]
 namespaces = false
 
 [tool.setuptools.package-data]
-sim = ["assets/**/*.xml", "assets/**/*.obj", "assets/**/*.stl", "assets/**/PROVENANCE.md"]
-configs = ["**/*.yaml"]
+"vla_lego.sim" = ["assets/**/*.xml", "assets/**/*.obj", "assets/**/*.stl", "assets/**/PROVENANCE.md"]
+"vla_lego.configs" = ["**/*.yaml"]
 
 # ============================================================================
 # Tool Configurations
@@ -115,7 +115,7 @@ exclude = ["build", "dist", ".venv"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short --import-mode=importlib"
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]

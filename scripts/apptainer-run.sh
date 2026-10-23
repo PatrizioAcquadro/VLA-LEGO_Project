@@ -7,7 +7,7 @@
 # like Gilbreth where Docker is not available.
 #
 # Usage:
-#   ./scripts/apptainer-run.sh python -m sim.demo --help
+#   ./scripts/apptainer-run.sh python -m vla_lego.sim.demo --help
 #   ./scripts/apptainer-run.sh pytest tests/ -v
 #
 # Environment variables:
@@ -28,8 +28,8 @@ if [[ $# -eq 0 ]]; then
     echo "Usage: $0 COMMAND [ARGS...]"
     echo ""
     echo "Examples:"
-    echo "  $0 python -m sim.demo --help"
-    echo "  $0 python -m scripts.validate_configs"
+    echo "  $0 python -m vla_lego.sim.demo --help"
+    echo "  $0 python scripts/validate_configs.py"
     echo "  $0 pytest tests/ -v"
     echo ""
     echo "Current SIF: $SIF"

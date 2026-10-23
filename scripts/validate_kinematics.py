@@ -664,7 +664,7 @@ def main() -> None:
     print("=" * 60)
 
     # ── Load model ────────────────────────────────────────────
-    from sim.asset_loader import load_scene
+    from vla_lego.sim.asset_loader import load_scene
 
     model = load_scene("alex_upper_body")
     data = mujoco.MjData(model)
