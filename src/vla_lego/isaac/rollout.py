@@ -30,6 +30,7 @@ def main() -> None:
         "passed": False,
         "tick_budget": args.ticks,
         "learned_completion_signal": False,
+        "autonomy_started": False,
     }
     app = None
     connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -59,6 +60,7 @@ def main() -> None:
         max_projection = np.zeros(16, dtype=np.float32)
         initial_height = env.task_truth()["block_pose_w"][2]
         max_contact_lift = 0.0
+        report["autonomy_started"] = True
         with (args.output_dir / "trace.jsonl").open("w") as trace:
             for tick in range(args.ticks):
                 if not chunk:
