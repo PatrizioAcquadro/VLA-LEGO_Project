@@ -237,22 +237,26 @@ def main() -> None:
                 block = env.task_truth(index)["block_pose_w"][:3]
                 if pilot_case:
                     yaw += task.placements[index].yaw_deg
-                    if task.placements[index].yaw_deg:
-                        release = bottom + target.dimensions_m[2] / 2 + 0.06
-                        yaw = reference.grasp_yaw(
-                            side,
-                            yaw,
-                            [
-                                [0.40, 0.40 if side == "left" else -0.40, 1.05],
-                                [min(block[0], 0.46), block[1], 1.02],
-                                [block[0], block[1], block[2] + 0.10],
-                                [block[0], block[1], block[2] + 0.06],
-                                [block[0], block[1], block[2] + 0.16],
-                                [*task.assembly_xy_m, release + 0.025],
-                                [*task.assembly_xy_m, release],
-                                [*task.assembly_xy_m, release + target.dimensions_m[2] / 2 + 0.025],
-                            ],
-                        )
+                    release = bottom + target.dimensions_m[2] / 2 + 0.06
+                    yaw = reference.grasp_yaw(
+                        side,
+                        yaw,
+                        [
+                            [0.40, 0.40 if side == "left" else -0.40, 1.05],
+                            [min(block[0], 0.46), block[1], 1.02],
+                            [block[0], block[1], block[2] + 0.10],
+                            [block[0], block[1], block[2] + 0.06],
+                            [block[0], block[1], block[2] + 0.16],
+                            *(
+                                [[*task.assembly_xy_m, block[2] + 0.16]]
+                                if release + 0.025 < block[2] + 0.16
+                                else []
+                            ),
+                            [*task.assembly_xy_m, release + 0.025],
+                            [*task.assembly_xy_m, release],
+                            [*task.assembly_xy_m, release + target.dimensions_m[2] / 2 + 0.025],
+                        ],
+                    )
                 for stage, xyz in (
                     ("edge", [0.40, 0.40 if side == "left" else -0.40, 1.05]),
                     (

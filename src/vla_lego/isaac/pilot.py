@@ -168,6 +168,7 @@ class PilotCase:
             # Independent reachable layouts; N3 adds a 6 cm relocation and 15–35° yaw.
             if not inherited:
                 x += ((self.ordinal % 3) - 1) * 0.01
+            x = min(x, 0.53)  # Keep face grasps inside the verified native reach region.
             if relocated:
                 y += (-0.06 if abs(y) > 0.3 else 0.06) * (1 if y > 0 else -1)
             yaw = rng.choice((-35.0, -25.0, 20.0, 30.0)) if relocated else 0.0
