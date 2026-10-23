@@ -276,6 +276,17 @@ def main() -> None:
                 reference.move(f"{prefix}_lift", side, [block[0], block[1], lift_z], yaw)
                 if env.task_truth(index)["block_pose_w"][2] < block[2] + 0.07:
                     raise RuntimeError(f"No verified contact-only lift at {prefix}")
+                if pilot_case and transit_z < lift_z:
+                    # Cross the loose inventory at lift height before descending
+                    # over the assembly area, rather than sweeping through props.
+                    reference.move(
+                        f"{prefix}_transport_high",
+                        side,
+                        [*task.assembly_xy_m, lift_z],
+                        yaw,
+                        linear=True,
+                        linear_step_m=0.02,
+                    )
                 if level >= cooperative_level:
                     # Gain clearance away from the existing tower before the
                     # carried object's footprint crosses into the assembly area.

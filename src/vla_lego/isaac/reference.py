@@ -135,6 +135,7 @@ class PhysicalReference:
         *,
         quaternion_xyzw: list[float] | None = None,
         linear: bool = False,
+        linear_step_m: float = 0.004,
     ) -> None:
         from PIL import Image
 
@@ -144,8 +145,10 @@ class PhysicalReference:
         desired = [*xyz, *orientation]
         _, ids, _ = self.ctrl.frames[side]
         if linear:
+            if not 0 < linear_step_m <= 0.02:
+                raise ValueError("Cartesian waypoint spacing must be in (0, 0.02] meters.")
             start = self.ctrl.pose(side)[0, :3].tolist()
-            count = max(1, math.ceil(math.dist(start, xyz) / 0.004))
+            count = max(1, math.ceil(math.dist(start, xyz) / linear_step_m))
             for waypoint in range(1, count):
                 intermediate = [
                     a + (b - a) * waypoint / count for a, b in zip(start, xyz, strict=True)
