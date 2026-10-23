@@ -23,6 +23,24 @@ Admission is source-specific: record the release and attribution, available chan
 
 For each shortlisted source, Phase 3 records whether it is used as additional training data, already represented only through the chosen checkpoint, deferred or excluded. Direct ingestion is not mandatory for every source. A large volume with unresolved action semantics or no useful task contribution is not an acceptable substitute for Alex coverage.
 
+## Admission state during the implementation pilot
+
+No public foreign-robot actions are currently admitted as Alex action supervision. The actual robot-pretrained SmolVLA checkpoint is the compact candidate under feasibility work; its priors are retained through the published weights. Exact pretraining exposure is not inferred from a source's popularity or from GR00T embodiment names.
+
+| Reviewed source | Current decision and reason |
+|---|---|
+| OXE / BridgeData V2 | Additional ingestion deferred until the Alex pilot identifies a transferable gap and an exact constituent/mapping is selected; avoid Bridge/OXE duplicate exposure. |
+| DROID | The official GR00T sample was acquired for runtime validation only; that inference failed at gated backbone access. Excluded from Alex training and qualification. Broader ingestion deferred pending a justified mapping. |
+| ALOHA | Additional ingestion deferred. Bimanual priors are relevant, but foreign joint targets are not Alex commands and the selected release/supervision role must earn its cost. |
+| RoboMIND / 2.0 | Deferred: exact admitted subset, access and 2.0 release terms are not resolved. |
+| AgiBot World 2026 | Deferred: no selected task archives or validated fixed-base action mapping; the stated source-specific terms still apply to any future use. |
+| Galaxea Open-World | Deferred: no selected subset or validated mapping; do not transfer mobile-base targets into Alex. |
+| NVIDIA PhysicalAI | Deferred for direct episode ingestion; identify a specific action-bearing release first. GR00T weights were acquired, but its backbone access remains unavailable. |
+| RoboTwin 2.0 | Deferred for direct episodes. Use its scene-variation principles within Isaac once the contact teacher is valid; do not introduce another task simulator. |
+| EgoDex / EgoScale | Deferred for direct human-data ingestion. No fabricated robot actions; data terms, supported objective and incremental benefit remain prerequisites. |
+
+These are initial source decisions, not completion of Phase 3. The first required useful corpus remains physically executed Alex data with verified nominal/corrective/stop labels and grouped splits. Revisit additional public data when a measured pilot or development failure supports its value.
+
 ## Human egocentric data
 
 [EgoDex](https://github.com/apple-aiml-research/ml-egodex) provides public egocentric video, language and 3D head/hand/body trajectories; dataset terms are CC BY-NC-ND, separate from its code license. Treat additional use as conditional on compatible training/processing/redistribution terms and measured task benefit. Human hand motion is not a robot action label.
