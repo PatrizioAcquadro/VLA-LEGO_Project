@@ -18,6 +18,7 @@ def main() -> None:
         "--action-representation", choices=("absolute", "measured_arm_offset"), default="absolute"
     )
     parser.add_argument("--include-arm-velocity", action="store_true")
+    parser.add_argument("--include-task-decisions", action="store_true")
     parser.add_argument("--reassessments", type=Path, nargs="*", default=[])
     args = parser.parse_args()
 
@@ -25,6 +26,8 @@ def main() -> None:
     from lerobot.configs.video import RGBEncoderConfig
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
     from PIL import Image
+
+    from vla_lego.pretrained.decisions import DECISION_NAMES, DECISION_TARGETS
 
     admitted = []
     outcomes = []
@@ -66,9 +69,17 @@ def main() -> None:
             raise ValueError(f"Source split {split} differs from requested output {args.split}")
         if not metadata.get("control_clock_enforced", False):
             reason = "unverified_control_clock"
-        elif not metadata["verified_success"] or metadata["supervision_role"] not in (
+        elif not (
+            metadata["verified_success"]
+            or (
+                metadata.get("verified_stop")
+                and metadata["supervision_role"] == "verified_stop"
+                and args.include_task_decisions
+            )
+        ) or metadata["supervision_role"] not in (
             "verified_nominal",
             "verified_correction",
+            "verified_stop",
         ):
             reason = "context_only"
         elif metadata["supervision_role"] == "verified_correction" and not metadata.get(
@@ -76,6 +87,8 @@ def main() -> None:
         ).get("exact_native_parity"):
             reason = "unverified_corrective_start"
         else:
+            if args.include_task_decisions and not metadata.get("task_decisions_recorded"):
+                raise ValueError(f"Source has no recorded task decisions: {directory}")
             reason = "admitted_" + metadata["supervision_role"]
             admitted.append((directory, metadata))
         outcomes.append(
@@ -83,6 +96,7 @@ def main() -> None:
                 "recording": str(directory.resolve()),
                 "frames": metadata["frames"],
                 "physical_success": original_success,
+                "verified_stop": metadata.get("verified_stop", False),
                 "supervision_role": original_role,
                 "reassessment_report": reassessment,
                 "admission": reason,
@@ -99,6 +113,8 @@ def main() -> None:
     action_labels = first["action_names"]
     if args.action_representation == "measured_arm_offset":
         action_labels = [f"{name}_OFFSET" for name in action_labels[:14]] + action_labels[14:]
+    if args.include_task_decisions:
+        action_labels = action_labels + list(DECISION_NAMES)
     state_labels = first["state_names"]
     if args.include_arm_velocity:
         state_labels = state_labels + [f"{name}_VELOCITY" for name in state_labels[:14]]
@@ -108,7 +124,7 @@ def main() -> None:
             "shape": (len(state_labels),),
             "names": state_labels,
         },
-        "action": {"dtype": "float32", "shape": (16,), "names": action_labels},
+        "action": {"dtype": "float32", "shape": (len(action_labels),), "names": action_labels},
         "observation.images.head": {
             "dtype": "video",
             "shape": (600, 960, 3),
@@ -155,6 +171,10 @@ def main() -> None:
                     raise ValueError("Invalid sensor/action tensor.")
                 if args.action_representation == "measured_arm_offset":
                     action[:14] -= state[:14]
+                if args.include_task_decisions:
+                    action = np.concatenate(
+                        (action, DECISION_TARGETS[row["task_decision"]])
+                    ).astype(np.float32)
                 if args.include_arm_velocity:
                     velocity = np.asarray(row["joint_velocity"], dtype=np.float32)
                     if velocity.shape != (18,) or not np.isfinite(velocity).all():
@@ -191,6 +211,7 @@ def main() -> None:
         "max_camera_age_s": max_age,
         "action_representation": args.action_representation,
         "include_arm_velocity": args.include_arm_velocity,
+        "include_task_decisions": args.include_task_decisions,
         "action_targets": "derived from actually applied targets; raw requested/applied values preserved",
         "privileged_inputs_loaded": False,
         "codec": args.codec,
@@ -205,6 +226,7 @@ def main() -> None:
         "position_names": first["state_names"],
         "include_arm_velocity": args.include_arm_velocity,
         "control_hz": 20,
+        "task_decision_names": list(DECISION_NAMES) if args.include_task_decisions else [],
     }
     (args.output_dir / "alex_interface.json").write_text(json.dumps(interface, indent=2) + "\n")
     print(json.dumps(report), flush=True)

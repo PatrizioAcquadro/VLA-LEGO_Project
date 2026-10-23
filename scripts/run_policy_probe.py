@@ -40,7 +40,12 @@ def main() -> int:
     parser.add_argument("--ticks", type=int, default=1200)
     parser.add_argument("--execution-horizon", type=int)
     parser.add_argument("--seed", type=int, default=20261023)
+    parser.add_argument("--task", choices=("single_block", "tower"), default="single_block")
+    parser.add_argument("--mirror", action="store_true")
+    parser.add_argument("--missing-target", type=int, choices=range(5))
     args = parser.parse_args()
+    if args.task != "tower" and (args.mirror or args.missing_target is not None):
+        parser.error("Scene variants require --task tower")
     root = Path(__file__).resolve().parents[1]
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -55,6 +60,7 @@ def main() -> int:
         "checkpoint": str(args.checkpoint.resolve()),
         "ticks": args.ticks,
         "model_seed": args.seed,
+        "task": args.task,
     }
     code = 1
     try:
@@ -107,7 +113,11 @@ def main() -> int:
                         "bash",
                         str(root / "scripts" / "isaac-run.sh"),
                         "-m",
-                        "vla_lego.isaac.rollout",
+                        (
+                            "vla_lego.isaac.tower_rollout"
+                            if args.task == "tower"
+                            else "vla_lego.isaac.rollout"
+                        ),
                         "--socket",
                         str(socket_path),
                         "--output-dir",
@@ -116,7 +126,13 @@ def main() -> int:
                         str(args.cache_dir.resolve()),
                         "--ticks",
                         str(args.ticks),
-                    ],
+                    ]
+                    + (["--mirror"] if args.mirror else [])
+                    + (
+                        ["--missing-target", str(args.missing_target)]
+                        if args.missing_target is not None
+                        else []
+                    ),
                     cwd=root,
                     stdout=client_log,
                     stderr=subprocess.STDOUT,
@@ -133,6 +149,7 @@ def main() -> int:
                             "started" if result.get("autonomy_started") else "setup_unavailable"
                         ),
                         rollout_report=str(result_path),
+                        case_passed=result.get("case_passed", result["passed"]),
                     )
                 else:
                     report["availability"] = "unscorable"

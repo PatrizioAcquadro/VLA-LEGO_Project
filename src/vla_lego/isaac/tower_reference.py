@@ -80,6 +80,7 @@ def main() -> None:
                 task.instruction,
                 family=args.family,
                 split=args.split,
+                task_decisions=True,
             )
             env.recorder = recorder
         report["task"] = asdict(task)
@@ -263,6 +264,8 @@ def main() -> None:
                     reference.park(stabilizer_side)
                     verify_support(level, "stabilizer withdrawal")
                 bottom += target.dimensions_m[2]
+            if recorder is not None:
+                recorder.task_decision = "complete"
             reference.wait(40, "final_released_dwell")
             env.capture()
             Image.fromarray(env.observe()["head_rgb"]).save(args.output_dir / "final.png")

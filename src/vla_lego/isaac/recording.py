@@ -17,6 +17,7 @@ class EpisodeRecorder:
         family: str,
         split: str,
         correction_source: dict | None = None,
+        task_decisions: bool = False,
     ):
         if not family or split not in ("train", "development"):
             raise ValueError(
@@ -32,6 +33,8 @@ class EpisodeRecorder:
         self.instruction = instruction
         self.family, self.split = family, split
         self.correction_source = correction_source
+        self.task_decisions = task_decisions
+        self.task_decision = "continue"
         self.count = 0
         self.closed = False
         self.state_names: tuple[str, ...] | None = None
@@ -89,6 +92,12 @@ class EpisodeRecorder:
             "action": np.asarray(action).tolist(),
             "requested_action": np.asarray(requested_action).tolist(),
         }
+        if self.task_decisions:
+            from vla_lego.pretrained.decisions import DECISION_TARGETS
+
+            if self.task_decision not in DECISION_TARGETS:
+                raise ValueError("Unknown teacher task-decision annotation.")
+            row["task_decision"] = self.task_decision
         self.frames.write(json.dumps(row) + "\n")
         self.evidence.write(json.dumps({"frame": self.count, "blocks": truth}) + "\n")
         self.count += 1
@@ -96,9 +105,11 @@ class EpisodeRecorder:
             self.frames.flush()
             self.evidence.flush()
 
-    def finish(self, *, verified_success: bool, reason: str) -> None:
+    def finish(self, *, verified_success: bool, reason: str, verified_stop: bool = False) -> None:
         if self.closed:
             return
+        if verified_stop and (verified_success or not self.task_decisions):
+            raise ValueError("A verified stop is distinct from completion and requires labels.")
         self.frames.close()
         self.evidence.close()
         metadata = {
@@ -111,10 +122,12 @@ class EpisodeRecorder:
             "action_names": self.action_names,
             "start_time_s": self.start_time,
             "verified_success": verified_success,
+            "verified_stop": verified_stop,
+            "task_decisions_recorded": self.task_decisions,
             "supervision_role": (
                 ("verified_correction" if self.correction_source else "verified_nominal")
                 if verified_success
-                else "context_only"
+                else "verified_stop" if verified_stop else "context_only"
             ),
             "reason": reason,
             "action_timing": "observation_t then target_action_t then 10 native physics steps",

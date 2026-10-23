@@ -47,6 +47,10 @@ class TowerTask:
         order = ", then ".join(target.description for target in self.targets)
         return f"Build a five-block tower inside the black square, bottom to top: {order}."
 
+    def without_target(self, level: int) -> TowerTask:
+        index = next(i for i, p in enumerate(self.placements) if p.spec == self.targets[level])
+        return replace(self, placements=self.placements[:index] + self.placements[index + 1 :])
+
 
 def initial_tower_task(*, mirror: bool = False) -> TowerTask:
     """First loose-piece scene; its control/reach coverage is still unqualified."""

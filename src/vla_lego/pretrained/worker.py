@@ -34,6 +34,7 @@ def main() -> None:
         from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
 
         from vla_lego.isaac.environment import ARM_JOINTS, JAW_JOINTS
+        from vla_lego.pretrained.decisions import DECISION_NAMES
 
         interface_path = args.checkpoint / "alex_interface.json"
         if interface_path.exists():
@@ -53,6 +54,7 @@ def main() -> None:
             interface["action_representation"] not in ("absolute", "measured_arm_offset")
             or interface["action_joint_names"] != [*ARM_JOINTS, *JAW_JOINTS]
             or interface["control_hz"] != 20
+            or interface.get("task_decision_names", []) not in ([], list(DECISION_NAMES))
         ):
             raise ValueError("Checkpoint uses an incompatible Alex command interface.")
 
@@ -62,6 +64,10 @@ def main() -> None:
         torch.manual_seed(args.seed)
         started = time.monotonic()
         policy = SmolVLAPolicy.from_pretrained(args.checkpoint).to("cuda").eval()
+        decision_names = interface.get("task_decision_names", [])
+        action_width = 16 + len(decision_names)
+        if tuple(policy.config.output_features["action"].shape) != (action_width,):
+            raise ValueError("Checkpoint action width differs from its declared interface.")
         if not all(parameter.is_cuda for parameter in policy.parameters()):
             raise RuntimeError("Unexpected CPU policy parameters.")
         preprocessor, postprocessor = make_pre_post_processors(
@@ -133,7 +139,7 @@ def main() -> None:
                     actions = postprocessor(actions)
                 torch.cuda.synchronize()
                 elapsed = time.monotonic() - started
-                if actions.shape != (1, horizon, 16):
+                if actions.shape != (1, horizon, action_width):
                     raise ValueError(f"Unexpected learned action shape {actions.shape}")
                 if not bool(torch.isfinite(actions).all()):
                     raise ValueError("Learned actions must be finite.")
@@ -144,6 +150,7 @@ def main() -> None:
                         "actions": actions.cpu().tolist()[0],
                         "inference_seconds": elapsed,
                         "action_representation": interface["action_representation"],
+                        "task_decision_names": decision_names,
                     },
                 )
         report.update(passed=True, peak_allocated_gib=torch.cuda.max_memory_allocated() / 1024**3)
