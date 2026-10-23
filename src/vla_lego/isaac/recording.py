@@ -9,11 +9,21 @@ from pathlib import Path
 class EpisodeRecorder:
     """Stream images and rows; accept positive labels only after verified completion."""
 
-    def __init__(self, directory: Path, instruction: str, *, family: str, split: str):
+    def __init__(
+        self,
+        directory: Path,
+        instruction: str,
+        *,
+        family: str,
+        split: str,
+        correction_source: dict | None = None,
+    ):
         if not family or split not in ("train", "development"):
             raise ValueError(
                 "Collection requires a generation family and a train/development split."
             )
+        if correction_source is not None and not correction_source.get("exact_native_parity"):
+            raise ValueError("A corrective continuation requires exact native prefix replay.")
         directory.mkdir(parents=True, exist_ok=False)
         self.directory = directory
         (directory / "head").mkdir()
@@ -21,6 +31,7 @@ class EpisodeRecorder:
         self.evidence = (directory / "privileged.jsonl").open("w")
         self.instruction = instruction
         self.family, self.split = family, split
+        self.correction_source = correction_source
         self.count = 0
         self.closed = False
         self.state_names: tuple[str, ...] | None = None
@@ -100,11 +111,17 @@ class EpisodeRecorder:
             "action_names": self.action_names,
             "start_time_s": self.start_time,
             "verified_success": verified_success,
-            "supervision_role": "verified_nominal" if verified_success else "context_only",
+            "supervision_role": (
+                ("verified_correction" if self.correction_source else "verified_nominal")
+                if verified_success
+                else "context_only"
+            ),
             "reason": reason,
             "action_timing": "observation_t then target_action_t then 10 native physics steps",
             "privileged_policy_inputs": False,
             "control_clock_enforced": True,
         }
+        if self.correction_source is not None:
+            metadata["correction_source"] = self.correction_source
         (self.directory / "episode.json").write_text(json.dumps(metadata, indent=2) + "\n")
         self.closed = True

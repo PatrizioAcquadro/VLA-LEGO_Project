@@ -38,16 +38,24 @@ def main() -> None:
             raise ValueError(f"Source split {split} differs from requested output {args.split}")
         if not metadata.get("control_clock_enforced", False):
             reason = "unverified_control_clock"
-        elif not metadata["verified_success"] or metadata["supervision_role"] != "verified_nominal":
+        elif not metadata["verified_success"] or metadata["supervision_role"] not in (
+            "verified_nominal",
+            "verified_correction",
+        ):
             reason = "context_only"
+        elif metadata["supervision_role"] == "verified_correction" and not metadata.get(
+            "correction_source", {}
+        ).get("exact_native_parity"):
+            reason = "unverified_corrective_start"
         else:
-            reason = "admitted_verified_nominal"
+            reason = "admitted_" + metadata["supervision_role"]
             admitted.append((directory, metadata))
         outcomes.append(
             {
                 "recording": str(directory.resolve()),
                 "frames": metadata["frames"],
                 "physical_success": metadata["verified_success"],
+                "supervision_role": metadata["supervision_role"],
                 "admission": reason,
                 "generation_family": family,
             }

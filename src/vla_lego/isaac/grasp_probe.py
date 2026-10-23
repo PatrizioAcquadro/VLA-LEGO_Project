@@ -15,11 +15,15 @@ def main() -> None:
     parser.add_argument("--cache-dir", type=Path, required=True)
     parser.add_argument("--record", action="store_true")
     parser.add_argument("--event-settling", action="store_true")
+    parser.add_argument("--prefix-run", type=Path)
+    parser.add_argument("--prefix-ticks", type=int)
     parser.add_argument("--family")
     parser.add_argument("--split", choices=("train", "development"))
     args = parser.parse_args()
     if args.record and (not args.family or not args.split):
         parser.error("--record requires --family and --split before collection")
+    if (args.prefix_run is None) != (args.prefix_ticks is None):
+        parser.error("--prefix-run and --prefix-ticks must be supplied together")
     args.output_dir.mkdir(parents=True, exist_ok=False)
     started = time.monotonic()
     app = None
@@ -45,17 +49,31 @@ def main() -> None:
         env = AssemblyEnvironment(args.cache_dir.resolve())
         ctrl = ToolController(env)
         env.step(400)
+        initial = {side: ctrl.pose(side)[0].tolist() for side in ("left", "right")}
+        report["initial_truth"] = env.task_truth()
+        original_block = env.task_truth()["block_pose_w"][:3]
+        correction_source = None
+        if args.prefix_run is not None:
+            from vla_lego.isaac.policy_replay import replay_prefix
+
+            correction_source = replay_prefix(env, args.prefix_run, args.prefix_ticks)
+            report["source_prefix_replay"] = correction_source
+            if not correction_source["exact_native_parity"]:
+                raise RuntimeError("No corrective collection without exact native prefix parity.")
+            report["corrective_start"] = {
+                "tools": {side: ctrl.pose(side)[0].tolist() for side in ("left", "right")},
+                "truth": env.task_truth(),
+            }
         if args.record:
             recorder = EpisodeRecorder(
                 args.output_dir / "recording",
                 "Pick up the small red cube and place it back on the table in the open space to the left.",
                 family=args.family,
                 split=args.split,
+                correction_source=correction_source,
             )
             env.recorder = recorder
-        initial = {side: ctrl.pose(side)[0].tolist() for side in ("left", "right")}
         report["initial_tool_poses_xyzw"] = initial
-        report["initial_truth"] = env.task_truth()
         solvers = {
             side: ArmKinematics(
                 Path(env.robot.cfg.spawn.asset_path),
@@ -78,10 +96,14 @@ def main() -> None:
 
             def joint_move(name: str, side: str, q_goal) -> None:
                 _, ids, _ = ctrl.frames[side]
-                q_start = env.robot.data.joint_pos.torch[0, ids].clone()
+                limits = env.robot.data.joint_pos_limits.torch[0, ids]
+                q_start = env.robot.data.joint_pos.torch[0, ids].clamp(limits[:, 0], limits[:, 1])
+                q_goal = q_goal.clamp(limits[:, 0], limits[:, 1])
                 ticks = max(1, round(float((q_goal - q_start).abs().max()) / 0.5 / 0.05))
                 for tick in range(ticks):
-                    q = torch.lerp(q_start, q_goal, (tick + 1) / ticks)
+                    q = torch.lerp(q_start, q_goal, (tick + 1) / ticks).clamp(
+                        limits[:, 0], limits[:, 1]
+                    )
                     env.set_joint_targets(dict(zip(solvers[side].names, q.tolist(), strict=True)))
                     env.step(10)
                     trace.write(
@@ -190,6 +212,9 @@ def main() -> None:
             if not lifted or lift_truth["block_pose_w"][2] < block[2] + 0.07:
                 raise RuntimeError("No verified physical lift")
             destination = [block[0] + 0.03, block[1] + 0.08, grasp[2] + 0.10]
+            if correction_source is not None:
+                # Preserve the original task goal even if the failed policy moved the cube.
+                destination[:2] = [original_block[0] + 0.03, original_block[1] + 0.08]
             if not move("transport", "left", destination, 6):
                 raise RuntimeError("Reference transport failed")
             destination[2] = grasp[2]
