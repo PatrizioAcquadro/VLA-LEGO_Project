@@ -2,7 +2,7 @@
 
 ## Objective
 
-Audit all consumers and immediately simplify the commissioned software into a coherent base for lightweight-brick manipulation. The original audit worked on `PatrizioAcquadro/audiovisual-policy`, based on `main` at `a5205b2`, with local atomic commits and no remote mutation. The initial working tree was clean. The source-layout follow-up below additionally authorizes a feature-branch push; main integration, history rewriting and branch/worktree deletion remain outside scope.
+Audit all consumers and immediately simplify the commissioned software into a coherent base for lightweight-brick manipulation. The original audit worked on `PatrizioAcquadro/audiovisual-policy`, based on `main` at `c8e0bcd`, with local atomic commits and no remote mutation. The initial working tree was clean. The source-layout follow-up below additionally authorizes a feature-branch push; main integration, history rewriting and branch/worktree deletion remain outside scope.
 
 ## Approved implementation
 
@@ -48,7 +48,7 @@ Final portable checks: `make check` passes, all 102 local documentation links/an
 
 ## Source layout follow-up
 
-The user authorized a conventional SWE repository layout and a final push of `PatrizioAcquadro/audiovisual-policy`. Baseline: `dae723a`, clean tracked tree. Keep main untouched and preserve local ignored evidence.
+The user authorized a conventional SWE repository layout and a final push of `PatrizioAcquadro/audiovisual-policy`. Baseline: `9ccadcf`, clean tracked tree. Keep main untouched and preserve local ignored evidence.
 
 Move the maintained runtime to the single `src/vla_lego` namespace, with simulation assets and Hydra configuration packaged beside their consumers. Group tests by subsystem, consolidate development checks under `scripts/`, and keep scheduler/deployment definitions in `infra/`. Preserve CLI command names and physical/model contracts. Update every internal consumer and operating instruction; remove root import/path workarounds instead of adding compatibility copies. Strengthen installed-wheel verification against the actual source inventory. Validate the native GPU suite and diagnostic/container paths, commit coherent milestones, then push only the requested feature branch without rewriting history.
 
@@ -56,7 +56,7 @@ Source-layout validation passes: 481 native CUDA/EGL tests (32 native model GPU 
 
 ## Root file cleanup
 
-The user merged PR #4 and requested main as the only branch, an essential root directory, and publication of the final cleanup. Baseline: merged main `e0aa7cc`, with no tracked local changes. Preserve local ignored state and all scientific evidence.
+The user merged PR #4 and requested main as the only branch, an essential root directory, and publication of the final cleanup. Baseline: merged main `7949e0c`, with no tracked local changes. Preserve local ignored state and all scientific evidence.
 
 Keep the root files used by standard Python/Git tooling: README, LICENSE, pyproject, Makefile, gitignore and pre-commit configuration. Move Docker/Apptainer definitions and Dockerfile-specific context rules under `infra/containers`, updating their real build/CI consumers. Remove the duplicate contribution pointer, unused patch-version pin and redundant environment example; canonical setup remains in knowledge. Keep agent checklists local and ignored rather than tracking completed task history. Verify affected operating paths and package metadata, then publish main. Remove other branches only after verifying integration or preserving their unique commits locally.
 

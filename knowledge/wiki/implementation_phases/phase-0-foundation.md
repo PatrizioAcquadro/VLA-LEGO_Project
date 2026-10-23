@@ -53,4 +53,4 @@ Produce a concise source-linked design rationale, unresolved implementation ques
 
 ## Source trace
 
-[Original roadmap](https://websitepresentation.vercel.app/roadmap) and its 0.1/0.2 detail pages; the removed 0.2 draft is recoverable at `31bffb75:docs/roadmap/phase0.2.md`. See [history](../history.md) for exact revision pointers.
+[Original roadmap](https://websitepresentation.vercel.app/roadmap) and its 0.1/0.2 detail pages; the removed 0.2 draft is recoverable at `4670ec5c:docs/roadmap/phase0.2.md`. See [history](../history.md) for exact revision pointers.
