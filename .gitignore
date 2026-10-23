@@ -153,3 +153,6 @@ renders
 *.safetensors
 *.bin
 !configs/**/*.bin
+
+# Local implementation checklist; durable plans live in knowledge/.
+/TODO.md

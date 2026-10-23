@@ -1,6 +1,6 @@
 # Implementation plans
 
-Nine canonical files follow website Phases 0–8. Their sections preserve all 22 original subphases, including work already implemented and work still to do. No separate subphase files are needed. These are development specifications; [TODO.md](../../../TODO.md) is the active implementation checklist.
+Nine canonical files follow website Phases 0–8. Their sections preserve all 22 original subphases, including work already implemented and work still to do. No separate subphase files are needed. These are development specifications; a local ignored `TODO.md` can hold the active implementation checklist.
 
 The [website roadmap](https://websitepresentation.vercel.app/roadmap) and historical repository plans are the sources. The original January 16–April 4, 2026 schedule is historical. There is no new delivery calendar or assumed 8×A100 allocation. Status comes from actual source and [evidence](../validation.md), not the passage of scheduled dates.
 

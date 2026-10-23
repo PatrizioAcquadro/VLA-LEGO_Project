@@ -219,19 +219,19 @@ jobs:
         id: filter
         with:
           # Container-relevant paths that trigger heavy builds:
-          # - Dockerfile: container definition
+          # - infra/containers/Dockerfile: container definition
           # - pyproject.toml: dependency specifications (deps extracted at build time)
-          # - .dockerignore: affects build context
+          # - infra/containers/Dockerfile.dockerignore: build context allowlist
           # - scripts/container-entrypoint.sh: entrypoint script baked into image
           #
-          # NOTE: apptainer.def is NOT included here. CI builds Apptainer images
+          # NOTE: infra/containers/apptainer.def is NOT included here. CI builds Apptainer images
           # from the Docker image digest, not from apptainer.def. Edits to
-          # apptainer.def alone do NOT trigger heavy builds.
+          # the standalone Apptainer recipe alone do NOT trigger heavy builds.
           filters: |
             container:
-              - 'Dockerfile'
+              - 'infra/containers/Dockerfile'
               - 'pyproject.toml'
-              - '.dockerignore'
+              - 'infra/containers/Dockerfile.dockerignore'
               - 'scripts/container-entrypoint.sh'
               - 'scripts/container_dependencies.py'
 
@@ -326,7 +326,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile
+          file: ./infra/containers/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

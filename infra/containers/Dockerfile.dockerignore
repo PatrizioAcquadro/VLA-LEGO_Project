@@ -1,6 +1,5 @@
-# The image contains dependencies, not source, evidence or local state.
+# Dependency-only context; source, evidence and credentials stay outside the image.
 **
-!Dockerfile
 !pyproject.toml
 !scripts/
 !scripts/container_dependencies.py

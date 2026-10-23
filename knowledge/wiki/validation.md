@@ -35,3 +35,5 @@ After migration to `src/vla_lego`, the complete native CUDA/EGL suite still pass
 The dependency-only Docker image was rebuilt with `/workspace/src` exposure and exported the robot/tower/triangle GPU diagnostics successfully (`outputs/src-container-demo/`). All five installed CLIs resolve to `vla_lego.*` and the strict asset linter passes. Obsolete generated root-level egg metadata was removed after it was found shadowing current entry-point metadata; no tracked evidence was changed.
 
 The feature branch is published. Hosted CI runs on branch pushes; [GitHub Actions](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/actions/workflows/ci-cd.yml) is the source for the current revision's status. A branch push does not publish a container or merge main.
+
+Root-file cleanup preserves that runtime unchanged. `make check`, the 71-file installed-wheel probe, all five CLIs and the relocated Docker build pass; the current wiki has 94 valid local links. Container definitions now live in `infra/containers`. Evidence: `outputs/essential-root-check.log`, `outputs/essential-root-package.log` and `outputs/essential-root-docker-build.log`.

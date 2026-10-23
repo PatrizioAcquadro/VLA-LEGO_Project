@@ -7,7 +7,7 @@ The package name `vla-lego` is retained for continuity. Real LEGO studs, press-f
 - [Project knowledge and operating guides](knowledge/wiki/index.md)
 - [Current capabilities, limits and priorities](knowledge/wiki/status.md)
 - [Nine implementation plans, covering all 22 original subphases](knowledge/wiki/implementation_phases/index.md)
-- [Install and develop](knowledge/wiki/development.md)
+- [Install and contribute](knowledge/wiki/development.md)
 - [Run the simulation and diagnostic demo](knowledge/wiki/simulation.md)
 - [Validation evidence](knowledge/wiki/validation.md)
 
@@ -33,7 +33,7 @@ src/vla_lego/       Runtime package
   configs/         Packaged Hydra configuration
 tests/             Simulation, model and tracking regression suites
 scripts/           Diagnostics, quality checks and container utilities
-infra/gilbreth/    Scheduler jobs and environment setup
+infra/             Container definitions and Gilbreth scheduler setup
 knowledge/         Canonical guides, status and nine phase plans
 .github/workflows/ Automated checks and gated publication
 ```

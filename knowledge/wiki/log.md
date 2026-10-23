@@ -15,3 +15,9 @@ Keep only decisions that change interpretation or future development. Use Git fo
 - Consolidate runtime code, Hydra configuration and assets under `src/vla_lego`; keep CLI names and simulation/model contracts unchanged.
 - Group tests by subsystem and keep repository utilities in `scripts/`. Use installed-package imports and verify the wheel inventory against `src/`.
 - Run CI on feature-branch pushes. Publishing remains separately gated. The user authorized pushing the requested feature branch; main integration is still outside scope.
+
+## 2026-10-23 — Essential root and main-only development
+
+- After the user’s merge, keep main as the only branch. Preserve all removed branch histories in a local verified bundle, including the unmerged README badge commit from the old CI test branch.
+- Keep six conventional root files; move container definitions into `infra/containers` with a Dockerfile-specific context allowlist. Remove duplicate root guides, environment examples and an unused Python patch-version pin.
+- Keep agent TODO checklists local and ignored, with durable development plans in the nine canonical phase pages.

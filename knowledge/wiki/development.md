@@ -30,7 +30,7 @@ The package check builds an sdist, builds its wheel, installs it in a temporary 
 
 ## Change discipline
 
-Use [TODO.md](../../TODO.md) for the current implementation checklist and one linked phase specification. Keep canonical operating knowledge here and completed ordinary source history in Git. Preserve pre-existing changes; work on the explicitly requested branch. The current task authorizes pushing `PatrizioAcquadro/audiovisual-policy`. Main integration, history rewriting and branch/worktree deletion require separate authorization. Create small local commits after coherent validated changes.
+For substantial work, use a local ignored `TODO.md` checklist linked to one phase specification; do not commit completed agent-task checklists. Keep canonical operating knowledge here and completed ordinary source history in Git. Preserve pre-existing changes; work on the explicitly requested branch. The current cleanup works directly on main after the user’s merge and publishes the verified result. The user explicitly approved removing the four obsolete branches; their history was saved in a local bundle. History rewriting and worktree deletion remain outside scope. Create small local commits after coherent validated changes.
 
 Retain tests that protect maintained behavior: native simulation, contracts, support/stability, camera alignment, masks, gradients, processor metadata and package contents. Small model doubles are useful for isolated sequence/mask regressions; they do not replace native GPU integration. Remove tests that merely mirror constants or support retired placeholder behavior.
 
@@ -47,3 +47,7 @@ Existing publication behavior remains: qualifying main changes/manual dispatch/t
 Install the package in editable mode before running tests or scripts. When updating an old checkout, remove obsolete generated root-level `vla_lego.egg-info` before reinstalling; current metadata belongs under `src/`. All runtime imports begin with `vla_lego`; generic top-level `sim`, `models`, `tracking` and `configs` packages have been removed. Hydra uses `initialize_config_module(config_module="vla_lego.configs")`, and assets resolve through `vla_lego.sim.asset_loader`. CLI names remain unchanged.
 
 Tests are grouped under `tests/sim`, `tests/models` and `tests/tracking`, with shared setup in `tests/conftest.py` and package/config checks at the test root. Pytest uses importlib mode, so test collection does not make application code importable from the repository root. Development utilities live in `scripts/`; SLURM operations remain in `infra/gilbreth`. Use `make test` and `make package` for the full suite and installed-wheel probe.
+
+## Root files
+
+The tracked root contains only `README.md`, `LICENSE`, `pyproject.toml`, `Makefile`, `.gitignore` and `.pre-commit-config.yaml`. These are conventional entry points for readers, Python packaging, developer commands and Git/pre-commit tooling. Container definitions live under `infra/containers`; canonical contribution/setup instructions live here. Python compatibility is declared in `pyproject.toml`, so an unused patch-specific `.python-version` is unnecessary. Environment variables are documented beside their actual workflows; there is no automatically loaded `.env` template. Local `AGENTS.md` and `TODO.md` remain ignored.

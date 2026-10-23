@@ -20,7 +20,7 @@ Maintained tests, formatting/lint, configuration composition, clean package inst
 
 ## State
 
-Implementation completed locally. The completed checklist is the repository `TODO.md`. This does not complete the future research phases or authorize integration/publication.
+Implementation completed locally. The completed audit checklist is preserved in Git history; current checklists remain local and ignored. This does not complete the future research phases or authorize integration/publication.
 
 ## Operational validation ownership
 
@@ -53,3 +53,11 @@ The user authorized a conventional SWE repository layout and a final push of `Pa
 Move the maintained runtime to the single `src/vla_lego` namespace, with simulation assets and Hydra configuration packaged beside their consumers. Group tests by subsystem, consolidate development checks under `scripts/`, and keep scheduler/deployment definitions in `infra/`. Preserve CLI command names and physical/model contracts. Update every internal consumer and operating instruction; remove root import/path workarounds instead of adding compatibility copies. Strengthen installed-wheel verification against the actual source inventory. Validate the native GPU suite and diagnostic/container paths, commit coherent milestones, then push only the requested feature branch without rewriting history.
 
 Source-layout validation passes: 481 native CUDA/EGL tests (32 native model GPU checks), 165 focused CPU tests, mypy on 36 source files, Ruff/Black, eight config compositions, 100 current local documentation links, exact 71-file wheel inventory and installed-package probe, all CLI registrations and the GPU Docker diagnostic demo. Runtime assets retain their contents; only their package location changed.
+
+## Root file cleanup
+
+The user merged PR #4 and requested main as the only branch, an essential root directory, and publication of the final cleanup. Baseline: merged main `e0aa7cc`, with no tracked local changes. Preserve local ignored state and all scientific evidence.
+
+Keep the root files used by standard Python/Git tooling: README, LICENSE, pyproject, Makefile, gitignore and pre-commit configuration. Move Docker/Apptainer definitions and Dockerfile-specific context rules under `infra/containers`, updating their real build/CI consumers. Remove the duplicate contribution pointer, unused patch-version pin and redundant environment example; canonical setup remains in knowledge. Keep agent checklists local and ignored rather than tracking completed task history. Verify affected operating paths and package metadata, then publish main. Remove other branches only after verifying integration or preserving their unique commits locally.
+
+Root cleanup validation: quality/configuration checks and all 94 current local documentation links pass; the sdist-to-wheel probe still matches the 71 expected runtime/configuration/asset files and all five CLIs work. The relocated Dockerfile builds successfully with its specific context allowlist and passes dependency consistency checks. Runtime code is unchanged from the 481-test native GPU-validated baseline. All four non-main branches were deleted after explicit confirmation; a verified complete Git bundle remains at `outputs/branch-archive-20261023/non-main-branches.bundle`. No worktree was deleted.
