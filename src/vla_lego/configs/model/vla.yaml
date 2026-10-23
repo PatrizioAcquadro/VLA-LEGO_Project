@@ -1,0 +1,7 @@
+defaults:
+  - vlm
+  - action_head
+  - _self_
+name: vla
+architecture:
+  type: vla

@@ -1,333 +1,43 @@
-<div align="center">
+# Lightweight Brick Assembly VLA
 
-# VLA-LEGO
+Vision-language-action components for Alex to manipulate lightweight, variable-size bricks into structures. The current repository provides MuJoCo simulation, the robot/control/camera interfaces and Qwen3.5-4B with a flow-matching action head. A trained assembly policy and real demonstration dataset remain future work.
 
-**Vision-Language-Action System for Bimanual Robotic LEGO Assembly**
+The package name `vla-lego` is retained for continuity. Real LEGO studs, press-fit and retention are a future extension.
 
-[![CI](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/actions/workflows/ci.yml/badge.svg)](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/actions/workflows/ci.yml)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+- [Project knowledge and operating guides](knowledge/wiki/index.md)
+- [Current capabilities, limits and priorities](knowledge/wiki/status.md)
+- [Nine implementation plans, covering all 22 original subphases](knowledge/wiki/implementation_phases/index.md)
+- [Install and develop](knowledge/wiki/development.md)
+- [Run the simulation and diagnostic demo](knowledge/wiki/simulation.md)
+- [Validation evidence](knowledge/wiki/validation.md)
 
-[Features](#features) • [Installation](#installation) • [Quick Start](#quick-start) • [Documentation](#documentation) • [Contributing](#contributing)
-
-</div>
-
----
-
-## Overview
-
-VLA-LEGO is a Master's thesis research project developing a **Vision-Language-Action (VLA) system** for robotic bimanual manipulation. The project replicates and extends the [EO-1 model](https://arxiv.org/abs/2508.21112) architecture for coordinated two-arm assembly tasks on the **IHMC Alex humanoid robot**.
-
-This research is conducted as part of an exchange program between **Politecnico di Milano** and **Purdue University**, under the supervision of Prof. Eugenio Culurciello and Prof. Marcello Restelli.
-
-### Research Goals
-
-- Replicate the EO-1 Vision-Language-Action architecture
-- Extend the model for bimanual manipulation tasks
-- Evaluate on LIBERO benchmark (Spatial, Object, Goal, Long subsets)
-- Deploy on IHMC Alex humanoid robot for LEGO assembly
-
-## Features
-
-- **EO-1 Architecture** — Unified decoder-only transformer with Qwen 2.5 VL backbone (3B parameters), combining discrete autoregressive decoding with continuous flow matching
-- **Bimanual Manipulation** — Coordinated two-arm control for assembly tasks on IHMC Alex
-- **LIBERO Evaluation** — Comprehensive benchmark evaluation across spatial, object, goal, and long-horizon tasks
-- **Hydra Configuration** — Hierarchical, composable configs with CLI overrides
-- **Distributed Training** — PyTorch DDP with NCCL backend, optimized for 8x A100 GPUs
-- **HPC Ready** — Pre-configured for Slurm clusters with container support (Docker + Apptainer)
-- **Experiment Tracking** — Weights & Biases integration for logging and visualization
-- **Reproducible** — Deterministic training with seed control and checkpoint management
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        VLA-LEGO Pipeline (EO-1)                         │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│   ┌─────────────┐    ┌─────────────────┐    ┌─────────────────────┐    │
-│   │   Vision    │    │    Language     │    │      Action         │    │
-│   │   Encoder   │───▶│    Reasoning    │───▶│    Generation       │    │
-│   │             │    │                 │    │                     │    │
-│   │  Qwen 2.5   │    │  Interleaved    │    │  Autoregressive +   │    │
-│   │  VL (3B)    │    │  Vision-Text    │    │  Flow Matching      │    │
-│   └─────────────┘    └─────────────────┘    └─────────────────────┘    │
-│                                                                         │
-│   Input: RGB Images + Language Instructions                             │
-│   Output: Continuous Action Trajectories (Bimanual)                     │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-## Installation
-
-### Prerequisites
-
-- Python 3.10+
-- CUDA 11.8+ (for GPU training)
-- Git
-
-### Setup
+## Quick start
 
 ```bash
-# Clone the repository
-git clone https://github.com/PatrizioAcquadro/VLA-LEGO_Project.git
-cd VLA-LEGO_Project
-
-# Create and activate virtual environment
-python -m venv .venv
-source .venv/bin/activate  # Linux/macOS
-# .venv\Scripts\activate   # Windows
-
-# Install in development mode
-pip install -e ".[dev]"
-
-# Set up pre-commit hooks
-pre-commit install
+python3.10 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[sim]'
+vla-lint-assets
+MUJOCO_GL=egl vla-demo --scenario all --output-dir outputs/demo-001
 ```
 
-## Quick Start
+The demo exports robot motion and prearranged tower/triangle layouts. It is a simulation diagnostic, not robot assembly or learned-policy success. See the guides for GPU/model setup, contracts and remaining development.
 
-### Local Training (Debug)
+## Source layout
 
-```bash
-# Quick smoke test (100 steps, small batch)
-python -m train.trainer trainer=debug cluster=local
+```text
+src/vla_lego/       Runtime package
+  sim/             MuJoCo, control, cameras, bricks and assets
+  models/          Qwen/VLA components and losses
+  tracking/        Optional experiment integration
+  configs/         Packaged Hydra configuration
+tests/             Simulation, model and tracking regression suites
+scripts/           Diagnostics, quality checks and container utilities
+infra/gilbreth/    Scheduler jobs and environment setup
+knowledge/         Canonical guides, status and nine phase plans
+.github/workflows/ Automated checks and gated publication
 ```
 
-### Full Training
+Install before running tests or scripts. Python imports use `vla_lego.*`; the `vla-*` CLI names are unchanged. `make check`, `make test` and `make package` provide the main development checks. Git preserves ordinary source history.
 
-```bash
-# Train with base model configuration
-python -m train.trainer cluster=local
-
-# Train with large model on GPU cluster
-python -m train.trainer model=large cluster=gilbreth
-```
-
-### Configuration Overrides
-
-All settings can be overridden from the command line:
-
-```bash
-python -m train.trainer \
-    model=large \
-    trainer.optimizer.lr=1e-5 \
-    trainer.training.batch_size_per_device=16 \
-    trainer.training.max_steps=50000
-```
-
-## Configuration
-
-VLA-LEGO uses [Hydra](https://hydra.cc/) for configuration management. All configs are in `configs/`:
-
-| Config Group | Options | Description |
-|-------------|---------|-------------|
-| `model` | `base`, `large` | Model architecture settings |
-| `trainer` | `default`, `debug` | Training hyperparameters |
-| `data` | `default` | Dataset and dataloader settings |
-| `cluster` | `local`, `gilbreth` | Cluster-specific settings |
-| `logging` | `wandb` | Experiment tracking |
-
-### Example: Custom Configuration
-
-```bash
-# Combine multiple config overrides
-python -m train.trainer \
-    model=large \
-    trainer=default \
-    cluster=local \
-    experiment.seed=123 \
-    trainer.optimizer.lr=5e-5
-```
-
-## Project Structure
-
-```
-VLA-LEGO_Project/
-├── configs/                 # Hydra configuration files
-│   ├── config.yaml          # Main config (composes defaults)
-│   ├── model/               # Model architectures (base, large)
-│   ├── trainer/             # Training settings (default, debug)
-│   ├── data/                # Dataset configuration
-│   ├── cluster/             # Cluster settings (local, gilbreth)
-│   └── logging/             # W&B integration
-├── data/                    # Data loading and processing
-│   ├── dataset.py           # Dataset classes
-│   └── loader.py            # DataLoader utilities
-├── models/                  # Model implementations
-│   ├── transformer.py       # TransformerModel
-│   └── utils.py             # Model utilities
-├── train/                   # Training code
-│   └── trainer.py           # Main Trainer class
-├── eval/                    # Evaluation code
-├── scripts/                 # Utility scripts
-├── tests/                   # Test suite
-├── docs/                    # Documentation
-├── Dockerfile               # Container definition
-└── apptainer.def            # Singularity/Apptainer definition
-```
-
-## Development
-
-### Running Tests
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage report
-pytest --cov=. --cov-report=html
-
-# Run specific test file
-pytest tests/test_models.py -v
-```
-
-### Code Quality
-
-```bash
-# Format code
-black .
-isort .
-
-# Lint
-ruff check .
-
-# Type checking
-mypy sim models train eval --ignore-missing-imports
-
-# Run all checks (pre-commit)
-pre-commit run --all-files
-```
-
-### Validating Configurations
-
-```bash
-# Validate all config combinations
-python scripts/validate_configs.py
-```
-
-## HPC Cluster Usage
-
-### Gilbreth (Purdue)
-
-```bash
-# Submit training job
-sbatch scripts/train.sh
-
-# Interactive session
-sinteractive -A <account> -n 1 -g 1 -t 4:00:00
-
-# Load container and run
-apptainer exec --nv vla-lego.sif python -m train.trainer cluster=gilbreth
-```
-
-See [docs/git-workflow.md](docs/git-workflow.md) for detailed cluster instructions.
-
-## Running with Containers (Deps-Only Model)
-
-Container images contain **only dependencies** (CUDA, Python, PyTorch, etc.). Your code is bind-mounted at runtime from your git checkout.
-
-### Why deps-only?
-
-- **No rebuilds for code changes** — `git pull` updates your code instantly
-- **Reproducibility** — run = (git commit) + (image digest/tag)
-- **Smaller images** — no repo code baked in
-
-### Docker (Lab PC)
-
-```bash
-# Using wrapper script (recommended)
-./scripts/docker-run.sh python -m train.trainer --help
-./scripts/docker-run.sh python -m train.trainer trainer=debug cluster=local
-
-# Or directly with docker
-docker run --rm -it --gpus all \
-    -v $(pwd):/workspace \
-    ghcr.io/patrizioacquadro/vla-lego_project:latest \
-    python -m train.trainer cluster=local
-```
-
-### Apptainer (HPC Cluster)
-
-```bash
-# Download image once (or use release artifact)
-apptainer pull vla-lego.sif docker://ghcr.io/patrizioacquadro/vla-lego_project:latest
-
-# Using wrapper script (recommended)
-./scripts/apptainer-run.sh python -m train.trainer cluster=gilbreth
-```
-
-### Reproducibility
-
-Each container run prints git commit, Python version, and GPU info. This output is saved to `/tmp/vla_run_info.txt` inside the container. Record this for experiment tracking:
-
-```
-=== VLA-LEGO Container Run ===
-Timestamp: 2024-01-15T10:30:00+00:00
-Python: Python 3.10.12
-Git commit: abc1234...
-Git branch: main
-Git dirty: 0 files
-PyTorch: 2.2.0
-CUDA: True
-GPU: NVIDIA A100-SXM4-80GB
-==============================
-```
-
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [docs/git-workflow.md](docs/git-workflow.md) | Git branching and workflow guide |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines |
-
-## Roadmap
-
-- [ ] EO-1 architecture implementation (Qwen 2.5 VL backbone)
-- [ ] Data pipeline for LIBERO benchmark
-- [ ] Flow matching action head integration
-- [ ] Bimanual action space extension
-- [ ] LIBERO benchmark evaluation
-- [ ] IHMC Alex deployment
-
-## Contributing
-
-Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) before submitting a PR.
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-### Academic Institutions
-- **Politecnico di Milano** — Primary institution
-- **Purdue University** — Exchange program host
-
-### Advisors
-- **Prof. Eugenio Culurciello** — Purdue University
-- **Prof. Marcello Restelli** — Politecnico di Milano
-
-### Technical Foundations
-- [EO-1: A Unified Model for Embodied AI](https://arxiv.org/abs/2508.21112) — Base architecture
-- [Lerobot](https://github.com/huggingface/lerobot) — Training framework
-- [LIBERO](https://libero-project.github.io/) — Evaluation benchmark
-- [PyTorch](https://pytorch.org/) — Deep learning framework
-- [Hydra](https://hydra.cc/) — Configuration management
-- [Weights & Biases](https://wandb.ai/) — Experiment tracking
-
----
-
-<div align="center">
-  <sub>Master's Thesis Research — Politecnico di Milano / Purdue University</sub>
-  <br>
-  <sub>Author: Patrizio Acquadro</sub>
-</div>
+[MIT license](LICENSE). Robot asset sources and modifications are recorded in [provenance](src/vla_lego/sim/assets/robots/alex/PROVENANCE.md).

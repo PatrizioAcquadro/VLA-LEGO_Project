@@ -1,0 +1,5 @@
+# Location metadata for artifacts; execution resources are selected by the caller.
+name: local
+paths:
+  scratch: ${paths.root}
+  cache: ${paths.root}/cache

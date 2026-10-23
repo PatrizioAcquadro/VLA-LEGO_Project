@@ -12,7 +12,6 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "viewer: marks tests requiring display/viewer")
     config.addinivalue_line("markers", "smoke: simulation smoke tests (Phase 0.2.4)")
     config.addinivalue_line("markers", "assets: asset loading and linting tests (Phase 0.2.5)")
-    config.addinivalue_line("markers", "lego: LEGO brick tests (Phase 1.2.1)")
     config.addinivalue_line(
         "markers", "vlm: marks tests requiring transformers/VLM deps (Phase 3.1)"
     )
@@ -60,17 +59,3 @@ def device():
     if torch.cuda.is_available():
         return torch.device("cuda:0")
     return torch.device("cpu")
-
-
-@pytest.fixture
-def sample_batch():
-    """Create a sample batch for testing."""
-    batch_size = 4
-    seq_len = 128
-    state_dim = 256
-
-    return {
-        "input_ids": torch.randn(batch_size, seq_len, state_dim),
-        "labels": torch.randn(batch_size, seq_len, state_dim),
-        "attention_mask": torch.ones(batch_size, seq_len, dtype=torch.long),
-    }

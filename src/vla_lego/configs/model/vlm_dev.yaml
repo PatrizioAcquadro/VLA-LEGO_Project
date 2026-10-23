@@ -1,0 +1,6 @@
+defaults:
+  - vlm
+  - _self_
+name: vlm_dev
+vlm:
+  max_seq_length: 4096

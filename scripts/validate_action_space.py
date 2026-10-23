@@ -15,21 +15,17 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
-# Ensure project root is importable
-_project_root = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_project_root))
-
-from sim.action_space import (  # noqa: E402
+from vla_lego.sim.action_space import (
     ACTION_DIM,
     ARM_ACTUATOR_NAMES,
     ARM_DIM,
     GRIPPER_DIM,
     AlexActionSpace,
 )
-from sim.asset_loader import load_scene  # noqa: E402
-from sim.sim_runner import SimRunner  # noqa: E402
+from vla_lego.sim.asset_loader import load_scene
+from vla_lego.sim.sim_runner import SimRunner
 
-ARTIFACT_DIR = _project_root / "logs" / "action_space_validation"
+ARTIFACT_DIR = Path(__file__).resolve().parents[1] / "logs" / "action_space_validation"
 
 
 def print_contract(action_space: AlexActionSpace) -> None:
@@ -145,7 +141,7 @@ def test_action_chunks(
 def generate_video(model: mujoco.MjModel) -> None:
     """Generate a video of the robot executing random actions."""
     try:
-        from sim.offscreen import RenderConfig, RenderedFrame, save_video
+        from vla_lego.sim.offscreen import RenderConfig, RenderedFrame, save_video
     except ImportError:
         print("  Skipped: imageio not available for video generation")
         return

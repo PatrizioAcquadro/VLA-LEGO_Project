@@ -6,7 +6,7 @@
 # the current directory bind-mounted at /workspace.
 #
 # Usage:
-#   ./scripts/docker-run.sh python -m train.trainer --help
+#   ./scripts/docker-run.sh python -m vla_lego.sim.demo --help
 #   ./scripts/docker-run.sh pytest tests/ -v
 #
 # Environment variables:
@@ -27,8 +27,8 @@ if [[ $# -eq 0 ]]; then
     echo "Usage: $0 COMMAND [ARGS...]"
     echo ""
     echo "Examples:"
-    echo "  $0 python -m train.trainer --help"
-    echo "  $0 python -m train.trainer trainer=debug cluster=local"
+    echo "  $0 python -m vla_lego.sim.demo --help"
+    echo "  $0 python scripts/validate_configs.py"
     echo "  $0 pytest tests/ -v"
     echo "  $0 python -c \"import torch; print(torch.cuda.is_available())\""
     echo ""
@@ -47,13 +47,13 @@ fi
 # Build the docker run command
 DOCKER_ARGS=(
     --rm
-    -it
     -v "$(pwd):/workspace"
 )
 
-# Add GPU support if available
-if command -v nvidia-smi &>/dev/null; then
-    DOCKER_ARGS+=(--gpus all)
+# Native rendering/model operation requires the host GPU.
+DOCKER_ARGS+=(--gpus all)
+if [[ -t 0 ]]; then
+    DOCKER_ARGS+=(-it)
 fi
 
 # Pass through relevant environment variables

@@ -1,0 +1,20 @@
+# Maintained model and simulation configuration; no training entrypoint yet.
+defaults:
+  - _self_
+  - model: vla_dev
+  - cluster: local
+  - sim: default
+  - bricks: default
+
+paths:
+  root: ${oc.env:PROJECT_ROOT,.}
+  outputs: ${paths.root}/outputs
+
+experiment:
+  seed: 42
+
+hydra:
+  run:
+    dir: ${paths.outputs}/${now:%Y%m%d_%H%M%S}
+  job:
+    chdir: false

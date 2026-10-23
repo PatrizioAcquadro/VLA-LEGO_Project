@@ -16,13 +16,9 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
-# Ensure project root is importable
-_project_root = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_project_root))
-
-from sim.action_space import ACTION_DIM, ARM_DIM, GRIPPER_DIM  # noqa: E402
-from sim.asset_loader import load_scene  # noqa: E402
-from sim.robot_state import (  # noqa: E402
+from vla_lego.sim.action_space import ACTION_DIM, ARM_DIM, GRIPPER_DIM
+from vla_lego.sim.asset_loader import load_scene
+from vla_lego.sim.robot_state import (
     ARM_JOINT_NAMES,
     GRIPPER_SLICE,
     LEFT_EE_POS_SLICE,
@@ -36,9 +32,9 @@ from sim.robot_state import (  # noqa: E402
     STATE_DIM,
     AlexRobotState,
 )
-from sim.sim_runner import SimRunner  # noqa: E402
+from vla_lego.sim.sim_runner import SimRunner
 
-ARTIFACT_DIR = _project_root / "logs" / "robot_state_validation"
+ARTIFACT_DIR = Path(__file__).resolve().parents[1] / "logs" / "robot_state_validation"
 
 
 def print_contract(rs: AlexRobotState) -> None:

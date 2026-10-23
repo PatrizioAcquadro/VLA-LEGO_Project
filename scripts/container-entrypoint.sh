@@ -28,9 +28,9 @@ if [[ ! -f /workspace/pyproject.toml ]]; then
 fi
 
 # -----------------------------------------------------------------------------
-# Set PYTHONPATH so imports work without pip install
+# Expose the mounted src package in this dependency-only image
 # -----------------------------------------------------------------------------
-export PYTHONPATH=/workspace:${PYTHONPATH:-}
+export PYTHONPATH=/workspace/src:${PYTHONPATH:-}
 
 # -----------------------------------------------------------------------------
 # Collect and print run info for reproducibility
@@ -41,11 +41,11 @@ RUN_INFO_FILE="/tmp/vla_run_info.txt"
     echo "Timestamp: $(date -Iseconds)"
     echo "Python: $(python --version 2>&1)"
 
-    if [[ -d /workspace/.git ]]; then
+    if [[ -e /workspace/.git ]]; then
         cd /workspace
-        GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo 'N/A')
-        GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'N/A')
-        GIT_DIRTY=$(git status --porcelain 2>/dev/null | wc -l)
+        GIT_COMMIT=$(git -c safe.directory=/workspace rev-parse HEAD 2>/dev/null || echo 'N/A')
+        GIT_BRANCH=$(git -c safe.directory=/workspace rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'N/A')
+        GIT_DIRTY=$(git -c safe.directory=/workspace status --porcelain 2>/dev/null | wc -l)
         echo "Git commit: $GIT_COMMIT"
         echo "Git branch: $GIT_BRANCH"
         echo "Git dirty: $GIT_DIRTY files"

@@ -1,10 +1,10 @@
 # ============================================================================
 # CI/CD Pipeline: Unified workflow for testing, building, and releasing
-# - CI jobs run on pushes to main/tags and PRs targeting main
+# - CI jobs run on branch pushes/tags and PRs targeting main
 # - CD jobs (container/apptainer) run only when:
 #   - Tags v* (releases)
 #   - workflow_dispatch (manual trigger)
-#   - Push to main with container-relevant changes (Dockerfile, pyproject.toml, apptainer.def)
+#   - Push to main with container-relevant changes (Dockerfile, pyproject.toml and baked helper scripts)
 # - SBOM generation runs only on tags v*
 # ============================================================================
 
@@ -12,7 +12,7 @@ name: CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: ["**"]
     tags: ['v*']
   pull_request:
     branches: [main]
@@ -57,7 +57,7 @@ jobs:
       - name: Install linting tools
         run: |
           pip install --upgrade pip
-          pip install "ruff==0.14.14" black isort
+          pip install "ruff==0.15.3" "black==26.1.0"
 
       - name: Run Ruff (linting)
         run: ruff check . --output-format=github
@@ -65,16 +65,16 @@ jobs:
       - name: Run Black (formatting check)
         run: black --check --diff .
 
-      - name: Run isort (import sorting check)
-        run: isort --check-only --diff .
+      - name: Check documentation links
+        run: python scripts/check_docs.py
+
 
   # --------------------------------------------------------------------------
-  # Job: Type Checking (Advisory - does not block CI)
+  # Job: Type Checking
   # --------------------------------------------------------------------------
   typecheck:
-    name: Type Check (Advisory)
+    name: Type Check
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -89,17 +89,20 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
+          pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
           pip install -e ".[ci]"
 
       - name: Run mypy
-        run: mypy sim models train eval --ignore-missing-imports
+        run: mypy src/vla_lego --ignore-missing-imports
 
   # --------------------------------------------------------------------------
-  # Job: Unit Tests
+  # Job: Software and Headless Simulation
   # --------------------------------------------------------------------------
   test:
-    name: Unit Tests
+    name: Software and Headless Simulation
     runs-on: ubuntu-latest
+    env:
+      MUJOCO_GL: osmesa
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -111,16 +114,19 @@ jobs:
           cache: 'pip'
           cache-dependency-path: pyproject.toml
 
+      - name: Install CPU renderer
+        run: sudo apt-get update && sudo apt-get install -y libosmesa6 libglfw3
+
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e ".[ci]"
+          pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[ci,sim]"
 
       - name: Run unit tests
         run: |
           pytest tests/ -v \
             --tb=short \
-            --ignore=tests/integration \
             -m "not slow and not gpu"
 
   # --------------------------------------------------------------------------
@@ -143,70 +149,36 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
+          pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
           pip install -e ".[ci]"
 
       - name: Test imports
         run: |
-          python -c "import sim; print('sim OK')"
-          python -c "import data; print('data OK')"
-          python -c "import models; print('models OK')"
-          python -c "import train; print('train OK')"
-          python -c "import eval; print('eval OK')"
+          python -c "import vla_lego.sim; print('sim OK')"
+          python -c "import vla_lego.models; print('models OK')"
 
-      - name: Test config parsing
-        run: |
-          python -c "
-          from hydra import initialize, compose
-          from omegaconf import OmegaConf
+      - name: Validate maintained configuration
+        run: python scripts/validate_configs.py
 
-          with initialize(config_path='configs', version_base=None):
-              cfg = compose(config_name='config', overrides=['cluster=local'])
-              print(OmegaConf.to_yaml(cfg))
-              print('Config parsing OK')
-          "
-
-      - name: Dry run entrypoint
-        run: |
-          python -m train.trainer --help
-          python -m train.trainer \
-            cluster=local \
-            trainer=debug \
-            trainer.training.max_steps=2 \
-            hydra.run.dir=/tmp/vla_lego_smoke \
-            --cfg job 2>&1 | head -100
-          echo "Smoke test completed"
-
-  # --------------------------------------------------------------------------
-  # Job: Config Validation
-  # --------------------------------------------------------------------------
-  config-check:
-    name: Validate Configs
+  package:
+    name: Installed Wheel
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
-          cache-dependency-path: pyproject.toml
-
-      - name: Install dependencies
-        run: |
-          pip install hydra-core omegaconf pyyaml
-
-      - name: Validate all config combinations
-        run: |
-          python scripts/validate_configs.py
+      - run: |
+          pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[ci,sim]"
+      - run: python scripts/check_install.py
 
   # --------------------------------------------------------------------------
   # Job: CI Success Gate (required for branch protection and CD gating)
   # --------------------------------------------------------------------------
   ci-success:
     name: CI Success
-    needs: [lint, test, smoke, config-check]
+    needs: [lint, typecheck, test, smoke, package]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -215,12 +187,13 @@ jobs:
           if [[ "${{ needs.lint.result }}" != "success" ]] || \
              [[ "${{ needs.test.result }}" != "success" ]] || \
              [[ "${{ needs.smoke.result }}" != "success" ]] || \
-             [[ "${{ needs.config-check.result }}" != "success" ]]; then
+             [[ "${{ needs.typecheck.result }}" != "success" ]] || \
+             [[ "${{ needs.package.result }}" != "success" ]]; then
             echo "One or more required CI jobs failed"
             echo "lint: ${{ needs.lint.result }}"
             echo "test: ${{ needs.test.result }}"
             echo "smoke: ${{ needs.smoke.result }}"
-            echo "config-check: ${{ needs.config-check.result }}"
+            echo "typecheck: ${{ needs.typecheck.result }}"
             exit 1
           fi
           echo "All required CI checks passed!"
@@ -260,6 +233,7 @@ jobs:
               - 'pyproject.toml'
               - '.dockerignore'
               - 'scripts/container-entrypoint.sh'
+              - 'scripts/container_dependencies.py'
 
   # --------------------------------------------------------------------------
   # Job: Determine if Container Build is Needed

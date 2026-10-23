@@ -1,0 +1,6 @@
+defaults:
+  - vla
+  - _self_
+name: vla_dev
+vlm:
+  max_seq_length: 4096
