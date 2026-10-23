@@ -20,12 +20,16 @@ def main() -> None:
     parser.add_argument("--split", choices=("train", "development"))
     parser.add_argument("--event-settling", action="store_true")
     parser.add_argument("--mirror", action="store_true")
+    parser.add_argument("--cases", type=Path)
+    parser.add_argument("--case")
     parser.add_argument(
         "--motion-measurement",
         choices=("pose_dwell", "solver_velocity", "pose_step_peaks"),
         default="pose_dwell",
     )
     args = parser.parse_args()
+    if bool(args.cases) != bool(args.case):
+        parser.error("--cases and --case must be provided together")
     if args.record and (not args.family or not args.split):
         parser.error("--record requires --family and --split before collection")
     args.output_dir.mkdir(parents=True, exist_ok=False)
@@ -55,7 +59,17 @@ def main() -> None:
         from vla_lego.isaac.reference import PhysicalReference
         from vla_lego.isaac.task import initial_tower_task
 
-        task = initial_tower_task(mirror=args.mirror)
+        pilot_case = None
+        if args.cases:
+            from vla_lego.isaac.pilot import load_cases
+
+            pilot_case = next(c for c in load_cases(args.cases) if c.name == args.case)
+            if pilot_case.category == "stop":
+                raise ValueError("Stop cases use the stop collector.")
+            if pilot_case.category == "recovery":
+                raise ValueError("Pilot recovery execution is not implemented yet.")
+        task = pilot_case.task() if pilot_case else initial_tower_task(mirror=args.mirror)
+        cooperative_level = pilot_case.cooperative_level if pilot_case else 3
         roles: tuple[tuple[str, int], ...] = (
             ("left", 0),
             ("right", 180),
@@ -65,13 +79,26 @@ def main() -> None:
         )
         if args.mirror:
             roles = tuple(("right" if side == "left" else "left", -yaw) for side, yaw in roles)
-        stabilizer_side, placer_side = roles[2][0], roles[3][0]
+        if pilot_case:
+            roles = tuple(
+                (
+                    "left" if p.xy_m[1] > 0 else "right",
+                    (0 if p.xy_m[1] > 0 else 180) if level < 2 else (-90 if p.xy_m[1] > 0 else 90),
+                )
+                for level, target in enumerate(task.targets)
+                for p in task.placements
+                if p.spec == target
+            )
+        stabilizer_side, placer_side = roles[cooperative_level - 1][0], roles[cooperative_level][0]
         stabilizer_y = 0.20 if stabilizer_side == "left" else -0.20
         env = AssemblyEnvironment(
             args.cache_dir.resolve(),
             placements=task.placements,
             assembly_xy_m=task.assembly_xy_m,
             measure_pose_motion=args.motion_measurement == "pose_step_peaks",
+            mass_scale=pilot_case.mass_scale if pilot_case else 1.0,
+            friction=pilot_case.friction if pilot_case else (0.6, 0.5),
+            appearance=pilot_case.appearance if pilot_case else "legacy",
         )
         env.step(400)
         if args.record:
@@ -84,6 +111,8 @@ def main() -> None:
             )
             env.recorder = recorder
         report["task"] = asdict(task)
+        if pilot_case:
+            report["pilot_case"] = pilot_case.row
         report["robot_joint_names"] = env.robot.data.joint_names
         report["physics_solver_iterations"] = list(env.solver_iterations)
         indices = [
@@ -101,9 +130,9 @@ def main() -> None:
 
         def sample_cooperation(stage: str, truth: list[dict]) -> None:
             evaluator.update(env.time, truth)
-            if not stage.startswith("level3_"):
+            if not stage.startswith(f"level{cooperative_level}_"):
                 return
-            lower, upper = truth[indices[2]], truth[indices[3]]
+            lower, upper = truth[indices[cooperative_level - 1]], truth[indices[cooperative_level]]
             stabilizer = sum(
                 sum(v * v for v in lower["robot_contact_forces_n"][i]) ** 0.5
                 for i in contact_ids[stabilizer_side]
@@ -112,7 +141,7 @@ def main() -> None:
                 sum(v * v for v in upper["robot_contact_forces_n"][i]) ** 0.5
                 for i in contact_ids[placer_side]
             )
-            support = upper["block_contact_forces_n"][indices[2]][2]
+            support = upper["block_contact_forces_n"][indices[cooperative_level - 1]][2]
             if stabilizer > 0.5 and placer > 0.5 and support > 0.05:
                 cooperation.append(
                     {
@@ -173,7 +202,7 @@ def main() -> None:
                 reference.move(f"{prefix}_lift", side, [block[0], block[1], lift_z], yaw)
                 if env.task_truth(index)["block_pose_w"][2] < block[2] + 0.07:
                     raise RuntimeError(f"No verified contact-only lift at {prefix}")
-                if level >= 3:
+                if level >= cooperative_level:
                     # Gain clearance away from the existing tower before the
                     # carried object's footprint crosses into the assembly area.
                     for waypoint, y in enumerate((0.20, 0.10)):
@@ -185,11 +214,16 @@ def main() -> None:
                         )
                 reference.move(f"{prefix}_transport", side, [*task.assembly_xy_m, transit_z], yaw)
                 reference.move(f"{prefix}_place", side, [*task.assembly_xy_m, release_z], yaw)
-                if level == 3:
+                if level == cooperative_level:
                     # Transfer load through actual upper/lower contact before
                     # release, using teacher evidence rather than a hidden policy aid.
                     for descent in range(1, 7):
-                        if env.task_truth(index)["block_contact_forces_n"][indices[2]][2] > 0.05:
+                        if (
+                            env.task_truth(index)["block_contact_forces_n"][
+                                indices[cooperative_level - 1]
+                            ][2]
+                            > 0.05
+                        ):
                             break
                         reference.move(
                             f"{prefix}_touch_{descent}",
@@ -197,7 +231,12 @@ def main() -> None:
                             [*task.assembly_xy_m, release_z - descent * 0.001],
                             yaw,
                         )
-                    if env.task_truth(index)["block_contact_forces_n"][indices[2]][2] <= 0.05:
+                    if (
+                        env.task_truth(index)["block_contact_forces_n"][
+                            indices[cooperative_level - 1]
+                        ][2]
+                        <= 0.05
+                    ):
                         raise RuntimeError("No physical load transfer at cooperative placement.")
                 reference.wait(5 if args.event_settling else 20, f"{prefix}_supported_hold")
                 reference.grip(f"{prefix}_release", side, None)
@@ -206,11 +245,11 @@ def main() -> None:
                 reference.move(
                     f"{prefix}_exit", side, [0.40, 0.40 if side == "left" else -0.40, 1.05], yaw
                 )
-                if level != 2:
+                if level != cooperative_level - 1:
                     reference.park(side)
                 reference.wait(10, f"{prefix}_support_check")
                 verify_support(level, prefix)
-                if level == 2:
+                if level == cooperative_level - 1:
                     # Regrasp the already placed green block from the side. This
                     # keeps both gripper housings out of the upper placement path.
                     green = env.task_truth(index)["block_pose_w"][:3]
@@ -228,7 +267,7 @@ def main() -> None:
                             quaternion_xyzw=[0, 0, 0, 1],
                         )
                     reference.grip("stabilizer_close", stabilizer_side, target.dimensions_m[1])
-                if level == 3:
+                if level == cooperative_level:
                     if stabilizer_pose is None:
                         raise RuntimeError("Missing physical stabilizer setup.")
                     reference.grip("stabilizer_release", stabilizer_side, None)
@@ -264,9 +303,10 @@ def main() -> None:
                     reference.park(stabilizer_side)
                     verify_support(level, "stabilizer withdrawal")
                 bottom += target.dimensions_m[2]
-            if recorder is not None:
-                recorder.task_decision = "complete"
             reference.wait(40, "final_released_dwell")
+            if recorder is not None and evaluator.result()["passed"]:
+                recorder.task_decision = "complete"
+                reference.wait(1, "verified_complete")
             env.capture()
             Image.fromarray(env.observe()["head_rgb"]).save(args.output_dir / "final.png")
             report.update(

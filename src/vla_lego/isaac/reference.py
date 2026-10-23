@@ -60,6 +60,8 @@ class PhysicalReference:
             self.on_sample(stage, truth)
 
     def wait(self, ticks: int, stage: str) -> None:
+        if self.env.recorder is not None:
+            self.env.recorder.stage = stage
         for _ in range(ticks):
             self.env.step(10)
             self.sample(stage)
@@ -76,6 +78,8 @@ class PhysicalReference:
     def joint_move(self, stage: str, side: str, goal) -> None:
         import torch
 
+        if self.env.recorder is not None:
+            self.env.recorder.stage = stage
         _, ids, _ = self.ctrl.frames[side]
         limits = self.env.robot.data.joint_pos_limits.torch[0, ids]
         start = self.env.robot.data.joint_pos.torch[0, ids].clamp(limits[:, 0], limits[:, 1])

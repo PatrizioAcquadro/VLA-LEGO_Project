@@ -12,6 +12,7 @@ class TowerTask:
     placements: tuple[BlockPlacement, ...]
     targets: tuple[BlockSpec, ...]
     assembly_xy_m: tuple[float, float]
+    instruction_text: str | None = None
 
     def __post_init__(self) -> None:
         if len(self.targets) != 5:
@@ -44,6 +45,8 @@ class TowerTask:
 
     @property
     def instruction(self) -> str:
+        if self.instruction_text is not None:
+            return self.instruction_text
         order = ", then ".join(target.description for target in self.targets)
         return f"Build a five-block tower inside the black square, bottom to top: {order}."
 

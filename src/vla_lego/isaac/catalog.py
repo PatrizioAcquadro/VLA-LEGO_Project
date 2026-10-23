@@ -72,6 +72,7 @@ class BlockSpec:
 class BlockPlacement:
     spec: BlockSpec
     xy_m: tuple[float, float]
+    yaw_deg: float = 0.0
 
 
 def catalog() -> tuple[BlockSpec, ...]:

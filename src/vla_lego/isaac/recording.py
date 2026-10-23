@@ -30,6 +30,9 @@ class EpisodeRecorder:
         (directory / "head").mkdir()
         self.frames = (directory / "frames.jsonl").open("w")
         self.evidence = (directory / "privileged.jsonl").open("w")
+        self.annotations = (directory / "annotations.jsonl").open("w")
+        self.stage = "initial_context"
+        self.positive_imitation = True
         self.instruction = instruction
         self.family, self.split = family, split
         self.correction_source = correction_source
@@ -100,10 +103,21 @@ class EpisodeRecorder:
             row["task_decision"] = self.task_decision
         self.frames.write(json.dumps(row) + "\n")
         self.evidence.write(json.dumps({"frame": self.count, "blocks": truth}) + "\n")
+        self.annotations.write(
+            json.dumps(
+                {
+                    "frame": self.count,
+                    "stage": self.stage,
+                    "positive_imitation": self.positive_imitation,
+                }
+            )
+            + "\n"
+        )
         self.count += 1
         if self.count % 20 == 0:
             self.frames.flush()
             self.evidence.flush()
+            self.annotations.flush()
 
     def finish(self, *, verified_success: bool, reason: str, verified_stop: bool = False) -> None:
         if self.closed:
@@ -112,6 +126,7 @@ class EpisodeRecorder:
             raise ValueError("A verified stop is distinct from completion and requires labels.")
         self.frames.close()
         self.evidence.close()
+        self.annotations.close()
         metadata = {
             "instruction": self.instruction,
             "generation_family": self.family,

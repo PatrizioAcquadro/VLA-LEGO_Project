@@ -41,6 +41,7 @@ class AssemblyEnvironment:
         assembly_xy_m: tuple[float, float] | None = None,
         solver_iterations: tuple[int, int] = (8, 4),
         measure_pose_motion: bool = False,
+        appearance: str = "legacy",
     ):
         import isaaclab.sim as sim_utils
         import omni.usd
@@ -118,9 +119,16 @@ class AssemblyEnvironment:
             spawn=sim_utils.CuboidCfg(
                 size=(0.70, 1.10, 0.05),
                 collision_props=PhysxCollisionPropertiesCfg(),
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.4, 0.35, 0.3)),
+                visual_material=sim_utils.PreviewSurfaceCfg(
+                    diffuse_color=(
+                        (0.72, 0.72, 0.70)
+                        if appearance == "neutral_side"
+                        else (0.67, 0.56, 0.43) if appearance == "light_wood" else (0.4, 0.35, 0.3)
+                    ),
+                    roughness=0.9,
+                ),
                 physics_material=sim_utils.RigidBodyMaterialCfg(
-                    static_friction=0.6, dynamic_friction=0.5, restitution=0.0
+                    static_friction=friction[0], dynamic_friction=friction[1], restitution=0.0
                 ),
             ),
             init_state=AssetBaseCfg.InitialStateCfg(pos=(0.60, 0.0, TABLE_TOP - 0.025)),
@@ -175,13 +183,21 @@ class AssemblyEnvironment:
                         mass=placement.spec.mass_kg * mass_scale
                     ),
                     activate_contact_sensors=True,
-                    visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=placement.spec.rgb),
+                    visual_material=sim_utils.PreviewSurfaceCfg(
+                        diffuse_color=placement.spec.rgb, roughness=0.9, metallic=0.0
+                    ),
                     physics_material=sim_utils.RigidBodyMaterialCfg(
                         static_friction=friction[0], dynamic_friction=friction[1], restitution=0.0
                     ),
                 ),
                 init_state=RigidObjectCfg.InitialStateCfg(
-                    pos=(*placement.xy_m, TABLE_TOP + placement.spec.dimensions_m[2] / 2 + 0.06)
+                    pos=(*placement.xy_m, TABLE_TOP + placement.spec.dimensions_m[2] / 2 + 0.06),
+                    rot=(
+                        0.0,
+                        0.0,
+                        math.sin(math.radians(placement.yaw_deg) / 2),
+                        math.cos(math.radians(placement.yaw_deg) / 2),
+                    ),
                 ),
             )
             setattr(cfg, name, block_cfg)
@@ -190,7 +206,17 @@ class AssemblyEnvironment:
         )
         camera_cfg.data_types = ["rgb"]
         cfg.key_light = AssetBaseCfg(
-            prim_path="/World/KeyLight", spawn=sim_utils.DistantLightCfg(intensity=1200)
+            prim_path="/World/KeyLight",
+            spawn=sim_utils.DistantLightCfg(
+                intensity=1000 if appearance == "neutral_side" else 1200
+            ),
+            init_state=AssetBaseCfg.InitialStateCfg(
+                rot=(
+                    (0.0, math.sin(math.radians(15)), 0.0, math.cos(math.radians(15)))
+                    if appearance == "neutral_side"
+                    else (0.0, 0.0, 0.0, 1.0)
+                )
+            ),
         )
         cfg.replicate_physics = False
         self.scene = InteractiveScene(cfg)
@@ -198,6 +224,15 @@ class AssemblyEnvironment:
         self.blocks = tuple(self.scene[name] for name in self.block_names)
         self.block = self.blocks[0]
         self.stage = omni.usd.get_context().get_stage()
+        if appearance != "legacy":
+            # Equal pair coefficients keep PhysX material combination from defeating
+            # the declared effective block/table/jaw friction profile.
+            for prim in self.stage.Traverse():
+                if prim.HasAPI(UsdPhysics.MaterialAPI):
+                    material = UsdPhysics.MaterialAPI(prim)
+                    material.CreateStaticFrictionAttr().Set(friction[0])
+                    material.CreateDynamicFrictionAttr().Set(friction[1])
+                    material.CreateRestitutionAttr().Set(0.0)
         self.contact_robot_paths = [
             str(prim.GetPath())
             for prim in Usd.PrimRange(self.stage.GetPrimAtPath("/World/envs/env_0/Robot"))

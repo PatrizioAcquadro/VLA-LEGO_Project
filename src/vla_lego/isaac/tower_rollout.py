@@ -67,8 +67,10 @@ def main() -> None:
         limits = env.robot.data.joint_pos_limits.torch[0, ids].cpu().numpy()
         evaluator = TowerEvaluator(task, env.contact_robot_paths)
         evaluator.update(env.time, [env.task_truth(i) for i in range(len(env.blocks))])
-        chunk, inference_seconds = [], []
-        representation = decision_names = None
+        chunk: list = []
+        inference_seconds: list[float] = []
+        representation = None
+        decision_names: list[str] = []
         terminal, executed, clipped_ticks = "budget", 0, 0
         report["autonomy_started"] = True
         with (args.output_dir / "trace.jsonl").open("w") as trace:
