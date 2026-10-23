@@ -4,6 +4,7 @@ defaults:
   - model: vla_dev
   - cluster: local
   - sim: default
+  - bricks: default
 
 paths:
   root: ${oc.env:PROJECT_ROOT,.}

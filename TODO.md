@@ -10,7 +10,7 @@ Pre-existing user changes to preserve:
 ## Tasks
 
 - [x] 0. Retire synthetic training, evaluation and their exclusive consumers.
-- [ ] 1. Replace LEGO-specific simulation with lightweight bricks, resets and task evaluation.
+- [x] 1. Replace LEGO-specific simulation with lightweight bricks, resets and task evaluation.
 - [ ] 2. Consolidate simulation demos and retain meaningful behavioral tests.
 - [ ] 3. Align packaging, configuration, containers and CI with maintained workflows.
 - [ ] 4. Consolidate canonical knowledge and all implementation plans, including historical outcomes and the future LEGO extension.
