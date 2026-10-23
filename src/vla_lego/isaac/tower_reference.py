@@ -15,7 +15,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--cache-dir", type=Path, required=True)
+    parser.add_argument("--record", action="store_true")
+    parser.add_argument("--family")
+    parser.add_argument("--split", choices=("train", "development"))
     args = parser.parse_args()
+    if args.record and (not args.family or not args.split):
+        parser.error("--record requires --family and --split before collection")
     args.output_dir.mkdir(parents=True, exist_ok=False)
     report: dict = {
         "kind": "physical_tower_reference",
@@ -25,6 +30,7 @@ def main() -> None:
     }
     app = None
     reference = None
+    recorder = None
     cooperation: list[dict] = []
     started = time.monotonic()
     try:
@@ -35,6 +41,7 @@ def main() -> None:
 
         from vla_lego.isaac.environment import TABLE_TOP, AssemblyEnvironment
         from vla_lego.isaac.evaluation import TowerEvaluator
+        from vla_lego.isaac.recording import EpisodeRecorder
         from vla_lego.isaac.reference import PhysicalReference
         from vla_lego.isaac.task import initial_tower_task
 
@@ -43,6 +50,14 @@ def main() -> None:
             args.cache_dir.resolve(), placements=task.placements, assembly_xy_m=task.assembly_xy_m
         )
         env.step(400)
+        if args.record:
+            recorder = EpisodeRecorder(
+                args.output_dir / "recording",
+                task.instruction,
+                family=args.family,
+                split=args.split,
+            )
+            env.recorder = recorder
         report["task"] = asdict(task)
         report["robot_joint_names"] = env.robot.data.joint_names
         indices = [
@@ -121,6 +136,16 @@ def main() -> None:
                 reference.move(f"{prefix}_lift", side, [block[0], block[1], lift_z], yaw)
                 if env.task_truth(index)["block_pose_w"][2] < block[2] + 0.07:
                     raise RuntimeError(f"No verified contact-only lift at {prefix}")
+                if level >= 3:
+                    # Gain clearance away from the existing tower before the
+                    # carried object's footprint crosses into the assembly area.
+                    for waypoint, y in enumerate((0.20, 0.10)):
+                        reference.move(
+                            f"{prefix}_carry_clearance_{waypoint}",
+                            side,
+                            [task.assembly_xy_m[0], y if side == "left" else -y, transit_z],
+                            yaw,
+                        )
                 reference.move(f"{prefix}_transport", side, [*task.assembly_xy_m, transit_z], yaw)
                 reference.move(f"{prefix}_place", side, [*task.assembly_xy_m, release_z], yaw)
                 if level == 3:
@@ -217,6 +242,18 @@ def main() -> None:
         report.update(error=traceback.format_exc())
         raise
     finally:
+        if recorder is not None:
+            recorder.finish(
+                verified_success=bool(report.get("passed")),
+                reason=report.get(
+                    "error",
+                    (
+                        "complete task admitted"
+                        if report.get("passed")
+                        else "full task evaluator rejected"
+                    ),
+                ),
+            )
         if reference is not None:
             report["stages"] = reference.stages
             report["max_native_limit_projection_rad"] = reference.max_limit_projection
