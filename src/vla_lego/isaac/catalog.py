@@ -68,6 +68,12 @@ class BlockSpec:
         return f"{self.scale} {self.color} {self.shape}"
 
 
+@dataclass(frozen=True)
+class BlockPlacement:
+    spec: BlockSpec
+    xy_m: tuple[float, float]
+
+
 def catalog() -> tuple[BlockSpec, ...]:
     """Full 2 x 2 x 6 simulation crossing; physical sample measurements stay open."""
     return tuple(

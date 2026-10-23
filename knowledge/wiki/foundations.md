@@ -25,7 +25,19 @@ bash scripts/isaac-run.sh -m vla_lego.isaac.smoke \
 
 Use a new output directory for each attempt. The probe writes a separate deployable observation, privileged truth report, head image and scene layer. It checks native GPU tensors, fixed root, a loose block settling under gravity, both WSG32 leader commands and RGB. These are component checks, not a grasp, assembly demonstration or learned result. Table height (0.80 m), 40 mm/25 g cube and friction (0.6/0.5) are provisional diagnostic assumptions, not the admitted printable catalog or physical acceptance calibration.
 
-The low-level joint API currently validates finite positions against the shared URDF limits. Actuator effort/velocity limits are enforced by that shared configuration. Collision-aware Cartesian control, stale-command handling and the finalized VLA interface remain implementation work; do not expose this diagnostic joint API to a physical robot.
+The low-level joint API validates finite positions against the shared URDF limits and admits target changes only on the 20 Hz clock. Per-tick target increments are bounded at 0.025 rad for arm joints and 0.020 m for WSG leaders; shared actuator effort/velocity limits also apply. Collision-aware planning, stale-command handling and the finalized VLA interface remain implementation work; this diagnostic API is not a physical robot interface.
+
+## Loose scene and causal learning diagnostic
+
+`vla_lego.isaac.scene_probe` creates five ordered targets and two attribute distractors, all loose on the table. The assembly square is purely visual. The initial native scene passed support, release, non-stacking and marker checks; all seven pieces were inspected in the head image. Its reach coverage and full assembly remain unqualified.
+
+`grasp_probe --record --family FAMILY --split train` records head RGB and named proprioception before each applied joint target's ten native physics steps. Privileged object/contact evidence is written separately. Command changes and image captures share the control clock; image capture does not advance physics. Generation families receive a split before action-window construction. Failed references retain context-only labels.
+
+The first two collection attempts both physically completed the single-block reference. The first was excluded from positive imitation because diagnostic single-step rendering shifted command timing; its original evidence is preserved with a separate audit. The corrected second attempt contains 1,066 aligned frames. `vla_lego.isaac.replay` reproduced all recorded joint states exactly and completed the same physical release using only the recorded commands, with no teacher or object assistance.
+
+`vla_lego.pretrained.convert_dataset` admits only verified clock-aligned positives and converts their deployable inputs/actions to a local LeRobot dataset. GPU H.264 encoding uses no B-frames with two-frame GOPs; the initial failed encoder attempt is retained. The admitted diagnostic dataset has one training family/episode, zero measured camera age, 18 state signals, 16 actions and one head view. It is not a five-block pilot or the nominal/recovery/stop corpus.
+
+`vla_lego.pretrained.train` runs upstream SmolVLA training in the isolated LeRobot environment, derives the actual Alex input features, uses train-only statistics, and disables Hub/W&B publication. The first bounded run updated 99,880,992 of 450,046,176 parameters for 200 CUDA steps (batch eight), saving weights, processors, optimizer, scheduler and RNG. A separate resumed run restored data order and reached step 220. This establishes actual adaptation and reload/resume; it does not establish autonomous task behavior or model selection.
 
 ## TCP control and single-block reference
 

@@ -17,6 +17,14 @@ The new Alex003 interface below is a design direction, not implemented dimension
 
 The VLA owns piece selection, sequence, cooperation and recovery. A low-level controller may reject or constrain a motion for physical reasons, but may not replace the policy's task choice. Keep requested and actually applied commands distinguishable in data and reporting.
 
+### Provisional SmolVLA pilot decision
+
+The first pilot uses **16 named absolute position targets**: seven left-arm joints, seven right-arm joints, then the left/right WSG32 leader opening in meters. Joint order is `vla_lego.isaac.environment.ARM_JOINTS` followed by `JAW_JOINTS`; arm units are radians, opening limits are `[0,0.034]` m. There is no spine/torso action. This is an evidence-driven provisional alternative to the Cartesian direction above, not a reuse of the legacy 17-D tensor.
+
+The contact-only reference executes these targets and has verified grasp/transport/release. Three attempted conversions to an EEF-only differential interface failed near straight-arm/limit configurations, despite native FK/Jacobian parity. Direct joint targets preserve the physically executed control interface and match SmolVLA's supported joint-action adaptation path; no extra task planner supplies autonomous choices. All attempted Cartesian results remain in `outputs/blackwell/grasp-007` through `grasp-009`; source variants are retained in ignored experiment outputs.
+
+The initial sensor contract remains head RGB plus 18 named arm/neck/WSG leader positions and velocities, excluding simulated followers and object truth. The model smoke consumed positions only. Selection, normalization, model input feature subset, explicit deployable completion/abstention outputs and final timing/chunk execution remain open until the pilot. Fit statistics only on training data. Keep geometric EEF planning in the collection teacher and separate evaluation channels. If the joint-action candidate cannot meet development behavior, reconsider representation using that failure evidence; do not declare this pilot choice task-qualified.
+
 Finalize this contract in Phase 2 using the minimum scene and Phase 3 pilot before mass collection. Reproduce real observation availability and latency in simulation; missing hardware signals are not filled with simulator truth. The [data strategy](data.md) owns synchronization, source mapping and leakage prevention.
 
 Phase 2 first supplies a provisional contract for pilot collection, then records concrete values for the final model. Required decisions are the ordered available signals, units/reference frames, pose/action meaning, gripper convention, observation history, normalization, predicted/executed horizon and the capture/replanning/command rates. These values are not left to different consumers to guess. A changed contract requires reconciling earlier pilot data or recollecting it.

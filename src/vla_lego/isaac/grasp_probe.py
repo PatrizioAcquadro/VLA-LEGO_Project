@@ -13,10 +13,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--cache-dir", type=Path, required=True)
+    parser.add_argument("--record", action="store_true")
+    parser.add_argument("--family")
+    parser.add_argument("--split", choices=("train", "development"))
     args = parser.parse_args()
+    if args.record and (not args.family or not args.split):
+        parser.error("--record requires --family and --split before collection")
     args.output_dir.mkdir(parents=True, exist_ok=False)
     started = time.monotonic()
     app = None
+    recorder = None
     report: dict = {"kind": "reference_grasp_probe", "learned": False, "stages": []}
     try:
         from isaaclab.app import AppLauncher
@@ -28,10 +34,19 @@ def main() -> None:
         from vla_lego.isaac.control import ToolController
         from vla_lego.isaac.environment import TABLE_TOP, AssemblyEnvironment
         from vla_lego.isaac.kinematics import ArmKinematics
+        from vla_lego.isaac.recording import EpisodeRecorder
 
         env = AssemblyEnvironment(args.cache_dir.resolve())
         ctrl = ToolController(env)
         env.step(400)
+        if args.record:
+            recorder = EpisodeRecorder(
+                args.output_dir / "recording",
+                "Pick up the small red cube and place it back on the table in the open space to the left.",
+                family=args.family,
+                split=args.split,
+            )
+            env.recorder = recorder
         initial = {side: ctrl.pose(side)[0].tolist() for side in ("left", "right")}
         report["initial_tool_poses_xyzw"] = initial
         report["initial_truth"] = env.task_truth()
@@ -99,7 +114,7 @@ def main() -> None:
                         and feedback["rotation_error_rad"] < 0.04
                     ):
                         break
-                env.step(1, render=True)
+                env.capture()
                 Image.fromarray(env.observe()["head_rgb"]).save(args.output_dir / f"{name}.png")
                 current = ctrl.pose(side)[0]
                 position_error = float((current[:3] - current.new_tensor(position)).norm())
@@ -120,7 +135,7 @@ def main() -> None:
                     [0.8, 0.35 if side == "left" else -0.35, 0.0, -1.8, 0.0, 0.0, 0.0]
                 )
                 joint_move(f"{side}_park", side, parked)
-                env.step(1, render=True)
+                env.capture()
                 Image.fromarray(env.observe()["head_rgb"]).save(
                     args.output_dir / f"{side}_park.png"
                 )
@@ -189,6 +204,10 @@ def main() -> None:
         report.update(passed=False, error=traceback.format_exc())
         raise
     finally:
+        if recorder is not None:
+            recorder.finish(
+                verified_success=bool(report.get("passed")), reason=report.get("error", "complete")
+            )
         report["wall_seconds_before_app_close"] = time.monotonic() - started
         (args.output_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         if app is not None:

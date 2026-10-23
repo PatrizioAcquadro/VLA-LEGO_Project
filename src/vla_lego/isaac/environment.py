@@ -5,7 +5,8 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-from vla_lego.isaac.catalog import BlockSpec
+from vla_lego.isaac.catalog import BlockPlacement, BlockSpec
+from vla_lego.isaac.recording import EpisodeRecorder
 
 ARM_JOINTS = tuple(
     f"{side}_{joint}"
@@ -30,7 +31,15 @@ BLOCK_SIZE = DIAGNOSTIC_BLOCK.dimensions_m[0]
 class AssemblyEnvironment:
     """One contact-only scene; task truth is exposed separately from observations."""
 
-    def __init__(self, cache_dir: Path):
+    def __init__(
+        self,
+        cache_dir: Path,
+        *,
+        placements: tuple[BlockPlacement, ...] | None = None,
+        mass_scale: float = 1.0,
+        friction: tuple[float, float] = (0.6, 0.5),
+        assembly_xy_m: tuple[float, float] | None = None,
+    ):
         import isaaclab.sim as sim_utils
         import omni.usd
         import torch
@@ -55,6 +64,15 @@ class AssemblyEnvironment:
 
         if not torch.cuda.is_available():
             raise RuntimeError("Native CUDA is required; CPU fallback is not supported.")
+        self.placements = (
+            (BlockPlacement(DIAGNOSTIC_BLOCK, (0.45, 0.15)),) if placements is None else placements
+        )
+        if not self.placements:
+            raise ValueError("The task scene requires at least one loose block.")
+        if not math.isfinite(mass_scale) or mass_scale <= 0:
+            raise ValueError("Mass scale must be positive and finite.")
+        if len(friction) != 2 or any(not math.isfinite(v) or v < 0 for v in friction):
+            raise ValueError("Static/dynamic friction must be finite and non-negative.")
         self.sim = sim_utils.SimulationContext(
             sim_utils.SimulationCfg(
                 dt=DT,
@@ -97,21 +115,66 @@ class AssemblyEnvironment:
             ),
             init_state=AssetBaseCfg.InitialStateCfg(pos=(0.60, 0.0, TABLE_TOP - 0.025)),
         )
-        cfg.block = RigidObjectCfg(
-            prim_path="{ENV_REGEX_NS}/Block",
-            spawn=sim_utils.CuboidCfg(
-                size=DIAGNOSTIC_BLOCK.dimensions_m,
-                rigid_props=PhysxRigidBodyPropertiesCfg(disable_gravity=False),
-                collision_props=PhysxCollisionPropertiesCfg(contact_offset=0.001, rest_offset=0.0),
-                mass_props=sim_utils.MassPropertiesCfg(mass=DIAGNOSTIC_BLOCK.mass_kg),
-                activate_contact_sensors=True,
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=DIAGNOSTIC_BLOCK.rgb),
-                physics_material=sim_utils.RigidBodyMaterialCfg(
-                    static_friction=0.6, dynamic_friction=0.5, restitution=0.0
-                ),
-            ),
-            init_state=RigidObjectCfg.InitialStateCfg(pos=(0.45, 0.15, TABLE_TOP + 0.08)),
+        if assembly_xy_m is not None:
+            if any(not math.isfinite(value) for value in assembly_xy_m):
+                raise ValueError("Assembly marker coordinates must be finite.")
+            for index, (dx, dy, size) in enumerate(
+                (
+                    (-0.06, 0.0, (0.004, 0.12, 0.0001)),
+                    (0.06, 0.0, (0.004, 0.12, 0.0001)),
+                    (0.0, -0.06, (0.12, 0.004, 0.0001)),
+                    (0.0, 0.06, (0.12, 0.004, 0.0001)),
+                )
+            ):
+                setattr(
+                    cfg,
+                    f"marker_{index}",
+                    AssetBaseCfg(
+                        prim_path=f"{{ENV_REGEX_NS}}/Marker_{index}",
+                        spawn=sim_utils.CuboidCfg(
+                            size=size,
+                            visual_material=sim_utils.PreviewSurfaceCfg(
+                                diffuse_color=(0.01, 0.01, 0.01)
+                            ),
+                        ),
+                        init_state=AssetBaseCfg.InitialStateCfg(
+                            pos=(assembly_xy_m[0] + dx, assembly_xy_m[1] + dy, TABLE_TOP + 0.0001)
+                        ),
+                    ),
+                )
+        self.block_names = tuple(
+            "block" if i == 0 else f"block_{i}" for i in range(len(self.placements))
         )
+        self.block_paths = tuple(
+            f"/World/envs/env_0/Block{f'_{i}' if i else ''}" for i in range(len(self.placements))
+        )
+        for index, (name, placement) in enumerate(
+            zip(self.block_names, self.placements, strict=True)
+        ):
+            if any(not math.isfinite(value) for value in placement.xy_m):
+                raise ValueError("Block coordinates must be finite.")
+            block_cfg = RigidObjectCfg(
+                prim_path=self.block_paths[index].replace("/World/envs/env_0", "{ENV_REGEX_NS}"),
+                spawn=sim_utils.CuboidCfg(
+                    size=placement.spec.dimensions_m,
+                    rigid_props=PhysxRigidBodyPropertiesCfg(disable_gravity=False),
+                    collision_props=PhysxCollisionPropertiesCfg(
+                        contact_offset=0.001, rest_offset=0.0
+                    ),
+                    mass_props=sim_utils.MassPropertiesCfg(
+                        mass=placement.spec.mass_kg * mass_scale
+                    ),
+                    activate_contact_sensors=True,
+                    visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=placement.spec.rgb),
+                    physics_material=sim_utils.RigidBodyMaterialCfg(
+                        static_friction=friction[0], dynamic_friction=friction[1], restitution=0.0
+                    ),
+                ),
+                init_state=RigidObjectCfg.InitialStateCfg(
+                    pos=(*placement.xy_m, TABLE_TOP + placement.spec.dimensions_m[2] / 2 + 0.06)
+                ),
+            )
+            setattr(cfg, name, block_cfg)
         cfg.zed_model, camera_cfg, _ = make_zed_x_mini_cfgs(
             "{ENV_REGEX_NS}/ZED_X_Mini", resolution="SVGA"
         )
@@ -121,7 +184,9 @@ class AssemblyEnvironment:
         )
         cfg.replicate_physics = False
         self.scene = InteractiveScene(cfg)
-        self.robot, self.block = self.scene["robot"], self.scene["block"]
+        self.robot = self.scene["robot"]
+        self.blocks = tuple(self.scene[name] for name in self.block_names)
+        self.block = self.blocks[0]
         self.stage = omni.usd.get_context().get_stage()
         self.contact_robot_paths = [
             str(prim.GetPath())
@@ -132,14 +197,18 @@ class AssemblyEnvironment:
         # URDF nests link prims, so each link must be activated explicitly.
         for body_path in self.contact_robot_paths:
             sim_utils.activate_contact_sensors(body_path, stage=self.stage)
-        self.block_contact = ContactSensor(
-            ContactSensorCfg(
-                prim_path="/World/envs/env_0/Block",
-                filter_prim_paths_expr=self.contact_robot_paths,
-                update_period=0.0,
-                history_length=1,
+        self.block_contacts = tuple(
+            ContactSensor(
+                ContactSensorCfg(
+                    prim_path=path,
+                    filter_prim_paths_expr=[*self.contact_robot_paths, *self.block_paths],
+                    update_period=0.0,
+                    history_length=1,
+                )
             )
+            for path in self.block_paths
         )
+        self.block_contact = self.block_contacts[0]
         author_alex_purdue_zed_x_mini_mount(
             self.stage, "/World/envs/env_0/Robot", "/World/envs/env_0/ZED_X_Mini"
         )
@@ -157,12 +226,19 @@ class AssemblyEnvironment:
             raise RuntimeError("Incomplete native robot contact reporting.")
         self.scene.reset()
         self.target = self.robot.data.default_joint_pos.torch.clone()
+        self.requested_target = self.target.clone()
         self.robot.set_joint_position_target_index(target=self.target)
         self.jaw_ids = [self.robot.data.joint_names.index(name) for name in JAW_JOINTS]
         self.time = 0.0
+        self.image_time: float | None = None
+        self.physics_step = 0
+        self.last_command_time = 0.0
+        self.recorder: EpisodeRecorder | None = None
 
     def set_joint_targets(self, targets: dict[str, float]) -> None:
         """Named low-level targets, bounded by the shared robot's hard limits."""
+        if self.physics_step % 10:
+            raise RuntimeError("Joint target changes must occur on the 20 Hz control clock.")
         for name, value in targets.items():
             index = self.robot.data.joint_names.index(name)
             lower, upper = self.robot.data.joint_pos_limits.torch[0, index].tolist()
@@ -170,8 +246,13 @@ class AssemblyEnvironment:
                 raise ValueError(f"Target outside joint limits: {name}={value}")
             if name.endswith("FOLLOWER"):
                 raise ValueError("The shared mimic constraint owns follower targets.")
-            self.target[0, index] = value
+            self.requested_target[0, index] = value
+            # One 20 Hz target tick, shared by teachers and autonomous policies.
+            step = (0.4 if name in JAW_JOINTS else 0.5) * 0.05
+            previous = float(self.target[0, index])
+            self.target[0, index] = min(max(value, previous - step), previous + step)
         self.robot.set_joint_position_target_index(target=self.target)
+        self.last_command_time = self.time
 
     def step(self, count: int = 1, *, render: bool = False) -> None:
         from ihmc_alex_isaaclab.robots.purdue_physics import ALEX_PURDUE_WSG32_MIMIC_JOINT_PAIRS
@@ -179,6 +260,18 @@ class AssemblyEnvironment:
         followers = {name for name, _ in ALEX_PURDUE_WSG32_MIMIC_JOINT_PAIRS}
         driven = [i for i, name in enumerate(self.robot.data.joint_names) if name not in followers]
         for tick in range(count):
+            if self.recorder is not None and self.physics_step % 10 == 0:
+                self.capture()
+                action_names = (*ARM_JOINTS, *JAW_JOINTS)
+                action_ids = [self.robot.data.joint_names.index(name) for name in action_names]
+                self.recorder.record(
+                    self.observe(),
+                    self.target[0, action_ids].detach().cpu().numpy(),
+                    action_names,
+                    [self.task_truth(i) for i in range(len(self.blocks))],
+                    requested_action=self.requested_target[0, action_ids].detach().cpu().numpy(),
+                    command_time_s=self.last_command_time,
+                )
             gravity = self.robot.data.gravity_compensation_forces.torch[
                 :, self.robot.num_base_dofs :
             ][:, driven]
@@ -186,36 +279,51 @@ class AssemblyEnvironment:
             self.scene.write_data_to_sim()
             self.sim.step(render=render and tick == count - 1)
             self.scene.update(DT)
-            self.block_contact.update(DT)
-            self.time += DT
+            for sensor in self.block_contacts:
+                sensor.update(DT)
+            self.physics_step += 1
+            self.time = self.physics_step * DT
         if render:
-            self.sim.forward()
-            self.sim.render_context.update_transforms(self.sim.get_physics_step_count())
-            self.camera.update(DT * count, force_recompute=True)
+            self.capture()
+
+    def capture(self) -> None:
+        self.sim.forward()
+        self.sim.render_context.update_transforms(self.sim.get_physics_step_count())
+        elapsed = DT if self.image_time is None else max(DT, self.time - self.image_time)
+        self.camera.update(elapsed, force_recompute=True)
+        self.image_time = self.time
 
     def observe(self) -> dict:
         """Only deployable sensor/joint signals, never block poses or teacher stages."""
         names = (*ARM_JOINTS, "NECK_Z", "NECK_Y", *JAW_JOINTS)
+        if self.image_time is None:
+            raise RuntimeError("Capture a head frame before requesting observations.")
         indices = [self.robot.data.joint_names.index(name) for name in names]
         return {
             "timestamp_s": self.time,
+            "image_timestamp_s": self.image_time,
             "head_rgb": self.camera.data.output["rgb"].torch[0, :, :, :3].cpu().numpy(),
             "joint_names": names,
             "joint_position": self.robot.data.joint_pos.torch[0, indices].detach().cpu().numpy(),
             "joint_velocity": self.robot.data.joint_vel.torch[0, indices].detach().cpu().numpy(),
         }
 
-    def task_truth(self) -> dict:
+    def task_truth(self, block_index: int = 0) -> dict:
         """Privileged diagnostic/evaluator channel, excluded from observe()."""
-        matrix = self.block_contact.data.force_matrix_w.torch[0, 0]
+        sensor = self.block_contacts[block_index]
+        block = self.blocks[block_index]
+        matrix = sensor.data.force_matrix_w.torch[0, 0]
+        robot_forces = matrix[: len(self.contact_robot_paths)]
         return {
-            "block_pose_w": self.block.data.root_pose_w.torch[0].tolist(),
-            "block_velocity_w": self.block.data.root_vel_w.torch[0].tolist(),
-            "robot_contact_force_n": float(matrix.norm(dim=-1).sum()),
+            "block_pose_w": block.data.root_pose_w.torch[0].tolist(),
+            "block_velocity_w": block.data.root_vel_w.torch[0].tolist(),
+            "robot_contact_force_n": float(robot_forces.norm(dim=-1).sum()),
+            "robot_contact_forces_n": robot_forces.tolist(),
+            "block_contact_forces_n": matrix[len(self.contact_robot_paths) :].tolist(),
             # PhysX GPU filters cannot target the static table. Retain the residual
             # as environmental contact, with geometry establishing table support.
             "nonrobot_contact_force_n": float(
-                (self.block_contact.data.net_forces_w.torch[0, 0] - matrix.sum(dim=0)).norm()
+                (sensor.data.net_forces_w.torch[0, 0] - matrix.sum(dim=0)).norm()
             ),
         }
 

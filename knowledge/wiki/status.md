@@ -1,15 +1,16 @@
 # Status
 
-Reviewed October 23, 2026. The persistent implementation goal covers [Phases 0–6](implementation_phases/index.md). Phase 0's native simulation foundation and a Phase 1 minimum single-block reference are verified on Blackwell. No trained assembly checkpoint or qualified corpus exists. Prior component evidence is preserved in [validation](validation.md).
+Reviewed October 23, 2026. The persistent implementation goal covers [Phases 0–6](implementation_phases/index.md). Native simulation, a single-block physical reference and causal command replay are verified on Blackwell. A real SmolVLA single-block training diagnostic has run and resumed; autonomous behavior, the full assembly checkpoint and the qualified corpus remain unverified. Prior component evidence is preserved in [validation](validation.md).
 
 ## Implementation progress
 
 | Phase | Verified state and remaining work |
 |---|---|
 | 0 | Native CUDA PhysX scene consumes shared Alex003 WSG32/UMI, measured pedestal and official head ZED without copied task robot assets. Gravity/table support, both jaw commands, fixed root, finite states and visible block passed. Ownership, separate environments and staged retirement documented in [foundations](foundations.md). |
-| 1 | One complete contact-only single-block reference after four retained failed development attempts: about 98 mm lift, transport, release and 2 s stable dwell. Shared TCP/Jacobian/FK validated. Two source STLs and the 24-combination simulation catalog imported with license. Five-block cooperative reference, broader reach/contact calibration and evaluator remain open; [evidence and limits](foundations.md#tcp-control-and-single-block-reference). |
-| 2 | GR00T installed; inference blocked by demonstrated gated-backbone HTTP 403. SmolVLA's actual pretrained weights passed CUDA prediction on recorded Alex sensors; predictions were not executed. [Model evidence](models.md#native-feasibility-work--october-23-2026). Alex adaptation, final interfaces, Orin execution and physical WSG32 readiness remain open. |
-| 3–6 | Teacher, pilot/corpus, training and autonomous qualification remain pending. |
+| 1 | Contact-only single-block reference, shared TCP/FK checks, licensed source catalog and loose five-target/two-distractor scene verified. Full cooperative reference, broader calibration and evaluator remain open; [evidence and limits](foundations.md#tcp-control-and-single-block-reference). |
+| 2 | GR00T native inference blocked by gated-backbone HTTP 403. SmolVLA pretrained CUDA inference and actual bounded Alex adaptation/reload/resume demonstrated. Provisional named joint interface follows three retained failed Cartesian replays. Autonomous task-conditioned pilot, final selection, Orin and physical WSG32 readiness remain open. |
+| 3–5 | Causal single-block diagnostic: two collected attempts, one admitted positive episode/1,066 frames; exact native command replay; 200 optimization steps plus 20 resumed steps. Full-task nominal/recovery/stop pilot, corpus and autonomous training iterations remain pending. [Diagnostic boundaries](foundations.md#loose-scene-and-causal-learning-diagnostic). |
+| 6 | Independent frozen nominal/generalization/recovery campaigns have not begun. |
 
 Native evidence is retained locally in `outputs/blackwell/foundation-001` through `foundation-005` and on Blackwell in `/home/pacquadr/projects/vla-lego/outputs`. Attempts 001–002 failed during bootstrap/configuration. Attempt 003 passed physical component checks but visual inspection found the table outside the image; 004 preserved the failed visibility check. Attempt 005 passed all nine component/visibility checks (5.04 simulated seconds; 16.29 s to report before app close), and its head image was inspected. This is component readiness only. Actual printed-block measurements, physical WSG32 command/feedback/stop and concurrent Orin timing remain open; the user's exception permits independent simulation work with declared assumptions.
 
