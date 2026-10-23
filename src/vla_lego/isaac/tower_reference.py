@@ -18,6 +18,11 @@ def main() -> None:
     parser.add_argument("--record", action="store_true")
     parser.add_argument("--family")
     parser.add_argument("--split", choices=("train", "development"))
+    parser.add_argument(
+        "--motion-measurement",
+        choices=("pose_dwell", "solver_velocity", "pose_step_peaks"),
+        default="pose_dwell",
+    )
     args = parser.parse_args()
     if args.record and (not args.family or not args.split):
         parser.error("--record requires --family and --split before collection")
@@ -27,6 +32,7 @@ def main() -> None:
         "learned": False,
         "passed": False,
         "qualification": False,
+        "motion_measurement": args.motion_measurement,
     }
     app = None
     reference = None
@@ -47,7 +53,10 @@ def main() -> None:
 
         task = initial_tower_task()
         env = AssemblyEnvironment(
-            args.cache_dir.resolve(), placements=task.placements, assembly_xy_m=task.assembly_xy_m
+            args.cache_dir.resolve(),
+            placements=task.placements,
+            assembly_xy_m=task.assembly_xy_m,
+            measure_pose_motion=args.motion_measurement == "pose_step_peaks",
         )
         env.step(400)
         if args.record:
@@ -60,6 +69,7 @@ def main() -> None:
             env.recorder = recorder
         report["task"] = asdict(task)
         report["robot_joint_names"] = env.robot.data.joint_names
+        report["physics_solver_iterations"] = list(env.solver_iterations)
         indices = [
             next(i for i, p in enumerate(task.placements) if p.spec == t) for t in task.targets
         ]
@@ -67,7 +77,9 @@ def main() -> None:
         left_ids = [i for i, path in enumerate(env.contact_robot_paths) if "left_WSG32" in path]
         if not right_ids or not left_ids:
             raise RuntimeError("Cannot identify actual WSG bodies for cooperation evidence.")
-        evaluator = TowerEvaluator(task, env.contact_robot_paths)
+        evaluator = TowerEvaluator(
+            task, env.contact_robot_paths, motion_measurement=args.motion_measurement
+        )
 
         def sample_cooperation(stage: str, truth: list[dict]) -> None:
             evaluator.update(env.time, truth)

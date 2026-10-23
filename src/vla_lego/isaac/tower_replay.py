@@ -17,7 +17,9 @@ def main() -> None:
     parser.add_argument("--solver-iterations", type=int, nargs=2, default=(8, 4))
     parser.add_argument("--baseline-replay", type=Path)
     parser.add_argument("--record", action="store_true")
-    parser.add_argument("--motion-measurement", choices=("solver_velocity", "pose_step_peaks"))
+    parser.add_argument(
+        "--motion-measurement", choices=("pose_dwell", "solver_velocity", "pose_step_peaks")
+    )
     args = parser.parse_args()
     source = json.loads((args.source_run / "report.json").read_text())
     recording = args.source_run / "recording"

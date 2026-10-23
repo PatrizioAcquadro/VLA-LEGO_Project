@@ -1,5 +1,7 @@
 """Analytical scorer fixtures only; these are not physical demonstrations."""
 
+import math
+
 import pytest
 
 from vla_lego.isaac.catalog import BlockPlacement
@@ -196,3 +198,45 @@ def test_legacy_trace_cannot_silently_acquire_pose_motion_admission():
         state.pop("motion_window_s")
     with pytest.raises(ValueError, match="fresh physics-step measurements"):
         scorer.update(0.0, row)
+
+
+@pytest.mark.parametrize("displacement,passed", [(0.002, True), (0.01, False)])
+def test_functional_dwell_accepts_millimeter_motion_and_rejects_centimeter_drift(
+    displacement, passed
+):
+    task = initial_tower_task()
+    scorer = construction(task, motion_measurement="pose_dwell")
+    start = scorer.previous_time + 0.05
+    for tick in range(41):
+        row = states(task, levels=5)
+        row[4]["block_pose_w"][0] += 0.002 + displacement * tick / 40
+        # Numerical velocity chatter is not a displacement or loss of support.
+        row[4]["block_velocity_w"] = [0.02, 0, 0, 0.2, 0, 0]
+        scorer.update(start + tick * 0.05, row)
+    result = scorer.result()
+    assert result["passed"] == passed
+    assert result["dwell_corner_displacement_m"][4] == pytest.approx(displacement)
+
+
+def test_functional_dwell_detects_rocking_even_without_center_motion():
+    task = initial_tower_task()
+    scorer = construction(task, motion_measurement="pose_dwell")
+    row = states(task, levels=5)
+    row[4]["block_pose_w"][3:] = [math.sin(0.2), 0, 0, math.cos(0.2)]
+    scorer.update(scorer.previous_time + 0.05, row)
+    result = scorer.result()
+    assert not result["passed"]
+    assert result["dwell_corner_displacement_m"][4] > 0.003
+
+
+def test_functional_dwell_still_requires_support_and_release():
+    task = initial_tower_task()
+    scorer = construction(task, motion_measurement="pose_dwell")
+    row = states(task, levels=5)
+    grip(row, 4, "right")
+    row[4]["block_contact_forces_n"][3][2] = 0
+    scorer.update(scorer.previous_time + 0.05, row)
+    result = scorer.result()
+    assert not result["passed"]
+    assert not result["last_sample_checks"][0]["ordered_support"]
+    assert not result["last_sample_checks"][0]["released"]

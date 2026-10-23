@@ -15,8 +15,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--motion-measurement", choices=("pose_dwell", "solver_velocity", "pose_step_peaks")
+    )
     args = parser.parse_args()
     source = json.loads((args.run_dir / "report.json").read_text())
+    source_measurement = source.get("motion_measurement", "solver_velocity")
+    measurement = args.motion_measurement or source_measurement
     raw = source["task"]
     task = TowerTask(
         tuple(
@@ -37,7 +42,7 @@ def main() -> None:
                 evaluator = TowerEvaluator(
                     task,
                     paths,
-                    motion_measurement=source.get("motion_measurement", "solver_velocity"),
+                    motion_measurement=measurement,
                 )
             if paths != contact_paths:
                 raise ValueError("Contact-body ordering changed inside the source episode.")
@@ -50,6 +55,8 @@ def main() -> None:
         source_run=str(args.run_dir.resolve()),
         source_outcome_preserved=True,
         source_report_passed=source["passed"],
+        source_motion_measurement=source_measurement,
+        criterion_reassessment=measurement != source_measurement,
         qualification=False,
     )
     args.output_dir.mkdir(parents=True, exist_ok=False)

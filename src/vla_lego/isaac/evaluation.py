@@ -10,6 +10,7 @@ from vla_lego.isaac.environment import TABLE_TOP
 from vla_lego.isaac.task import TowerTask
 
 POSITION_TOLERANCE_M = 0.003
+DWELL_DISPLACEMENT_M = 0.003
 CONTACT_ZERO_N = 1e-6
 PERIOD_S = 0.05
 DWELL_S = 2.0
@@ -21,21 +22,34 @@ def _norm(vector) -> float:
     return math.sqrt(sum(float(v) ** 2 for v in vector))
 
 
-def _footprint_inside(task: TowerTask, index: int, pose: list[float]) -> bool:
+def _corners(dimensions, pose):
     x, y, z, w = pose[3:]
     length = _norm((x, y, z, w))
     if not length > 0:
-        return False
+        return ()
     x, y, z, w = (v / length for v in (x, y, z, w))
-    rotation_xy = (
+    rotation = (
         (1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)),
         (2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)),
+        (2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)),
     )
-    half = [v / 2 for v in task.placements[index].spec.dimensions_m]
+    return tuple(
+        tuple(
+            pose[axis] + sum(r * v for r, v in zip(rotation[axis], corner, strict=True))
+            for axis in range(3)
+        )
+        for corner in itertools.product(*[(-v / 2, v / 2) for v in dimensions])
+    )
+
+
+def _footprint_inside(task: TowerTask, index: int, pose: list[float]) -> bool:
+    corners = _corners(task.placements[index].spec.dimensions_m, pose)
+    if not corners:
+        return False
     return all(
-        abs(pose[axis] - task.assembly_xy_m[axis])
-        + sum(abs(r) * h for r, h in zip(rotation_xy[axis], half, strict=True))
+        abs(corner[axis] - task.assembly_xy_m[axis])
         <= MARKER_INNER_HALF_M + 1e-6  # Float32 geometry tolerance, not a physical margin.
+        for corner in corners
         for axis in (0, 1)
     )
 
@@ -52,9 +66,9 @@ class TowerEvaluator:
         task: TowerTask,
         robot_contact_paths: list[str],
         *,
-        motion_measurement: str = "solver_velocity",
+        motion_measurement: str = "pose_dwell",
     ):
-        if motion_measurement not in ("solver_velocity", "pose_step_peaks"):
+        if motion_measurement not in ("solver_velocity", "pose_step_peaks", "pose_dwell"):
             raise ValueError("Unknown stability measurement protocol.")
         self.motion_measurement = motion_measurement
         self.task = task
@@ -92,6 +106,8 @@ class TowerEvaluator:
         return min(forces) > CONTACT_ZERO_N and sum(forces) > 0.5
 
     def _stable(self, state: dict) -> bool:
+        if self.motion_measurement == "pose_dwell":
+            return True  # Displacement is assessed over the complete dwell in result().
         if self.motion_measurement == "solver_velocity":
             return (
                 _norm(state["block_velocity_w"][:3]) < 0.01
@@ -210,7 +226,29 @@ class TowerEvaluator:
                                     }
                         else:
                             progress["contact_start"] = None
-        self.history.append((time_s, checks))
+        self.history.append((time_s, checks, tuple(tuple(b["block_pose_w"]) for b in blocks)))
+
+    def _dwell_displacements(self) -> list[float]:
+        if not self.history:
+            return []
+        displacements = []
+        for index, placement in enumerate(self.task.placements):
+            reference = _corners(placement.spec.dimensions_m, self.history[0][2][index])
+            displacements.append(
+                max(
+                    (
+                        _norm(tuple(b - a for a, b in zip(start, current, strict=True)))
+                        for row in self.history
+                        for start, current in zip(
+                            reference,
+                            _corners(placement.spec.dimensions_m, row[2][index]),
+                            strict=False,
+                        )
+                    ),
+                    default=math.inf,
+                )
+            )
+        return displacements
 
     def result(self) -> dict:
         times = [row[0] for row in self.history]
@@ -219,10 +257,17 @@ class TowerEvaluator:
             and times[-1] - times[0] >= DWELL_S - 1e-8
             and all(b - a <= PERIOD_S + 1e-8 for a, b in zip(times, times[1:], strict=False))
         )
+        displacements = (
+            self._dwell_displacements() if self.motion_measurement == "pose_dwell" else []
+        )
         passing = [
             assignment
             for i, assignment in enumerate(self.assignments)
             if complete_dwell
+            and (
+                self.motion_measurement != "pose_dwell"
+                or all(displacements[index] <= DWELL_DISPLACEMENT_M for index in assignment)
+            )
             and all(
                 all(
                     value
@@ -244,6 +289,10 @@ class TowerEvaluator:
         return {
             "passed": all(checks.values()),
             "motion_measurement": self.motion_measurement,
+            "dwell_corner_displacement_m": displacements,
+            "dwell_displacement_limit_m": (
+                DWELL_DISPLACEMENT_M if self.motion_measurement == "pose_dwell" else None
+            ),
             "checks": checks,
             "final_assignment_indices": list(passing[0]) if passing else None,
             "cooperation_events": list(self.events.values()),
