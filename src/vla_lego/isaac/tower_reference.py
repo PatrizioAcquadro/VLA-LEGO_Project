@@ -66,8 +66,6 @@ def main() -> None:
             pilot_case = next(c for c in load_cases(args.cases) if c.name == args.case)
             if pilot_case.category == "stop":
                 raise ValueError("Stop cases use the stop collector.")
-            if pilot_case.category == "recovery":
-                raise ValueError("Pilot recovery execution is not implemented yet.")
         task = pilot_case.task() if pilot_case else initial_tower_task(mirror=args.mirror)
         cooperative_level = pilot_case.cooperative_level if pilot_case else 3
         roles: tuple[tuple[str, int], ...] = (
@@ -80,10 +78,12 @@ def main() -> None:
         if args.mirror:
             roles = tuple(("right" if side == "left" else "left", -yaw) for side, yaw in roles)
         if pilot_case:
+            if (args.family, args.split) != (pilot_case.row["family"], pilot_case.row["split"]):
+                raise ValueError("Collection family/split differs from the approved case.")
             roles = tuple(
                 (
                     "left" if p.xy_m[1] > 0 else "right",
-                    (0 if p.xy_m[1] > 0 else 180) if level < 2 else (-90 if p.xy_m[1] > 0 else 90),
+                    -90 if p.xy_m[1] > 0 else 90,
                 )
                 for level, target in enumerate(task.targets)
                 for p in task.placements
@@ -108,11 +108,18 @@ def main() -> None:
                 family=args.family,
                 split=args.split,
                 task_decisions=True,
+                collection_case=pilot_case.row if pilot_case else None,
             )
             env.recorder = recorder
         report["task"] = asdict(task)
         if pilot_case:
             report["pilot_case"] = pilot_case.row
+            report["simulation_assumptions"] = {
+                "mass_scale": pilot_case.mass_scale,
+                "effective_friction": pilot_case.friction,
+                "table_lighting": pilot_case.appearance,
+                "measured_print_properties": False,
+            }
         report["robot_joint_names"] = env.robot.data.joint_names
         report["physics_solver_iterations"] = list(env.solver_iterations)
         indices = [
@@ -178,19 +185,80 @@ def main() -> None:
                         )
                     expected_bottom += task.targets[prior].dimensions_m[2]
 
+            def engage_stabilizer():
+                # Restrain the lower stack using actual bilateral jaw contact. This
+                # keeps both gripper housings out of the upper placement path.
+                lower = env.task_truth(indices[cooperative_level - 1])["block_pose_w"][:3]
+                stabilizer_pose = [lower[0] - 0.01, lower[1], lower[2]]
+                for name, xyz in (
+                    ("high", [lower[0] - 0.01, stabilizer_y, 1.02]),
+                    ("center", [lower[0] - 0.01, lower[1], 1.02]),
+                    ("above", [lower[0] - 0.01, lower[1], lower[2] + 0.06]),
+                    ("grasp", stabilizer_pose),
+                ):
+                    reference.move(
+                        f"stabilizer_{name}",
+                        stabilizer_side,
+                        xyz,
+                        quaternion_xyzw=[0, 0, 0, 1],
+                    )
+                reference.grip(
+                    "stabilizer_close",
+                    stabilizer_side,
+                    task.targets[cooperative_level - 1].dimensions_m[1],
+                )
+                return stabilizer_pose
+
             for side in ("left", "right"):
                 reference.park(side)
+            env.capture()
+            Image.fromarray(env.observe()["head_rgb"]).save(args.output_dir / "initial.png")
+            env.stage.Export(str(args.output_dir / "scene.usda"))
             bottom = TABLE_TOP
             stabilizer_pose = None
             # Per-piece yaw is a teacher planning choice, never a policy observation.
-            for level, (target, index, (side, yaw)) in enumerate(
+            for level, (target, index, (side, base_yaw)) in enumerate(
                 zip(task.targets, indices, roles, strict=True)
             ):
                 prefix = f"level{level}"
+                yaw = float(base_yaw)
+                if (
+                    pilot_case
+                    and pilot_case.category == "recovery"
+                    and level == pilot_case.error_level
+                    and pilot_case.row["error"] != "physically consequential incomplete placement"
+                ):
+                    from vla_lego.isaac.pilot_faults import pick_fault
+
+                    report["fault"] = pick_fault(reference, pilot_case, task, index)
+                    verify_support(level - 1, "pick fault correction")
+                if level == cooperative_level:
+                    stabilizer_pose = engage_stabilizer()
                 block = env.task_truth(index)["block_pose_w"][:3]
+                if pilot_case:
+                    yaw += task.placements[index].yaw_deg
+                    if task.placements[index].yaw_deg:
+                        release = bottom + target.dimensions_m[2] / 2 + 0.06
+                        yaw = reference.grasp_yaw(
+                            side,
+                            yaw,
+                            [
+                                [0.40, 0.40 if side == "left" else -0.40, 1.05],
+                                [min(block[0], 0.46), block[1], 1.02],
+                                [block[0], block[1], block[2] + 0.10],
+                                [block[0], block[1], block[2] + 0.06],
+                                [block[0], block[1], block[2] + 0.16],
+                                [*task.assembly_xy_m, release + 0.025],
+                                [*task.assembly_xy_m, release],
+                                [*task.assembly_xy_m, release + target.dimensions_m[2] / 2 + 0.025],
+                            ],
+                        )
                 for stage, xyz in (
                     ("edge", [0.40, 0.40 if side == "left" else -0.40, 1.05]),
-                    ("source_high", [block[0], block[1], 1.02]),
+                    (
+                        "source_high",
+                        [min(block[0], 0.46) if pilot_case else block[0], block[1], 1.02],
+                    ),
                     ("approach", [block[0], block[1], block[2] + 0.10]),
                     ("descend", [block[0], block[1], block[2] + 0.06]),
                 ):
@@ -213,6 +281,17 @@ def main() -> None:
                             yaw,
                         )
                 reference.move(f"{prefix}_transport", side, [*task.assembly_xy_m, transit_z], yaw)
+                if (
+                    pilot_case
+                    and pilot_case.category == "recovery"
+                    and level == pilot_case.error_level
+                    and pilot_case.row["error"] == "physically consequential incomplete placement"
+                ):
+                    from vla_lego.isaac.pilot_faults import placement_fault
+
+                    report["fault"] = placement_fault(
+                        reference, pilot_case, task, indices, side, yaw, release_z
+                    )
                 reference.move(f"{prefix}_place", side, [*task.assembly_xy_m, release_z], yaw)
                 if level == cooperative_level:
                     # Transfer load through actual upper/lower contact before
@@ -245,28 +324,9 @@ def main() -> None:
                 reference.move(
                     f"{prefix}_exit", side, [0.40, 0.40 if side == "left" else -0.40, 1.05], yaw
                 )
-                if level != cooperative_level - 1:
-                    reference.park(side)
+                reference.park(side)
                 reference.wait(10, f"{prefix}_support_check")
                 verify_support(level, prefix)
-                if level == cooperative_level - 1:
-                    # Regrasp the already placed green block from the side. This
-                    # keeps both gripper housings out of the upper placement path.
-                    green = env.task_truth(index)["block_pose_w"][:3]
-                    stabilizer_pose = [green[0] - 0.01, green[1], green[2]]
-                    for name, xyz in (
-                        ("high", [green[0] - 0.01, stabilizer_y, 1.02]),
-                        ("center", [green[0] - 0.01, green[1], 1.02]),
-                        ("above", [green[0] - 0.01, green[1], green[2] + 0.06]),
-                        ("grasp", stabilizer_pose),
-                    ):
-                        reference.move(
-                            f"stabilizer_{name}",
-                            stabilizer_side,
-                            xyz,
-                            quaternion_xyzw=[0, 0, 0, 1],
-                        )
-                    reference.grip("stabilizer_close", stabilizer_side, target.dimensions_m[1])
                 if level == cooperative_level:
                     if stabilizer_pose is None:
                         raise RuntimeError("Missing physical stabilizer setup.")
@@ -311,6 +371,9 @@ def main() -> None:
             Image.fromarray(env.observe()["head_rgb"]).save(args.output_dir / "final.png")
             report.update(
                 completed_reference_sequence=True,
+                final_tool_poses={
+                    side: reference.ctrl.pose(side)[0].tolist() for side in ("left", "right")
+                },
                 final_truth=[env.task_truth(i) for i in range(len(env.blocks))],
                 cooperation_samples=cooperation,
                 passed=evaluator.result()["passed"],

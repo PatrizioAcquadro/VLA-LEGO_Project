@@ -61,6 +61,16 @@ A declared disturbance may create a failure state for recovery collection or eva
 
 ## Initial case distribution
 
+### Approved 50+10 collection milestone
+
+The October 23 collection assignment is governed by the approved local specification `outputs/pilot-planning-20261023/pilot-proposal.md` and exact `pilot-cases.csv`. Its fixed usable-episode targets are 30 nominal / 15 recovery / 5 stop for training and 6 / 3 / 1 for development. Families T1–T5 and all descendants stay in training; D1–D2 and descendants stay in development. The former seven-object tower seed is auxiliary evidence and does not fill this eight-object pilot.
+
+`vla_lego.isaac.pilot` loads the approved CSV, rejects reserved combinations and constructs eight-object scenes with the declared order, stabilizer, cooperation level and variation. `tower_reference --cases ... --case ...` executes complete nominal/corrective cases; `pilot_stop` replaces a missing requested piece while keeping eight visible objects. Recoveries are explicitly teacher-induced robot commands: missed lift, incomplete load transfer or actual distractor lift/return. Their physical consequences must be verified before admission. No object teleports, retention welds or external object forces assist completion.
+
+Raw recordings retain 20 Hz head RGB, 18 measured positions/velocities, 16 applied joint/jaw targets, requested targets and English instructions. Continue/complete/abstain are output labels. `privileged.jsonl` contains simulator evidence; `annotations.jsonl` contains stages and `positive_imitation`. Neither file is a policy input. False mask values retain error context while excluding those actions from positive imitation. Future chunking must propagate these masks to every affected target, with all transformations staying inside the original family/split. The historical diagnostic converter does not yet consume these pilot masks; it must not silently convert corrective prefixes into positive targets.
+
+`pilot_audit --root ... --cases ... --output ...` lists all attempts, checks case identity, synchronized files/clocks, finite named signals, required terminal labels and the assigned physical cooperative event, and indexes admitted cases separately from missing cases. Execution evidence and source snapshots live in `outputs/pilot-collection-20261023` on Blackwell; local visual/report copies use the same task directory. Configurations and passing contract tests are not collected episodes. Collection yield and visual acceptance are reported only from finalized attempts. Printing, physical measurement and Orin checks do not block this simulated milestone. Stop after delivery; subsequent adaptation and roadmap progression require a new assignment.
+
 | Share of attempted collection cases | Coverage |
 |---|---|
 | **60% varied nominal cases** | Piece identity, dimensions, colors, initial positions, instructions, valid order, distractors and arm roles. |

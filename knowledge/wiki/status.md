@@ -1,6 +1,6 @@
 # Status
 
-Reviewed October 23, 2026. The persistent implementation goal covers [Phases 0–6](implementation_phases/index.md). Native simulation, a single-block physical reference and causal command replay are verified on Blackwell. A real SmolVLA single-block training diagnostic has run and resumed; autonomous behavior, the full assembly checkpoint and the qualified corpus remain unverified. Prior component evidence is preserved in [validation](validation.md).
+Reviewed October 23, 2026. The active assignment is the approved **50 training + 10 development episode data pilot**, as described in [data strategy](data.md#approved-5010-collection-milestone). It supersedes earlier automatic progression through Phases 0–6: stop at corpus delivery, with no training, expansion or qualification campaign. Native simulation, a single-block physical reference and causal command replay are verified on Blackwell. Earlier SmolVLA diagnostics do not establish autonomous assembly; the full assembly checkpoint and qualified corpus remain unverified. Prior component evidence is preserved in [validation](validation.md).
 
 ## Implementation progress
 

@@ -33,6 +33,24 @@ class PhysicalReference:
         self.max_limit_projection = 0.0
         self.event_settling = event_settling
 
+    def grasp_yaw(self, side: str, preferred: float, waypoints: list[list[float]]) -> float:
+        """Choose a reachable equivalent jaw approach for square-section blocks."""
+        _, ids, _ = self.ctrl.frames[side]
+        failures = []
+        for offset in (0, 90, -90, 180):
+            yaw = preferred + offset
+            seed = self.env.robot.data.joint_pos.torch[0, ids]
+            try:
+                for xyz in waypoints:
+                    seed = self.solvers[side].solve(
+                        self.env.target.new_tensor([*xyz, *self.orientation(side, yaw).tolist()]),
+                        seed,
+                    )
+                return yaw
+            except RuntimeError as error:
+                failures.append(str(error))
+        raise RuntimeError(f"No reachable square-face grasp approach: {failures}")
+
     def orientation(self, side: str, yaw_deg: float):
         from isaaclab.utils.math import quat_mul
 

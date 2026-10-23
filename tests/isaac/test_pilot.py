@@ -64,3 +64,16 @@ def test_stage_and_error_mask_are_separate_from_policy_signals(tmp_path):
     assert not {"stage", "positive_imitation", "hidden"} & frame.keys()
     assert frame["action"] == [0.1]
     assert annotation == {"frame": 0, "stage": "level3_wrong_pick", "positive_imitation": False}
+
+
+def test_recovery_cannot_be_admitted_without_a_physical_fault(tmp_path):
+    recorder = EpisodeRecorder(
+        tmp_path / "episode",
+        "instruction",
+        family="T1",
+        split="train",
+        collection_case={"category": "recovery"},
+    )
+    with pytest.raises(ValueError, match="physically verified"):
+        recorder.finish(verified_success=True, reason="a nominal result is insufficient")
+    recorder.finish(verified_success=False, reason="no fault")

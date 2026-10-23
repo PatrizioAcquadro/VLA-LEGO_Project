@@ -18,6 +18,7 @@ class EpisodeRecorder:
         split: str,
         correction_source: dict | None = None,
         task_decisions: bool = False,
+        collection_case: dict | None = None,
     ):
         if not family or split not in ("train", "development"):
             raise ValueError(
@@ -37,6 +38,8 @@ class EpisodeRecorder:
         self.family, self.split = family, split
         self.correction_source = correction_source
         self.task_decisions = task_decisions
+        self.collection_case = collection_case
+        self.fault_verified = False
         self.task_decision = "continue"
         self.count = 0
         self.closed = False
@@ -124,6 +127,13 @@ class EpisodeRecorder:
             return
         if verified_stop and (verified_success or not self.task_decisions):
             raise ValueError("A verified stop is distinct from completion and requires labels.")
+        if (
+            verified_success
+            and self.collection_case is not None
+            and self.collection_case["category"] == "recovery"
+            and not self.fault_verified
+        ):
+            raise ValueError("A corrective case requires a physically verified fault.")
         self.frames.close()
         self.evidence.close()
         self.annotations.close()
@@ -140,7 +150,11 @@ class EpisodeRecorder:
             "verified_stop": verified_stop,
             "task_decisions_recorded": self.task_decisions,
             "supervision_role": (
-                ("verified_correction" if self.correction_source else "verified_nominal")
+                (
+                    "verified_correction"
+                    if self.correction_source or self.fault_verified
+                    else "verified_nominal"
+                )
                 if verified_success
                 else "verified_stop" if verified_stop else "context_only"
             ),
@@ -151,5 +165,8 @@ class EpisodeRecorder:
         }
         if self.correction_source is not None:
             metadata["correction_source"] = self.correction_source
+        if self.collection_case is not None:
+            metadata["collection_case"] = self.collection_case
+            metadata["teacher_induced_fault"] = self.fault_verified
         (self.directory / "episode.json").write_text(json.dumps(metadata, indent=2) + "\n")
         self.closed = True

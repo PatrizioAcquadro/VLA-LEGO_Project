@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import random
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from vla_lego.isaac.catalog import BlockPlacement, BlockSpec
@@ -75,7 +75,11 @@ class PilotCase:
 
     @property
     def appearance(self) -> str:
-        return "neutral_side" if self.name.endswith("N4") or self.name == "D1-N3" else "light_wood"
+        return (
+            "neutral_side"
+            if self.name.endswith("N4") or self.name in ("D1-N3", "D2-N3")
+            else "light_wood"
+        )
 
     def task(self) -> TowerTask:
         targets = tuple(piece(value) for value in self.row["order"].split(" > "))
@@ -84,22 +88,47 @@ class PilotCase:
             inventory[inventory.index(piece(self.row["missing_piece"]))] = piece(
                 self.row["replacement"]
             )
+        if self.name.startswith("T") and self.name.endswith("N2"):
+            base_row = dict(
+                self.row,
+                case=self.name[:-1] + "1",
+                order=" > ".join(reversed(self.row["order"].split(" > "))),
+                stabilizer="right" if self.row["stabilizer"] == "left" else "left",
+                variation="nominal spread",
+            )
+            base = PilotCase(base_row, self.ordinal - 1).task()
+            return replace(
+                base,
+                targets=targets,
+                placements=tuple(
+                    replace(p, xy_m=(p.xy_m[0], -p.xy_m[1]), yaw_deg=-p.yaw_deg)
+                    for p in base.placements
+                ),
+                instruction_text=FORMS[self.ordinal % 3].format(
+                    ", then ".join(
+                        t.description.replace("prism", "rectangular prism") for t in targets
+                    )
+                ),
+            )
         # Permute all eight source positions so location does not encode target/distractor.
         rng = random.Random(20261023 + self.ordinal * 101)
-        slots = [(x, y) for x in (0.45, 0.60) for y in (-0.45, -0.15, 0.15, 0.45)]
+        slots = [(x, y) for x in (0.43, 0.54) for y in (-0.45, -0.15, 0.15, 0.45)]
         rng.shuffle(slots)
         if self.category != "stop":
             stabilizer = self.row["stabilizer"]
-            for index, side in (
+            requirements = [
                 (self.cooperative_level - 1, stabilizer),
                 (self.cooperative_level, "right" if stabilizer == "left" else "left"),
-            ):
+            ]
+            if self.name.endswith("N1") and self.name.startswith("T"):
+                requirements.append((1, "right" if stabilizer == "left" else "left"))
+            protected = {index for index, _ in requirements}
+            for index, side in requirements:
                 if (slots[index][1] > 0) != (side == "left"):
                     other = next(
                         j
                         for j, xy in enumerate(slots)
-                        if j not in (self.cooperative_level - 1, self.cooperative_level)
-                        and (xy[1] > 0) == (side == "left")
+                        if j not in protected and (xy[1] > 0) == (side == "left")
                     )
                     slots[index], slots[other] = slots[other], slots[index]
         relocated = (
@@ -108,7 +137,7 @@ class PilotCase:
         placements = []
         for spec, (x, y) in zip(inventory, slots, strict=True):
             # Independent reachable layouts; N3 adds a 6 cm relocation and 15–35° yaw.
-            x += ((self.ordinal % 3) - 1) * 0.015
+            x += ((self.ordinal % 3) - 1) * 0.01
             if relocated:
                 y += -0.06 if y > 0 else 0.06
             yaw = rng.choice((-35.0, -25.0, 20.0, 30.0)) if relocated else 0.0

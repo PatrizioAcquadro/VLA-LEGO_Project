@@ -1,0 +1,105 @@
+"""Teacher-induced faults produced and corrected only through native robot commands."""
+
+from __future__ import annotations
+
+from vla_lego.isaac.pilot import PilotCase, piece
+from vla_lego.isaac.task import TowerTask
+
+
+def pick_fault(reference, case: PilotCase, task: TowerTask, target_index: int) -> dict:
+    env = reference.env
+    recorder = env.recorder
+    wrong = case.row["error"] == "wrong distractor picked"
+    index = (
+        next(i for i, p in enumerate(task.placements) if p.spec == piece(case.row["wrong_piece"]))
+        if wrong
+        else target_index
+    )
+    placement = task.placements[index]
+    side = "left" if placement.xy_m[1] > 0 else "right"
+    yaw = (-90 if side == "left" else 90) + placement.yaw_deg
+    source = env.task_truth(index)["block_pose_w"][:3]
+    y = (
+        source[1]
+        if wrong
+        else source[1] + (-0.09 if abs(source[1]) > 0.3 else 0.09) * (1 if source[1] > 0 else -1)
+    )
+    prefix = f"level{case.error_level}_fault_{'wrong_piece' if wrong else 'missed_grasp'}"
+    recorder.positive_imitation = False
+    for phase, xyz in (
+        ("edge", [0.40, 0.40 if side == "left" else -0.40, 1.05]),
+        ("source_high", [min(source[0], 0.46), y, 1.02]),
+        ("approach", [source[0], y, source[2] + 0.10]),
+        ("descend", [source[0], y, source[2] + 0.06]),
+    ):
+        reference.move(f"{prefix}_{phase}", side, xyz, yaw)
+    reference.grip(prefix + "_close", side, placement.spec.dimensions_m[1])
+    reference.move(prefix + "_lift", side, [source[0], y, source[2] + 0.16], yaw)
+    after = env.task_truth(index)
+    delta = after["block_pose_w"][2] - source[2]
+    verified = (
+        delta > 0.07 if wrong else abs(delta) < 0.01 and after["robot_contact_force_n"] < 1e-6
+    )
+    event = {
+        "type": case.row["error"],
+        "target_level": case.error_level + 1,
+        "teacher_induced": True,
+        "object_index": index,
+        "lift_delta_m": delta,
+        "physically_verified": verified,
+        "error_end_s": env.time,
+    }
+    if not verified:
+        raise RuntimeError(f"Intended physical fault did not occur: {event}")
+    recorder.positive_imitation = True
+    if wrong:
+        reference.move(
+            prefix + "_correct_return", side, [source[0], source[1], source[2] + 0.06], yaw
+        )
+    reference.grip(prefix + "_correct_open", side, None)
+    reference.move(prefix + "_correct_retreat", side, [source[0], y, 1.02], yaw)
+    reference.park(side)
+    if wrong and abs(env.task_truth(index)["block_pose_w"][2] - source[2]) > 0.01:
+        raise RuntimeError("Wrong piece was not returned to table support.")
+    recorder.fault_verified = True
+    return event
+
+
+def placement_fault(
+    reference,
+    case: PilotCase,
+    task: TowerTask,
+    indices: list[int],
+    side: str,
+    yaw: float,
+    release_z: float,
+) -> dict:
+    env = reference.env
+    index = indices[case.error_level]
+    prefix = f"level{case.error_level}_fault_incomplete_placement"
+    env.recorder.positive_imitation = False
+    # Stop the physical placement 18 mm above support; retain the block for correction.
+    # A harmless horizontal offset is never treated as an error.
+    reference.move(
+        prefix, side, [task.assembly_xy_m[0] + 0.015, task.assembly_xy_m[1], release_z + 0.018], yaw
+    )
+    reference.wait(4, prefix + "_failed_load_transfer")
+    truth = env.task_truth(index)
+    support = truth["block_contact_forces_n"][indices[case.error_level - 1]][2]
+    expected_z = release_z - 0.06
+    gap = truth["block_pose_w"][2] - expected_z
+    verified = support <= 1e-6 and gap > 0.01 and truth["robot_contact_force_n"] > 0.5
+    event = {
+        "type": case.row["error"],
+        "target_level": case.error_level + 1,
+        "teacher_induced": True,
+        "support_n": support,
+        "height_gap_m": gap,
+        "physically_verified": verified,
+        "error_end_s": env.time,
+    }
+    if not verified:
+        raise RuntimeError(f"Incomplete placement was not physically consequential: {event}")
+    env.recorder.positive_imitation = True
+    env.recorder.fault_verified = True
+    return event
