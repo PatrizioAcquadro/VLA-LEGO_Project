@@ -72,6 +72,7 @@ def main() -> None:
         from PIL import Image
 
         from vla_lego.isaac.catalog import BlockPlacement, BlockSpec
+        from vla_lego.isaac.control import ToolController
         from vla_lego.isaac.environment import ARM_JOINTS, JAW_JOINTS, AssemblyEnvironment
         from vla_lego.isaac.evaluation import TowerEvaluator
         from vla_lego.isaac.recording import EpisodeRecorder
@@ -80,15 +81,27 @@ def main() -> None:
         raw = source["task"]
         task = TowerTask(
             tuple(
-                BlockPlacement(BlockSpec(**p["spec"]), tuple(p["xy_m"])) for p in raw["placements"]
+                BlockPlacement(
+                    BlockSpec(**p["spec"]), tuple(p["xy_m"]), yaw_deg=p.get("yaw_deg", 0)
+                )
+                for p in raw["placements"]
             ),
             tuple(BlockSpec(**p) for p in raw["targets"]),
             tuple(raw["assembly_xy_m"]),
+            instruction_text=raw.get("instruction_text"),
+            build_region_xy_m=(
+                tuple(raw["build_region_xy_m"]) if raw.get("build_region_xy_m") else None
+            ),
         )
         env = AssemblyEnvironment(
             args.cache_dir.resolve(),
             placements=task.placements,
-            assembly_xy_m=task.assembly_xy_m,
+            assembly_xy_m=None if task.build_region_xy_m is not None else task.assembly_xy_m,
+            mass_scale=source.get("simulation_assumptions", {}).get("mass_scale", 1.0),
+            friction=tuple(
+                source.get("simulation_assumptions", {}).get("effective_friction", (0.6, 0.5))
+            ),
+            appearance=source.get("simulation_assumptions", {}).get("table_lighting", "legacy"),
             solver_iterations=iterations,
             measure_pose_motion=motion_measurement == "pose_step_peaks",
         )
@@ -102,6 +115,7 @@ def main() -> None:
         state_ids = [env.robot.data.joint_names.index(n) for n in metadata["state_names"]]
         limits = env.robot.data.joint_pos_limits.torch[0, action_ids].cpu().numpy()
         env.step(round(metadata["start_time_s"] / 0.005))
+        ctrl = ToolController(env)
         evaluator = TowerEvaluator(
             task, env.contact_robot_paths, motion_measurement=motion_measurement
         )
@@ -167,7 +181,13 @@ def main() -> None:
                             )
                         ),
                     )
-                evaluator.update(env.time, truth)
+                evaluator.update(
+                    env.time,
+                    truth,
+                    tool_positions={
+                        side: ctrl.pose(side)[0, :3].tolist() for side in ("left", "right")
+                    },
+                )
                 trace.write(
                     json.dumps(
                         {

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import math
 import random
 from collections import Counter
 from dataclasses import dataclass, replace
@@ -19,10 +20,42 @@ CODES = {
 }
 RESERVED = {("PS", "blue"), ("PL", "purple"), ("CS", "yellow"), ("CL", "green")}
 FORMS = (
-    "Build a five-block tower inside the black square. From bottom to top: {}.",
-    "Inside the black square, stack these five blocks in this order, starting at the bottom: {}.",
-    "Make a tower in the marked square: {}, listed from the base to the top.",
+    "Build a five-block tower in a clear, suitable place on the table. From bottom to top: {}.",
+    "Choose a clear place on the table and stack these five blocks in this order, starting at the bottom: {}.",
+    "Make a tower on a clear part of the table: {}, listed from the base to the top.",
 )
+
+
+# Center workspace shared by both arms; no corresponding visual marking.
+BUILD_REGION = (0.30, 0.45, -0.13, 0.13)
+COLLECTION_CONDITION = "marker_free_continuous_site_v1"
+
+
+def build_site(placements: tuple[BlockPlacement, ...], ordinal: int) -> tuple[float, float]:
+    """Select free space near an independently shuffled continuous coverage sample."""
+    coverage = random.Random(721903)
+    ranks_x, ranks_y = list(range(60)), list(range(60))
+    coverage.shuffle(ranks_x)
+    coverage.shuffle(ranks_y)
+    rng = random.Random(862313 + ordinal * 137)
+    x0, x1, y0, y1 = BUILD_REGION
+    desired = ((ranks_x[ordinal] + rng.random()) / 60, (ranks_y[ordinal] + rng.random()) / 60)
+    candidates = [(rng.uniform(x0, x1), rng.uniform(y0, y1)) for _ in range(512)]
+    free = [
+        xy
+        for xy in candidates
+        if all(
+            math.dist(xy, p.xy_m) > math.hypot(*p.spec.dimensions_m[:2]) / 2 + 0.065
+            for p in placements
+        )
+    ]
+    if not free:
+        raise ValueError("No clear bimanual construction site in this scene")
+    return min(
+        free,
+        key=lambda xy: ((xy[0] - x0) / (x1 - x0) - desired[0]) ** 2
+        + ((xy[1] - y0) / (y1 - y0) - desired[1]) ** 2,
+    )
 
 
 def piece(value: str) -> BlockSpec:
@@ -97,13 +130,15 @@ class PilotCase:
                 variation="nominal spread",
             )
             base = PilotCase(base_row, self.ordinal - 1).task()
+            mirrored = tuple(
+                replace(p, xy_m=(p.xy_m[0], -p.xy_m[1]), yaw_deg=-p.yaw_deg)
+                for p in base.placements
+            )
             return replace(
                 base,
                 targets=targets,
-                placements=tuple(
-                    replace(p, xy_m=(p.xy_m[0], -p.xy_m[1]), yaw_deg=-p.yaw_deg)
-                    for p in base.placements
-                ),
+                placements=mirrored,
+                assembly_xy_m=build_site(mirrored, self.ordinal),
                 instruction_text=FORMS[self.ordinal % 3].format(
                     ", then ".join(
                         t.description.replace("prism", "rectangular prism") for t in targets
@@ -176,7 +211,8 @@ class PilotCase:
         return TowerTask(
             placements=tuple(placements),
             targets=targets,
-            assembly_xy_m=(0.40, 0.0),
+            assembly_xy_m=build_site(tuple(placements), self.ordinal),
+            build_region_xy_m=BUILD_REGION,
             instruction_text=FORMS[self.ordinal % 3].format(
                 ", then ".join(t.description.replace("prism", "rectangular prism") for t in targets)
             ),

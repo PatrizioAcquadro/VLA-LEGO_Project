@@ -46,6 +46,12 @@ def _footprint_inside(task: TowerTask, index: int, pose: list[float]) -> bool:
     corners = _corners(task.placements[index].spec.dimensions_m, pose)
     if not corners:
         return False
+    if task.build_region_xy_m is not None:
+        # Physical tabletop support, independent of the teacher's chosen point.
+        return all(
+            0.25 <= corner[0] <= 0.95 and -0.55 <= corner[1] <= 0.55
+            for corner in _corners(task.placements[index].spec.dimensions_m, pose)
+        )
     return all(
         abs(corner[axis] - task.assembly_xy_m[axis])
         <= MARKER_INNER_HALF_M + 1e-6  # Float32 geometry tolerance, not a physical margin.
@@ -125,7 +131,9 @@ class TowerEvaluator:
             and speeds[1] < 0.1
         )
 
-    def update(self, time_s: float, blocks: list[dict]) -> None:
+    def update(
+        self, time_s: float, blocks: list[dict], *, tool_positions: dict | None = None
+    ) -> None:
         if len(blocks) != len(self.task.placements) or not math.isfinite(time_s):
             raise ValueError("Evaluator received a mismatched scene or invalid clock.")
         if self.previous_time is not None and time_s <= self.previous_time:
@@ -172,8 +180,23 @@ class TowerEvaluator:
                     and support > CONTACT_ZERO_N
                 )
             stable = all(self._stable(blocks[index]) for index in assignment)
+            site_valid = withdrawn = True
+            if self.task.build_region_xy_m is not None:
+                x0, x1, y0, y1 = self.task.build_region_xy_m
+                base = blocks[assignment[0]]["block_pose_w"]
+                site_valid = x0 <= base[0] <= x1 and y0 <= base[1] <= y1
+                withdrawn = (
+                    tool_positions is not None
+                    and set(tool_positions) == {"left", "right"}
+                    and all(
+                        min(math.dist(position[:3], b["block_pose_w"][:3]) for b in blocks) >= 0.10
+                        for position in tool_positions.values()
+                    )
+                )
             checks.append(
                 {
+                    "valid_build_site": site_valid,
+                    "hands_withdrawn": withdrawn,
                     "finite": finite,
                     "ordered_support": all(placed),
                     "released": released,

@@ -19,6 +19,7 @@ class EpisodeRecorder:
         correction_source: dict | None = None,
         task_decisions: bool = False,
         collection_case: dict | None = None,
+        collection_condition: str | None = None,
     ):
         if not family or split not in ("train", "development"):
             raise ValueError(
@@ -39,6 +40,7 @@ class EpisodeRecorder:
         self.correction_source = correction_source
         self.task_decisions = task_decisions
         self.collection_case = collection_case
+        self.collection_condition = collection_condition
         self.fault_verified = False
         self.task_decision = "continue"
         self.count = 0
@@ -137,8 +139,9 @@ class EpisodeRecorder:
         self.frames.close()
         self.evidence.close()
         self.annotations.close()
-        metadata = {
+        metadata: dict = {
             "instruction": self.instruction,
+            "collection_condition": self.collection_condition,
             "generation_family": self.family,
             "split": self.split,
             "frames": self.count,

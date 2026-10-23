@@ -9,13 +9,25 @@ from collections import Counter
 from pathlib import Path
 
 from vla_lego.isaac.environment import ARM_JOINTS, JAW_JOINTS
-from vla_lego.isaac.pilot import PilotCase, load_cases
+from vla_lego.isaac.pilot import COLLECTION_CONDITION, PilotCase, load_cases
 from vla_lego.pretrained.decisions import DECISION_NAMES
 
 
 def audit_episode(directory: Path, case: PilotCase) -> dict:
     report = json.loads((directory / "report.json").read_text())
     metadata = json.loads((directory / "recording/episode.json").read_text())
+    if (
+        report.get("collection_condition") != COLLECTION_CONDITION
+        or metadata.get("collection_condition") != COLLECTION_CONDITION
+    ):
+        raise ValueError(
+            "Previous marked/unknown condition is excluded from the marker-free corpus"
+        )
+    scene = (directory / "scene.usda").read_text()
+    if "Marker_" in scene or not report.get("task", {}).get("build_region_xy_m"):
+        raise ValueError("Marker-free scene/position contract is missing")
+    if any(cue in metadata["instruction"].lower() for cue in ("square", "marked", "marker")):
+        raise ValueError("Instruction still contains a destination marker cue")
     if (
         metadata["fps"] != 20
         or metadata["state_names"] != [*ARM_JOINTS, "NECK_Z", "NECK_Y", *JAW_JOINTS]
@@ -118,6 +130,14 @@ def audit_episode(directory: Path, case: PilotCase) -> dict:
         raise ValueError("Missing recorded terminal decision")
     return {
         "path": str(directory / "recording"),
+        "collection_condition": COLLECTION_CONDITION,
+        "final_base_xy_m": (
+            report["final_truth"][report["evaluation"]["final_assignment_indices"][0]][
+                "block_pose_w"
+            ][:2]
+            if case.category != "stop"
+            else None
+        ),
         "frames": count,
         "masked_error_frames": masked,
         "positive_frames": count - masked,

@@ -30,6 +30,8 @@ def main() -> None:
         ),
         tuple(BlockSpec(**spec) for spec in raw["targets"]),
         (raw["assembly_xy_m"][0], raw["assembly_xy_m"][1]),
+        instruction_text=raw.get("instruction_text"),
+        build_region_xy_m=tuple(raw["build_region_xy_m"]) if raw.get("build_region_xy_m") else None,
     )
     evaluator = None
     contact_paths = None
@@ -46,7 +48,11 @@ def main() -> None:
                 )
             if paths != contact_paths:
                 raise ValueError("Contact-body ordering changed inside the source episode.")
-            evaluator.update(row["time_s"], row["blocks"])
+            evaluator.update(
+                row["time_s"],
+                row["blocks"],
+                tool_positions={side: pose[:3] for side, pose in row.get("tools", {}).items()},
+            )
     if evaluator is None:
         raise ValueError("Cannot score an empty trace.")
     report = evaluator.result()

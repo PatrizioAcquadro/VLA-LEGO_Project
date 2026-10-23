@@ -1,6 +1,7 @@
 """Analytical scorer fixtures only; these are not physical demonstrations."""
 
 import math
+from dataclasses import replace
 
 import pytest
 
@@ -58,9 +59,11 @@ def construction(
     release_samples=41,
     release_period=0.05,
     motion_measurement="solver_velocity",
+    evaluation_task=None,
 ):
-    scorer = TowerEvaluator(task, PATHS, motion_measurement=motion_measurement)
-    scorer.update(0.0, states(task))
+    scorer = TowerEvaluator(evaluation_task or task, PATHS, motion_measurement=motion_measurement)
+    tools = {"left": [0, 0.5, 1.2], "right": [0, -0.5, 1.2]}
+    scorer.update(0.0, states(task), tool_positions=tools)
     approach = states(task, order, 3)
     approach[order[3]]["block_pose_w"][:3] = [
         *task.assembly_xy_m,
@@ -72,15 +75,15 @@ def construction(
     approach[order[3]]["nonrobot_contact_force_n"] = 0.0
     grip(approach, order[2], "left")
     grip(approach, order[3], "right")
-    scorer.update(0.05, approach)
+    scorer.update(0.05, approach, tool_positions=tools)
     contact = states(task, order, 4)
     grip(contact, order[2], "left")
     grip(contact, order[3], "right")
     for tick in range(6):
-        scorer.update(0.1 + tick * 0.05, contact)
+        scorer.update(0.1 + tick * 0.05, contact, tool_positions=tools)
     released = states(task, order, 5)
     for tick in range(release_samples):
-        scorer.update(0.4 + tick * release_period, released)
+        scorer.update(0.4 + tick * release_period, released, tool_positions=tools)
     return scorer
 
 
@@ -240,3 +243,27 @@ def test_functional_dwell_still_requires_support_and_release():
     assert not result["passed"]
     assert not result["last_sample_checks"][0]["ordered_support"]
     assert not result["last_sample_checks"][0]["released"]
+
+
+@pytest.mark.parametrize("xy", [(0.31, -0.09), (0.44, 0.08)])
+def test_marker_free_success_does_not_depend_on_teacher_point(xy):
+    task = replace(
+        initial_tower_task(), assembly_xy_m=xy, build_region_xy_m=(0.30, 0.45, -0.13, 0.13)
+    )
+    evaluator_task = replace(task, assembly_xy_m=(0.40, 0))
+    assert construction(task, evaluation_task=evaluator_task).result()["passed"]
+
+
+def test_marker_free_invalid_site_and_unwithdrawn_hands_are_rejected():
+    task = replace(
+        initial_tower_task(), assembly_xy_m=(0.29, 0), build_region_xy_m=(0.30, 0.45, -0.13, 0.13)
+    )
+    assert not construction(task).result()["passed"]
+    task = replace(task, assembly_xy_m=(0.35, 0.06))
+    scorer = construction(task)
+    scorer.update(
+        scorer.previous_time + 0.05,
+        states(task, levels=5),
+        tool_positions={"left": [0.35, 0.06, 0.9], "right": [0, -0.5, 1.2]},
+    )
+    assert not scorer.result()["passed"]

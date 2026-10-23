@@ -13,6 +13,7 @@ class TowerTask:
     targets: tuple[BlockSpec, ...]
     assembly_xy_m: tuple[float, float]
     instruction_text: str | None = None
+    build_region_xy_m: tuple[float, float, float, float] | None = None
 
     def __post_init__(self) -> None:
         if len(self.targets) != 5:

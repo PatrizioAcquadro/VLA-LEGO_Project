@@ -31,6 +31,7 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=False)
     report: dict = {
         "pilot_case": case.row,
+        "collection_condition": "marker_free_continuous_site_v1",
         "passed": False,
         "verified_stop": False,
         "kind": "approved_pilot_stop",
@@ -52,7 +53,7 @@ def main() -> None:
         env = AssemblyEnvironment(
             args.cache_dir,
             placements=task.placements,
-            assembly_xy_m=task.assembly_xy_m,
+            assembly_xy_m=None if task.build_region_xy_m is not None else task.assembly_xy_m,
             appearance=case.appearance,
         )
         env.step(400)
@@ -63,6 +64,7 @@ def main() -> None:
             split=args.split,
             task_decisions=True,
             collection_case=case.row,
+            collection_condition="marker_free_continuous_site_v1",
         )
         env.recorder = recorder
         with (args.output_dir / "trace.jsonl").open("w") as trace:

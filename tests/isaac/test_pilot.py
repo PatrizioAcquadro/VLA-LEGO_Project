@@ -77,3 +77,23 @@ def test_recovery_cannot_be_admitted_without_a_physical_fault(tmp_path):
     with pytest.raises(ValueError, match="physically verified"):
         recorder.finish(verified_success=True, reason="a nominal result is insufficient")
     recorder.finish(verified_success=False, reason="no fault")
+
+
+@pytest.mark.parametrize("ordinal", [0, 1, 2, 23, 45])
+def test_marker_free_instruction_and_site_are_free_of_destination_cues(ordinal):
+    task = PilotCase(case_row(), ordinal).task()
+    assert not any(word in task.instruction for word in ("square", "marked", "left", "right"))
+    assert task.build_region_xy_m is not None
+    assert all(
+        np.linalg.norm(np.array(task.assembly_xy_m) - p.xy_m) > 0.09 for p in task.placements
+    )
+
+
+def test_marked_corpus_cannot_be_admitted_as_marker_free(tmp_path):
+    from vla_lego.isaac.pilot_audit import audit_episode
+
+    (tmp_path / "recording").mkdir()
+    (tmp_path / "report.json").write_text('{"passed": true}')
+    (tmp_path / "recording/episode.json").write_text("{}")
+    with pytest.raises(ValueError, match="Previous marked"):
+        audit_episode(tmp_path, PilotCase(case_row(), 0))

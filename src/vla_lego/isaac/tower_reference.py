@@ -7,7 +7,7 @@ import json
 import math
 import time
 import traceback
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 
@@ -68,6 +68,7 @@ def main() -> None:
                 raise ValueError("Stop cases use the stop collector.")
         task = pilot_case.task() if pilot_case else initial_tower_task(mirror=args.mirror)
         cooperative_level = pilot_case.cooperative_level if pilot_case else 3
+        stabilizer_quaternion = [0.0, 0.0, 0.0, 1.0]
         roles: tuple[tuple[str, int], ...] = (
             ("left", 0),
             ("right", 180),
@@ -94,7 +95,7 @@ def main() -> None:
         env = AssemblyEnvironment(
             args.cache_dir.resolve(),
             placements=task.placements,
-            assembly_xy_m=task.assembly_xy_m,
+            assembly_xy_m=None if task.build_region_xy_m is not None else task.assembly_xy_m,
             measure_pose_motion=args.motion_measurement == "pose_step_peaks",
             mass_scale=pilot_case.mass_scale if pilot_case else 1.0,
             friction=pilot_case.friction if pilot_case else (0.6, 0.5),
@@ -109,11 +110,13 @@ def main() -> None:
                 split=args.split,
                 task_decisions=True,
                 collection_case=pilot_case.row if pilot_case else None,
+                collection_condition="marker_free_continuous_site_v1" if pilot_case else None,
             )
             env.recorder = recorder
         report["task"] = asdict(task)
         if pilot_case:
             report["pilot_case"] = pilot_case.row
+            report["collection_condition"] = "marker_free_continuous_site_v1"
             report["simulation_assumptions"] = {
                 "mass_scale": pilot_case.mass_scale,
                 "effective_friction": pilot_case.friction,
@@ -136,7 +139,14 @@ def main() -> None:
         )
 
         def sample_cooperation(stage: str, truth: list[dict]) -> None:
-            evaluator.update(env.time, truth)
+            assert reference is not None
+            evaluator.update(
+                env.time,
+                truth,
+                tool_positions={
+                    side: reference.ctrl.pose(side)[0, :3].tolist() for side in ("left", "right")
+                },
+            )
             if not stage.startswith(f"level{cooperative_level}_"):
                 return
             lower, upper = truth[indices[cooperative_level - 1]], truth[indices[cooperative_level]]
@@ -186,10 +196,37 @@ def main() -> None:
                     expected_bottom += task.targets[prior].dimensions_m[2]
 
             def engage_stabilizer():
+                nonlocal stabilizer_quaternion
                 # Restrain the lower stack using actual bilateral jaw contact. This
                 # keeps both gripper housings out of the upper placement path.
                 lower = env.task_truth(indices[cooperative_level - 1])["block_pose_w"][:3]
-                stabilizer_pose = [lower[0] - 0.01, lower[1], lower[2]]
+                stabilizer_pose = [
+                    lower[0] - 0.01,
+                    lower[1],
+                    lower[2] + (0.010 if pilot_case and cooperative_level == 2 else 0.0),
+                ]
+                if pilot_case:
+                    _, joint_ids, _ = reference.ctrl.frames[stabilizer_side]
+                    seed = env.robot.data.joint_pos.torch[0, joint_ids]
+                    for roll_deg in (
+                        0,
+                        20 if stabilizer_side == "left" else -20,
+                        -20 if stabilizer_side == "left" else 20,
+                    ):
+                        half = math.radians(roll_deg) / 2
+                        candidate = [math.sin(half), 0, 0, math.cos(half)]
+                        try:
+                            reference.solvers[stabilizer_side].solve(
+                                env.target.new_tensor([*stabilizer_pose, *candidate]), seed
+                            )
+                            stabilizer_quaternion = candidate
+                            break
+                        except RuntimeError:
+                            continue
+                    else:
+                        raise RuntimeError(
+                            "No reachable physical stabilizer approach at the actual tower"
+                        )
                 for name, xyz in (
                     ("high", [lower[0] - 0.01, stabilizer_y, 1.02]),
                     ("center", [lower[0] - 0.01, lower[1], 1.02]),
@@ -200,7 +237,8 @@ def main() -> None:
                         f"stabilizer_{name}",
                         stabilizer_side,
                         xyz,
-                        quaternion_xyzw=[0, 0, 0, 1],
+                        quaternion_xyzw=stabilizer_quaternion,
+                        linear=pilot_case is not None and name == "grasp",
                     )
                 reference.grip(
                     "stabilizer_close",
@@ -216,10 +254,13 @@ def main() -> None:
             env.stage.Export(str(args.output_dir / "scene.usda"))
             bottom = TABLE_TOP
             stabilizer_pose = None
+            build_xy = task.assembly_xy_m
             # Per-piece yaw is a teacher planning choice, never a policy observation.
             for level, (target, index, (side, base_yaw)) in enumerate(
                 zip(task.targets, indices, roles, strict=True)
             ):
+                if level and pilot_case:
+                    build_xy = tuple(env.task_truth(indices[0])["block_pose_w"][:2])
                 prefix = f"level{level}"
                 yaw = float(base_yaw)
                 if (
@@ -248,13 +289,13 @@ def main() -> None:
                             [block[0], block[1], block[2] + 0.06],
                             [block[0], block[1], block[2] + 0.16],
                             *(
-                                [[*task.assembly_xy_m, block[2] + 0.16]]
+                                [[*build_xy, block[2] + 0.16]]
                                 if release + 0.025 < block[2] + 0.16
                                 else []
                             ),
-                            [*task.assembly_xy_m, release + 0.025],
-                            [*task.assembly_xy_m, release],
-                            [*task.assembly_xy_m, release + target.dimensions_m[2] / 2 + 0.025],
+                            [*build_xy, release + 0.025],
+                            [*build_xy, release],
+                            [*build_xy, release + target.dimensions_m[2] / 2 + 0.025],
                         ],
                     )
                 for stage, xyz in (
@@ -286,7 +327,7 @@ def main() -> None:
                     reference.move(
                         f"{prefix}_transport_high",
                         side,
-                        [*task.assembly_xy_m, lift_z],
+                        [*build_xy, lift_z],
                         yaw,
                         linear=True,
                         linear_step_m=0.02,
@@ -298,10 +339,10 @@ def main() -> None:
                         reference.move(
                             f"{prefix}_carry_clearance_{waypoint}",
                             side,
-                            [task.assembly_xy_m[0], y if side == "left" else -y, transit_z],
+                            [build_xy[0], build_xy[1] + (y if side == "left" else -y), transit_z],
                             yaw,
                         )
-                reference.move(f"{prefix}_transport", side, [*task.assembly_xy_m, transit_z], yaw)
+                reference.move(f"{prefix}_transport", side, [*build_xy, transit_z], yaw)
                 if (
                     pilot_case
                     and pilot_case.category == "recovery"
@@ -311,9 +352,15 @@ def main() -> None:
                     from vla_lego.isaac.pilot_faults import placement_fault
 
                     report["fault"] = placement_fault(
-                        reference, pilot_case, task, indices, side, yaw, release_z
+                        reference,
+                        pilot_case,
+                        replace(task, assembly_xy_m=build_xy),
+                        indices,
+                        side,
+                        yaw,
+                        release_z,
                     )
-                reference.move(f"{prefix}_place", side, [*task.assembly_xy_m, release_z], yaw)
+                reference.move(f"{prefix}_place", side, [*build_xy, release_z], yaw)
                 if level == cooperative_level:
                     # A single contact sample can precede a bounce. Establish
                     # persistent load transfer with the same bounded robot descent.
@@ -333,7 +380,7 @@ def main() -> None:
                             reference.move(
                                 f"{prefix}_touch_{descent + 1}",
                                 side,
-                                [*task.assembly_xy_m, release_z - (descent + 1) * 0.001],
+                                [*build_xy, release_z - (descent + 1) * 0.001],
                                 yaw,
                             )
                     if not coordinated:
@@ -341,7 +388,7 @@ def main() -> None:
                 reference.wait(5 if args.event_settling else 20, f"{prefix}_supported_hold")
                 reference.grip(f"{prefix}_release", side, None)
                 retreat_z = release_z + target.dimensions_m[2] / 2 + 0.025
-                reference.move(f"{prefix}_retreat", side, [*task.assembly_xy_m, retreat_z], yaw)
+                reference.move(f"{prefix}_retreat", side, [*build_xy, retreat_z], yaw)
                 reference.move(
                     f"{prefix}_exit", side, [0.40, 0.40 if side == "left" else -0.40, 1.05], yaw
                 )
@@ -356,7 +403,7 @@ def main() -> None:
                         "stabilizer_retract",
                         stabilizer_side,
                         [*stabilizer_pose[:2], stabilizer_pose[2] + 0.06],
-                        quaternion_xyzw=[0, 0, 0, 1],
+                        quaternion_xyzw=stabilizer_quaternion,
                     )
                     reference.move(
                         "stabilizer_clear_tower",
