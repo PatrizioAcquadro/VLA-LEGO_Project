@@ -41,14 +41,42 @@ class PhysicalReference:
             self.env, self.solvers[side], side
         )
 
-    def grasp_yaw(self, side: str, preferred: float, waypoints: list[list[float]]) -> float:
+    def grasp_yaw(
+        self,
+        side: str,
+        preferred: float,
+        waypoints: list[list[float]],
+        *,
+        object_index: int | None = None,
+    ) -> float:
         """Choose a reachable equivalent jaw approach for square-section blocks."""
         _, ids, _ = self.ctrl.frames[side]
         failures = []
-        for offset in (0, 90, -90, 180):
-            yaw = preferred + offset
+        clear = None
+        if object_index is not None:
+            from vla_lego.isaac.clearance import source_grasp_clearance
+
+            clear = source_grasp_clearance(self.env, self.ctrl, side, object_index)
+        candidates = [(1.0, preferred + offset) for offset in (0, 90, -90, 180)]
+        if clear is not None:
+            candidates = [
+                (
+                    clear(
+                        self.env.target.new_tensor(
+                            [*waypoints[3], *self.orientation(side, yaw).tolist()]
+                        )
+                    ),
+                    yaw,
+                )
+                for _, yaw in candidates
+            ]
+            # Equivalent millimeter clearance retains the preferred face order.
+            candidates.sort(key=lambda candidate: round(candidate[0], 3), reverse=True)
+        for clearance_m, yaw in candidates:
             seed = self.env.robot.data.joint_pos.torch[0, ids]
             try:
+                if clearance_m <= 0:
+                    raise RuntimeError("Open jaws intersect another source object")
                 for xyz in waypoints:
                     seed = self.solvers[side].solve(
                         self.env.target.new_tensor([*xyz, *self.orientation(side, yaw).tolist()]),

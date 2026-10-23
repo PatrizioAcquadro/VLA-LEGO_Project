@@ -428,6 +428,7 @@ def main() -> None:
                             [*build_xy, release],
                             [*build_xy, release + target.dimensions_m[2] / 2 + 0.025],
                         ],
+                        object_index=index,
                     )
                 for stage, xyz in (
                     ("edge", [0.40, 0.40 if side == "left" else -0.40, 1.05]),

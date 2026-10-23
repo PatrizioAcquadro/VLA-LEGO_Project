@@ -1,15 +1,84 @@
-"""Conservative convex-part clearance for wrist planning against static furniture."""
+"""Native collision geometry for teacher arm and source-grasp planning."""
 
 from __future__ import annotations
 
 
-def _separated(points, axes, obstacle_points, obstacle_axes):
+def _separation_distance(points, axes, obstacle_points, obstacle_axes):
     import torch
 
     directions = torch.cat((axes, obstacle_axes.expand(points.shape[0], -1, -1)), dim=1)
     a = points @ directions.transpose(1, 2)
     b = obstacle_points.expand(points.shape[0], -1, -1) @ directions.transpose(1, 2)
-    return ((a.amax(dim=1) < b.amin(dim=1)) | (b.amax(dim=1) < a.amin(dim=1))).any(dim=1)
+    return torch.maximum(a.amin(dim=1) - b.amax(dim=1), b.amin(dim=1) - a.amax(dim=1)).amax(dim=1)
+
+
+def _separated(points, axes, obstacle_points, obstacle_axes):
+    return _separation_distance(points, axes, obstacle_points, obstacle_axes) > 0
+
+
+def source_grasp_clearance(env, controller, side: str, object_index: int):
+    """Rank source approaches by open-jaw clearance from other visible pieces."""
+    from isaaclab.utils.math import matrix_from_quat, quat_apply, quat_apply_inverse
+    from pxr import Gf, Usd, UsdGeom, UsdPhysics
+
+    from vla_lego.isaac.evaluation import _corners
+
+    cache = UsdGeom.XformCache()
+    tcp = controller.pose(side)[0]
+    geometry = []
+    for path in env.contact_robot_paths:
+        if f"{side}_WSG32_" not in path:
+            continue
+        body = env.stage.GetPrimAtPath(path)
+        inverse = cache.GetLocalToWorldTransform(body).GetInverse()
+        pose = env.robot.data.body_link_pose_w.torch[
+            0, env.robot.data.body_names.index(body.GetName())
+        ]
+        for prim in Usd.PrimRange(body, Usd.TraverseInstanceProxies()):
+            if not prim.HasAPI(UsdPhysics.CollisionAPI):
+                continue
+            if not prim.IsA(UsdGeom.Mesh):
+                raise RuntimeError("Unsupported native jaw collider")
+            transform = cache.GetLocalToWorldTransform(prim) * inverse
+            points = env.target.new_tensor(
+                [
+                    transform.Transform(Gf.Vec3d(*p))
+                    for p in UsdGeom.Mesh(prim).GetPointsAttr().Get()
+                ]
+            )
+            world = quat_apply(pose[3:].expand(len(points), -1), points) + pose[:3]
+            geometry.append(quat_apply_inverse(tcp[3:].expand(len(points), -1), world - tcp[:3]))
+    if not geometry:
+        raise RuntimeError("Native jaw geometry unavailable")
+    obstacles = []
+    for index, placement in enumerate(env.placements):
+        if index == object_index:
+            continue
+        pose = env.task_truth(index)["block_pose_w"]
+        obstacles.append(
+            (
+                env.target.new_tensor(_corners(placement.spec.dimensions_m, pose)),
+                matrix_from_quat(env.target.new_tensor(pose[3:])).T,
+            )
+        )
+
+    def clear(pose):
+        axes = matrix_from_quat(pose[3:]).T[None]
+        distance = float("inf")
+        for points in geometry:
+            world = quat_apply(pose[3:].expand(len(points), -1), points) + pose[:3]
+            for obstacle_points, obstacle_axes in obstacles:
+                distance = min(
+                    distance,
+                    float(
+                        _separation_distance(
+                            world[None], axes, obstacle_points, obstacle_axes
+                        ).item()
+                    ),
+                )
+        return distance
+
+    return clear
 
 
 def arm_clearance(env, solver, side: str):

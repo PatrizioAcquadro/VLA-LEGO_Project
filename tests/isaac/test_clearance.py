@@ -4,7 +4,7 @@ import itertools
 
 import torch
 
-from vla_lego.isaac.clearance import _separated
+from vla_lego.isaac.clearance import _separated, _separation_distance
 
 
 def test_face_plane_separates_shapes_whose_axis_aligned_bounds_overlap():
@@ -21,3 +21,8 @@ def test_batch_clearance_rejects_overlap_and_touching():
     moving = cube[None] + torch.tensor([[0.0, 0, 0], [0.3, 0, 0], [0.2, 0, 0]])[:, None]
     axes = torch.eye(3)
     assert _separated(moving, axes.expand(3, -1, -1), cube, axes).tolist() == [False, True, False]
+    assert torch.allclose(
+        _separation_distance(moving, axes.expand(3, -1, -1), cube, axes),
+        torch.tensor([-0.2, 0.1, 0.0]),
+        atol=1e-7,
+    )

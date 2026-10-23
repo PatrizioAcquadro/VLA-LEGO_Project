@@ -35,6 +35,7 @@ def pick_fault(reference, case: PilotCase, task: TowerTask, target_index: int) -
             [source[0], y, source[2] + 0.16],
             [source[0], y, 1.02],
         ],
+        object_index=index,
     )
     prefix = f"level{case.error_level}_fault_{'wrong_piece' if wrong else 'missed_grasp'}"
     recorder.positive_imitation = False
