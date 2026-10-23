@@ -21,3 +21,17 @@ Maintained tests, formatting/lint, configuration composition, clean package inst
 ## State
 
 Implementation in progress. The active checklist is the repository `TODO.md`.
+
+## Operational validation ownership
+
+The full maintained suite passed 448 tests with EGL on the RTX 4090 before consolidating the tools below. The unified demo exported the robot, tower and triangle clips successfully. No physics/controller thresholds were relaxed.
+
+| Retired duplicate | Maintained coverage / operator workflow |
+|---|---|
+| `generate_phase11_artifacts.py` | `sim.demo` exports short robot motion and gripper commands; Alex/EZGripper tests retain structural, coupling, stability and grasp-scene checks. |
+| `validate_mujoco.py` | `test_mujoco.py` retains native load, deterministic stepping, finite state, energy and environment metadata; `validate_sim_smoke.py` remains the operational headless smoke. |
+| `validate_assets.py` | `vla-lint-assets` and `test_asset_loader.py` retain path, missing mesh/include, scale and load contracts; clean-install validation loads every packaged scene. |
+| `validate_offscreen.py` | `sim.demo`, `test_offscreen.py` and `test_sim_smoke.py` retain RGB/depth/segmentation, frame alignment, deterministic rendering, video and PNG export. |
+| `validate_alex_model.py` | `test_alex_model.py`, `test_ezgripper.py`, `validate_kinematics.py` and the robot demo retain model/actuator limits, native stability, PD motion, gripper coupling and reference-FK comparison. |
+
+Action-space, robot-state, camera and kinematics operator validators remain maintained. Native model validators are retained until the replacement real-GPU model smoke is verified; a new command existing on disk is not sufficient evidence to retire them.
