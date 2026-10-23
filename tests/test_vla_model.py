@@ -150,7 +150,6 @@ _ACTION_HEAD_CFG: dict = {
     "flow_matching": {
         "n_denoising_steps": 3,  # fast for tests
         "solver": "euler",
-        "sigma_min": 0.001,
         "time_sampling": "uniform",
         "time_alpha": 1.5,
         "time_beta": 1.0,

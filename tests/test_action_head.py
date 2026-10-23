@@ -285,7 +285,6 @@ class TestFlowMatchingModule:
         cfg = FlowMatchingConfig()
         assert cfg.n_denoising_steps == 10
         assert cfg.solver == "euler"
-        assert cfg.sigma_min == 0.001
         assert cfg.time_sampling == "beta"
         assert cfg.time_alpha == 1.5
         assert cfg.time_beta == 1.0

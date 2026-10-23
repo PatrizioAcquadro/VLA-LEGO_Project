@@ -9,12 +9,8 @@ vlm:
   device_map: auto
   trust_remote_code: false
   attn_implementation: sdpa
-  max_seq_length: 8192
+  max_seq_length: 8192  # Planning budget; not automatic truncation in the wrapper.
   cache_dir: ${oc.env:HF_HUB_CACHE,${oc.env:HF_HOME,${oc.env:HOME}/.cache/huggingface}/hub}
-  processor:
-    image_resolution: 320
-    padding: longest
-    truncation: true
   freeze:
     backbone: true
     vision_encoder: true
