@@ -14,10 +14,14 @@ def main() -> None:
     parser.add_argument("--recording", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--cache-dir", type=Path, required=True)
+    parser.add_argument("--capture-every", type=int, default=1)
+    parser.add_argument("--compare-images", action="store_true")
     parser.add_argument(
         "--action-representation", choices=("absolute", "measured_arm_offset"), default="absolute"
     )
     args = parser.parse_args()
+    if args.capture_every < 1 or 10 % args.capture_every:
+        parser.error("--capture-every must be a positive divisor of 10 decision ticks.")
     metadata = json.loads((args.recording / "episode.json").read_text())
     if not metadata.get("control_clock_enforced"):
         raise ValueError("Replay requires a verified causal recording.")
@@ -44,6 +48,7 @@ def main() -> None:
         max_state_error = 0.0
         max_command_error = 0.0
         count = 0
+        image_metrics: list[dict] = []
         with (args.recording / "frames.jsonl").open() as stream:
             for line in stream:
                 row = json.loads(line)
@@ -60,8 +65,29 @@ def main() -> None:
                 env.set_joint_targets(
                     dict(zip(metadata["action_names"], action.tolist(), strict=True))
                 )
-                env.capture()
-                state = env.observe()["joint_position"]
+                if count % args.capture_every == 0:
+                    env.capture()
+                observation = env.observe()
+                state = observation["joint_position"]
+                if args.compare_images and count % 10 == 0:
+                    image_path = (args.recording / row["head_rgb"]).resolve()
+                    if not image_path.is_relative_to(args.recording.resolve()):
+                        raise ValueError("Recorded image escapes its episode directory.")
+                    with Image.open(image_path) as original:
+                        source_rgb = np.asarray(original.convert("RGB"))
+                    actual_rgb = observation["head_rgb"]
+                    if source_rgb.shape != actual_rgb.shape:
+                        raise ValueError("Replay image dimensions differ from the source.")
+                    difference = np.abs(actual_rgb.astype(np.int16) - source_rgb.astype(np.int16))
+                    image_metrics.append(
+                        {
+                            "frame": count,
+                            "mean_absolute_channel_error": float(difference.mean()),
+                            "p99_absolute_channel_error": float(np.quantile(difference, 0.99)),
+                            "max_absolute_channel_error": int(difference.max()),
+                            "fraction_channels_error_over_10": float((difference > 10).mean()),
+                        }
+                    )
                 max_state_error = max(
                     max_state_error,
                     float(np.max(np.abs(state - np.asarray(row["joint_position"])))),
@@ -91,7 +117,21 @@ def main() -> None:
             final_truth=final,
             privileged_inputs_used_for_commands=False,
             action_representation=args.action_representation,
+            capture_every_control_ticks=args.capture_every,
         )
+        if args.compare_images:
+            (args.output_dir / "image_metrics.jsonl").write_text(
+                "".join(json.dumps(row) + "\n" for row in image_metrics)
+            )
+            report["decision_image_comparison"] = {
+                "frames": len(image_metrics),
+                "mean_absolute_channel_error": float(
+                    np.mean([row["mean_absolute_channel_error"] for row in image_metrics])
+                ),
+                "max_frame_mean_absolute_channel_error": max(
+                    row["mean_absolute_channel_error"] for row in image_metrics
+                ),
+            }
     except Exception:
         report.update(error=traceback.format_exc())
         raise
