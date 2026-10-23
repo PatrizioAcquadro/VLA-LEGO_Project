@@ -18,6 +18,8 @@ def main() -> None:
     parser.add_argument("--record", action="store_true")
     parser.add_argument("--family")
     parser.add_argument("--split", choices=("train", "development"))
+    parser.add_argument("--event-settling", action="store_true")
+    parser.add_argument("--mirror", action="store_true")
     parser.add_argument(
         "--motion-measurement",
         choices=("pose_dwell", "solver_velocity", "pose_step_peaks"),
@@ -33,6 +35,8 @@ def main() -> None:
         "passed": False,
         "qualification": False,
         "motion_measurement": args.motion_measurement,
+        "settling": "measured_velocity" if args.event_settling else "fixed_wait",
+        "mirrored": args.mirror,
     }
     app = None
     reference = None
@@ -51,7 +55,18 @@ def main() -> None:
         from vla_lego.isaac.reference import PhysicalReference
         from vla_lego.isaac.task import initial_tower_task
 
-        task = initial_tower_task()
+        task = initial_tower_task(mirror=args.mirror)
+        roles: tuple[tuple[str, int], ...] = (
+            ("left", 0),
+            ("right", 180),
+            ("left", -90),
+            ("right", 90),
+            ("right", 90),
+        )
+        if args.mirror:
+            roles = tuple(("right" if side == "left" else "left", -yaw) for side, yaw in roles)
+        stabilizer_side, placer_side = roles[2][0], roles[3][0]
+        stabilizer_y = 0.20 if stabilizer_side == "left" else -0.20
         env = AssemblyEnvironment(
             args.cache_dir.resolve(),
             placements=task.placements,
@@ -73,9 +88,11 @@ def main() -> None:
         indices = [
             next(i for i, p in enumerate(task.placements) if p.spec == t) for t in task.targets
         ]
-        right_ids = [i for i, path in enumerate(env.contact_robot_paths) if "right_WSG32" in path]
-        left_ids = [i for i, path in enumerate(env.contact_robot_paths) if "left_WSG32" in path]
-        if not right_ids or not left_ids:
+        contact_ids = {
+            side: [i for i, path in enumerate(env.contact_robot_paths) if f"{side}_WSG32" in path]
+            for side in ("left", "right")
+        }
+        if not all(contact_ids.values()):
             raise RuntimeError("Cannot identify actual WSG bodies for cooperation evidence.")
         evaluator = TowerEvaluator(
             task, env.contact_robot_paths, motion_measurement=args.motion_measurement
@@ -87,10 +104,12 @@ def main() -> None:
                 return
             lower, upper = truth[indices[2]], truth[indices[3]]
             stabilizer = sum(
-                sum(v * v for v in lower["robot_contact_forces_n"][i]) ** 0.5 for i in left_ids
+                sum(v * v for v in lower["robot_contact_forces_n"][i]) ** 0.5
+                for i in contact_ids[stabilizer_side]
             )
             placer = sum(
-                sum(v * v for v in upper["robot_contact_forces_n"][i]) ** 0.5 for i in right_ids
+                sum(v * v for v in upper["robot_contact_forces_n"][i]) ** 0.5
+                for i in contact_ids[placer_side]
             )
             support = upper["block_contact_forces_n"][indices[2]][2]
             if stabilizer > 0.5 and placer > 0.5 and support > 0.05:
@@ -105,7 +124,13 @@ def main() -> None:
                 )
 
         with (args.output_dir / "trace.jsonl").open("w") as trace:
-            reference = PhysicalReference(env, trace, args.output_dir, sample_cooperation)
+            reference = PhysicalReference(
+                env,
+                trace,
+                args.output_dir,
+                sample_cooperation,
+                event_settling=args.event_settling,
+            )
 
             def verify_support(last_level: int, stage: str) -> None:
                 expected_bottom = TABLE_TOP
@@ -128,7 +153,6 @@ def main() -> None:
             bottom = TABLE_TOP
             stabilizer_pose = None
             # Per-piece yaw is a teacher planning choice, never a policy observation.
-            roles = (("left", 0), ("right", 180), ("left", -90), ("right", 90), ("right", 90))
             for level, (target, index, (side, yaw)) in enumerate(
                 zip(task.targets, indices, roles, strict=True)
             ):
@@ -174,7 +198,7 @@ def main() -> None:
                         )
                     if env.task_truth(index)["block_contact_forces_n"][indices[2]][2] <= 0.05:
                         raise RuntimeError("No physical load transfer at cooperative placement.")
-                reference.wait(20, f"{prefix}_supported_hold")
+                reference.wait(5 if args.event_settling else 20, f"{prefix}_supported_hold")
                 reference.grip(f"{prefix}_release", side, None)
                 retreat_z = release_z + target.dimensions_m[2] / 2 + 0.025
                 reference.move(f"{prefix}_retreat", side, [*task.assembly_xy_m, retreat_z], yaw)
@@ -191,31 +215,31 @@ def main() -> None:
                     green = env.task_truth(index)["block_pose_w"][:3]
                     stabilizer_pose = [green[0] - 0.01, green[1], green[2]]
                     for name, xyz in (
-                        ("high", [green[0] - 0.01, 0.20, 1.02]),
+                        ("high", [green[0] - 0.01, stabilizer_y, 1.02]),
                         ("center", [green[0] - 0.01, green[1], 1.02]),
                         ("above", [green[0] - 0.01, green[1], green[2] + 0.06]),
                         ("grasp", stabilizer_pose),
                     ):
                         reference.move(
                             f"stabilizer_{name}",
-                            "left",
+                            stabilizer_side,
                             xyz,
                             quaternion_xyzw=[0, 0, 0, 1],
                         )
-                    reference.grip("stabilizer_close", "left", target.dimensions_m[1])
+                    reference.grip("stabilizer_close", stabilizer_side, target.dimensions_m[1])
                 if level == 3:
                     if stabilizer_pose is None:
                         raise RuntimeError("Missing physical stabilizer setup.")
-                    reference.grip("stabilizer_release", "left", None)
+                    reference.grip("stabilizer_release", stabilizer_side, None)
                     reference.move(
                         "stabilizer_retract",
-                        "left",
+                        stabilizer_side,
                         [*stabilizer_pose[:2], stabilizer_pose[2] + 0.06],
                         quaternion_xyzw=[0, 0, 0, 1],
                     )
                     reference.move(
                         "stabilizer_clear_tower",
-                        "left",
+                        stabilizer_side,
                         [*stabilizer_pose[:2], bottom + target.dimensions_m[2] + 0.04],
                         # Pitch up 20 degrees to keep the proximal wrist reachable.
                         quaternion_xyzw=[
@@ -227,8 +251,8 @@ def main() -> None:
                     )
                     reference.move(
                         "stabilizer_exit",
-                        "left",
-                        [stabilizer_pose[0], 0.20, bottom + target.dimensions_m[2] + 0.04],
+                        stabilizer_side,
+                        [stabilizer_pose[0], stabilizer_y, bottom + target.dimensions_m[2] + 0.04],
                         quaternion_xyzw=[
                             0,
                             -math.sin(math.radians(10)),
@@ -236,7 +260,7 @@ def main() -> None:
                             math.cos(math.radians(10)),
                         ],
                     )
-                    reference.park("left")
+                    reference.park(stabilizer_side)
                     verify_support(level, "stabilizer withdrawal")
                 bottom += target.dimensions_m[2]
             reference.wait(40, "final_released_dwell")

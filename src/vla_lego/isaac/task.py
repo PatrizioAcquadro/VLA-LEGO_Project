@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from vla_lego.isaac.catalog import BlockPlacement, BlockSpec
 
@@ -48,14 +48,14 @@ class TowerTask:
         return f"Build a five-block tower inside the black square, bottom to top: {order}."
 
 
-def initial_tower_task() -> TowerTask:
+def initial_tower_task(*, mirror: bool = False) -> TowerTask:
     """First loose-piece scene; its control/reach coverage is still unqualified."""
     red = BlockSpec("cube", "small", "red")
     blue = BlockSpec("cube", "large", "blue")
     green = BlockSpec("prism", "small", "green")
     yellow = BlockSpec("prism", "large", "yellow")
     purple = BlockSpec("cube", "small", "purple")
-    return TowerTask(
+    task = TowerTask(
         placements=(
             BlockPlacement(red, (0.45, 0.15)),
             BlockPlacement(blue, (0.45, -0.30)),
@@ -68,3 +68,10 @@ def initial_tower_task() -> TowerTask:
         targets=(red, blue, green, yellow, purple),
         assembly_xy_m=(0.40, 0.0),
     )
+    if mirror:
+        task = replace(
+            task,
+            placements=tuple(replace(p, xy_m=(p.xy_m[0], -p.xy_m[1])) for p in task.placements),
+            assembly_xy_m=(task.assembly_xy_m[0], -task.assembly_xy_m[1]),
+        )
+    return task

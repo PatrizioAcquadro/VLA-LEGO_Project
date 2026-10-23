@@ -14,7 +14,7 @@ from vla_lego.isaac.kinematics import ArmKinematics
 class PhysicalReference:
     """Move only robot joints; callers own task choices and truth-based planning."""
 
-    def __init__(self, env: Any, trace, output_dir: Path, on_sample=None):
+    def __init__(self, env: Any, trace, output_dir: Path, on_sample=None, *, event_settling=False):
         self.env, self.trace, self.output_dir, self.on_sample = env, trace, output_dir, on_sample
         self.ctrl = ToolController(env)
         self.initial_orientations = {
@@ -31,6 +31,7 @@ class PhysicalReference:
         }
         self.stages: list[dict] = []
         self.max_limit_projection = 0.0
+        self.event_settling = event_settling
 
     def orientation(self, side: str, yaw_deg: float):
         from isaaclab.utils.math import quat_mul
@@ -63,6 +64,15 @@ class PhysicalReference:
             self.env.step(10)
             self.sample(stage)
 
+    def settle(self, ids, speed: float, max_ticks: int, stage: str) -> None:
+        quiet = 0
+        for _ in range(max_ticks):
+            self.wait(1, stage)
+            velocity = self.env.robot.data.joint_vel.torch[0, ids]
+            quiet = quiet + 1 if float(velocity.abs().max()) < speed else 0
+            if quiet >= 3:
+                break
+
     def joint_move(self, stage: str, side: str, goal) -> None:
         import torch
 
@@ -80,7 +90,10 @@ class PhysicalReference:
             self.env.set_joint_targets(dict(zip(self.solvers[side].names, q.tolist(), strict=True)))
             self.env.step(10)
             self.sample(stage)
-        self.wait(40, stage + "_settle")
+        if self.event_settling:
+            self.settle(ids, 0.02, 40, stage + "_settle")
+        else:
+            self.wait(40, stage + "_settle")
 
     def park(self, side: str) -> None:
         self.joint_move(
@@ -138,4 +151,7 @@ class PhysicalReference:
         # Measured inner gap = 2*(leader+.001); retain the validated 1 mm preload.
         target = 0.034 if width_m is None else width_m / 2 - 0.002
         self.env.set_joint_targets({f"{side}_WSG32_JAW_OPENING": target})
-        self.wait(20, stage)
+        if self.event_settling:
+            self.settle(self.env.jaw_ids, 0.001, 20, stage)
+        else:
+            self.wait(20, stage)
