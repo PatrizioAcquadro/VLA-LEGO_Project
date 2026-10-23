@@ -210,11 +210,7 @@ class TowerEvaluator:
                     lower = blocks[assignment[lower_level]]
                     for stabilizer, placer in (("left", "right"), ("right", "left")):
                         key = (assignment, lower_level, upper_level, stabilizer)
-                        active = (
-                            all(placed[: lower_level + 1])
-                            and self._gripping(lower, stabilizer)
-                            and self._gripping(upper, placer)
-                        )
+                        active = self._gripping(lower, stabilizer) and self._gripping(upper, placer)
                         if not active:
                             self.coordination.pop(key, None)
                             continue
@@ -222,7 +218,8 @@ class TowerEvaluator:
                             key, {"approach": False, "contact_start": None}
                         )
                         if (
-                            support <= CONTACT_ZERO_N
+                            all(placed[: lower_level + 1])
+                            and support <= CONTACT_ZERO_N
                             and upper["block_pose_w"][2] - self.expected_z[upper_level]
                             >= POSITION_TOLERANCE_M
                         ):

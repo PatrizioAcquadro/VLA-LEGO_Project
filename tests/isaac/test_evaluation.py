@@ -1,6 +1,7 @@
 """Analytical scorer fixtures only; these are not physical demonstrations."""
 
 import math
+from copy import deepcopy
 from dataclasses import replace
 
 import pytest
@@ -157,6 +158,40 @@ def test_grabbing_an_already_supported_upper_piece_is_not_a_placement():
     assert result["checks"]["ordered_supported_released_stable"]
     assert not result["checks"]["functional_cooperation"]
     assert not result["passed"]
+
+
+@pytest.mark.parametrize(
+    "support_returns,grip_lost,expected",
+    [(True, False, True), (False, False, False), (True, True, False)],
+)
+def test_cooperation_restarts_supported_dwell_without_forgetting_held_approach(
+    support_returns, grip_lost, expected
+):
+    task = initial_tower_task()
+    scorer = TowerEvaluator(task, PATHS)
+    scorer.update(0, states(task))
+    approach = states(task, levels=3)
+    approach[3]["block_pose_w"][:3] = [*task.assembly_xy_m, scorer.expected_z[3] + 0.03]
+    approach[3]["nonrobot_contact_force_n"] = 0
+    grip(approach, 2, "left")
+    grip(approach, 3, "right")
+    scorer.update(0.05, approach)
+    contact = states(task, levels=4)
+    grip(contact, 2, "left")
+    grip(contact, 3, "right")
+    scorer.update(0.1, contact)
+    unloaded = deepcopy(contact)
+    unloaded[2]["block_contact_forces_n"][1][2] = 0
+    if grip_lost:
+        unloaded[2]["robot_contact_forces_n"] = [[0.0] * 3 for _ in PATHS]
+    scorer.update(0.15, unloaded)
+    assert not scorer.result()["cooperation_events"]
+    for tick in range(6):
+        scorer.update(0.2 + tick * 0.05, contact if support_returns else unloaded)
+    events = scorer.result()["cooperation_events"]
+    assert bool(events) == expected
+    if events:
+        assert events[0]["contact_start_s"] == 0.2
 
 
 def test_pose_motion_protocol_does_not_use_unbiased_solver_velocity():
