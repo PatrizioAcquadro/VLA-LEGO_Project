@@ -25,3 +25,5 @@ The repository currently contains MuJoCo/Alex V1 and untrained Qwen-based compon
 | Read consequential scope decisions | [Decision log](log.md) |
 
 Topic pages own shared details; phase plans link to them. Operating instructions describe the implementation they actually run. The names `VLA-LEGO_Project` and `vla-lego` remain for continuity; LEGO connections belong to the later [extension phase](implementation_phases/phase-8-consolidation.md).
+
+The current project completes with the qualified five-block system and Phase 8 consolidation. Further shapes, insertion and LEGO are optional follow-on scope, as defined in the [completion boundary](implementation_phases/index.md#what-completes-the-current-project).

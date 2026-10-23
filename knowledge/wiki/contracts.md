@@ -19,6 +19,10 @@ The VLA owns piece selection, sequence, cooperation and recovery. A low-level co
 
 Finalize this contract in Phase 2 using the minimum scene and Phase 3 pilot before mass collection. Reproduce real observation availability and latency in simulation; missing hardware signals are not filled with simulator truth. The [data strategy](data.md) owns synchronization, source mapping and leakage prevention.
 
+Phase 2 first supplies a provisional contract for pilot collection, then records concrete values for the final model. Required decisions are the ordered available signals, units/reference frames, pose/action meaning, gripper convention, observation history, normalization, predicted/executed horizon and the capture/replanning/command rates. These values are not left to different consumers to guess. A changed contract requires reconciling earlier pilot data or recollecting it.
+
+Task progress or memory supplied to the policy must derive from its permitted past observations/actions; teacher stage indices and evaluator success labels are not deployable state. Select an explicit observation-based mechanism for justified stop/abstention in Phase 2, distinct from the controller's hard-limit and stale-command stops. The evaluator may terminate a scored episode after the required dwell, but does not choose corrective actions or supply progress to the controller.
+
 ## Existing MuJoCo and Qwen contract
 
 The sections below describe the retained implementation only. They remain useful while the replacement is built and do not constrain its design.

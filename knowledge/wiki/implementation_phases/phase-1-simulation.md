@@ -2,26 +2,27 @@
 
 ## Objective
 
-Obtain a physically credible assembly environment matching the Purdue robot and printed pieces, progressing from one placement to cooperative tower construction.
+Create the hardware-faithful task and demonstrate that Alex003 can physically assemble the requested tower under external reference control. This is task feasibility, not learned-policy success.
 
 ## Design choices
 
-Reuse the shared fixed-base Alex003, measured pedestal, WSG32/UMI grippers and head ZED X Mini. Task-specific calibration belongs here; reusable robot assets remain in Alex. Wrist cameras are conditional on a demonstrated occlusion limitation.
+Use the shared fixed-base Alex003, measured pedestal, WSG32/UMI grippers and head ZED X Mini. Task calibration belongs here. Wrist cameras remain conditional on a demonstrated occlusion limitation.
 
-Use the [printable block catalog](../bricks.md) and measured table, grasp clearance and contact behavior. Objects move through robot contact under gravity, without locking, teleports or external object assistance during demonstrations.
+Use the [block/task definition](../bricks.md), including the initial print sample and genuine stabilize–place cooperation. All manipulation uses robot contact under gravity. A reference controller may use simulation truth; the eventual policy may not.
 
 ## Conceptual activities
 
-- Align robot, tool, sensor and workspace geometry with the physical setup and early hardware-interface findings.
-- Calibrate printed dimensions, mass, grip/contact behavior and released stability before broad randomization.
-- Establish reachable grasp, lift, transport, placement and release; progress to a simple tower.
-- Develop genuine stabilize–place cooperation with interchangeable arm roles and realistic distractors.
-- Separate deployable observations from privileged teacher/evaluator information using the [future contract](../contracts.md#planned-alex003-contract).
+- Align robot, table, tool and camera frames with the physical setup.
+- Establish a minimum scene: both arms/grippers, table, one graspable block, head images, real-equivalent proprioception and bounded robot commands.
+- Demonstrate grasp, lift, transport and release in that minimum scene; hand it to Phases 2 and 3 while full task development continues.
+- Measure initial prints and fit dimensions, mass, grip/contact behavior and released stability; clearly label provisional assumptions until measurements exist.
+- Expand to five requested pieces plus distractors, physically feasible instructions and cooperative placements with either arm in either role.
+- Establish an evaluator for identity/order, cooperation, support, release and dwell, with calibration-derived acceptance ranges.
 
 ## Expected result
 
-A usable Isaac task with physical manipulation, a defined five-block goal, initial calibrated variation and a cooperative teacher feasibility demonstration.
+A complete task environment, measured initial print catalog and reference execution of a five-block cooperative tower. The reference behavior supplies seed skills for the data-ready teachers in Phase 3.
 
 ## Advancement conditions
 
-Pieces can be grasped and released without shortcuts, both arms perform task-relevant roles, and the scene supports meaningful failure and recovery observations. A minimum scene can unblock Phases 2 and 3 early; large-scale collection waits for the full task and interfaces. A prearranged tower is not completion.
+A reference execution completes the full task from loose pieces, with the cooperation defined in the task contract and no object assistance. Print/contact assumptions and evaluator ranges are resolved for the admitted initial curriculum. The minimum scene unlocks parallel work early; it is not completion of Phase 1. Wider variation and systematic recovery generation belong to Phases 3 and 4.

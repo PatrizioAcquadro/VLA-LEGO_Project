@@ -21,6 +21,8 @@ The following is a source shortlist reviewed October 23, 2026, not a downloaded 
 
 Admission is source-specific: record the release and attribution, available channels, action units/frames/timing, permitted use, overlap and chosen subset. A foreign embodiment can contribute supported cross-embodiment training or representation learning; it becomes Alex action supervision only through a justified, physically validated mapping. Preserve masks for absent modalities rather than inventing observations.
 
+For each shortlisted source, Phase 3 records whether it is used as additional training data, already represented only through the chosen checkpoint, deferred or excluded. Direct ingestion is not mandatory for every source. A large volume with unresolved action semantics or no useful task contribution is not an acceptable substitute for Alex coverage.
+
 ## Human egocentric data
 
 [EgoDex](https://github.com/apple-aiml-research/ml-egodex) provides public egocentric video, language and 3D head/hand/body trajectories; dataset terms are CC BY-NC-ND, separate from its code license. Treat additional use as conditional on compatible training/processing/redistribution terms and measured task benefit. Human hand motion is not a robot action label.
@@ -35,6 +37,8 @@ Add human demonstrations or corrective interventions where scripted behavior lac
 
 Use [Isaac Lab Mimic](https://isaac-sim.github.io/IsaacLab/v2.2.0/source/overview/teleop_imitation.html) and [DexMimicGen](https://dexmimicgen.github.io/) principles to transform object-relative subsequences and expand seeds. Preserve hand synchronization, contact phases and dependencies such as stabilization before placement. Reuse RoboTwin's structured variation of clutter, lighting, backgrounds, table geometry and language within measured physical ranges.
 
+A declared disturbance may create a failure state for recovery collection or evaluation; record its cause and timing separately. It may not secretly help grasp, transport or complete the structure. Recovery actions after that disturbance still come from the teacher during collection or the policy during autonomous evaluation, through the normal robot interface.
+
 ## Initial case distribution
 
 | Share of attempted collection cases | Coverage |
@@ -48,6 +52,15 @@ These are starting collection quotas, not promised success rates or mandatory tr
 ## Learning from mistakes
 
 Preserve the lead-up to the error, actions actually executed, intervention boundary, corrective actions and subsequent outcome. Accepted nominal and successful corrective segments supply positive imitation targets. Failed actions remain diagnostic context; they are not automatically positive targets. Any failure-prediction, preference or reinforcement objective requires explicit labels and a supported learning method.
+
+| Segment | Learning role |
+|---|---|
+| Verified nominal action | Positive action supervision |
+| Verified corrective continuation | Positive correction supervision conditioned on the available error context |
+| Failed action or unsuccessful correction | Preserved context/diagnosis; excluded from positive action imitation unless a separately validated useful subsegment is identified |
+| Justified abstention/stop | Supervision for the selected deployable stop mechanism, including allowed hold behavior; not a successful tower label |
+
+Collection categories and training weights are different decisions. Report both, including how much usable nominal, corrective and stop supervision remains after filtering. Context frames must not accidentally turn every action in a failed episode into an imitation target.
 
 Once a VLA exists, collect corrections to errors it actually produces. [IntervenGen](https://arxiv.org/abs/2405.01472) and [RECAP](https://www.pi.website/blog/pistar06) motivate this iterative rollout–correction–learning loop. Reuse the principle without making their full algorithms mandatory. Report assisted collection separately from autonomous performance.
 
@@ -65,4 +78,18 @@ Split complete episodes and related seed/generation families before creating win
 
 Reserve color–shape combinations, sizes, layouts and instruction variants; distinguish recombination of known attributes from genuinely unseen geometry or dimensions. Report each axis separately, including whether the reserved material was already seen in public pretraining. Cross color and shape assignments so color does not become a shortcut for geometry.
 
-Scale pilot → broader corpus → policy-driven corrections according to coverage and learning curves, not an inherited episode quota. Keep nominal ability while adding recoveries and real adaptation. Never tune routinely on final qualification episodes.
+Scale pilot → broader corpus → policy-driven corrections according to coverage and learning curves, not an inherited episode quota. Keep nominal ability while adding recoveries and real adaptation. Never tune routinely on final qualification episodes. If public pretraining exposure is unknown, say so: a project-held-out combination is not proof that the foundation model has never seen it.
+
+## Corpus readiness and growth
+
+The Phase 3 pilot supplies full-tower seed demonstrations, corrections for its admitted initial error families and stop examples. It establishes that recording, supervision and selected-model adaptation form a usable path; it is not the full training corpus.
+
+The initial Phase 4 handoff contains:
+
+- Usable demonstrations for selection, grasp, transport, stabilization, placement, release and continuation across all five levels, with both arm roles represented.
+- Variation that separates color from size and geometry, including misleading distractors and different feasible instructions/layouts.
+- Explicit nominal/recovery/stop coverage, source decisions, action supervision roles, useful-data yield and remaining gaps.
+- Training/development/qualification groups defined before windowing, with no transformed seed descendants crossing groups.
+- Data consumable under the Phase 2 contract, with no unresolved mapping, missing-signal fabrication or privileged policy inputs.
+
+This initial handoff starts Phase 5. Later batches address measured errors; the full collection/learning cycle must cover all seven named recovery families and the declared generalization axes before final qualification. At the end of each bounded batch or learning iteration, decide which gap to address next or whether the candidate is ready for Phase 6. No fixed episode quota or improving training loss alone establishes sufficient coverage.

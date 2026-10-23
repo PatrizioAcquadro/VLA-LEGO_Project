@@ -33,6 +33,8 @@ flowchart LR
 
 The VLA chooses pieces, sequence, arm roles and corrective behavior. The controller handles motion realization, limits, stale commands and stopping; it does not secretly solve the assembly task. Privileged teacher inputs and evaluator truth never become undeclared policy inputs. Teacher-assisted collection and autonomous qualification are separate execution modes.
 
+Online learned perception/planning used by the policy runs on Orin, including any learned auxiliary module; the NUC keeps the established low-level robot functions. Offboard compute is for development, training, offline teachers or passive recording/evaluation, not a hidden online task planner. Human scene preparation between episodes is permitted; autonomous resetting of loose pieces is outside the current completion requirement.
+
 Camera capture, model replanning and actuator command rates are separate. The chosen observation/action representation and timing are defined in [contracts](contracts.md); model and onboard constraints in [models](models.md).
 
 ## Existing implementation and migration

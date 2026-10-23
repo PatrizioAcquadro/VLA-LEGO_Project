@@ -23,7 +23,7 @@ Reviewed October 23, 2026. This revision implements the **documentation roadmap 
 | Policy | Robot-pretrained VLA; GR00T N1.7 leads, SmolVLA is the compact alternative. Selection remains conditional on task and Orin feasibility. |
 | Data | Selected public knowledge plus physically executed Alex simulation demonstrations, corrections and later targeted real data. |
 | Deployment | Entire VLA inference on Orin, with the established low-level robot controller. |
-| Progression | Qualify simulation, measure transfer before adaptation, adapt on separate real data, then qualify the physical task. |
+| Progression | Qualify simulation, measure transfer before adaptation, adapt on separate real data, then qualify the physical task and consolidate its handoff. |
 
 ## Immediate priorities and unresolved facts
 
@@ -31,6 +31,8 @@ Reviewed October 23, 2026. This revision implements the **documentation roadmap 
 2. Resolve the Orin software compatibility path and actual WSG32 command/feedback interface early. Simulated gripper readiness does not establish physical integration.
 3. Calibrate the initial printed set and physically executed cooperative teacher, then select the model using a bounded pilot. Large-scale collection waits for both Phase 2 and Phase 3.
 4. Iterate coverage, fine-tuning and corrections toward the [qualification targets](validation.md#assembly-qualification-targets).
+
+The [handoff order and decision ownership](implementation_phases/index.md#dependencies-and-handoffs) distinguish partial readiness from completed phases. The current project closes with the qualified five-block system and Phase 8 consolidation. Walls/bridges, insertion blocks, LEGO and a paper are optional subsequent scope.
 
 The [GR00T/JetPack mismatch](models.md#onboard-feasibility) is unresolved; no upgrade or onboard run is claimed. Print properties, Alex-specific latency, head-camera sufficiency, physical performance and resource allocations remain to be measured. Existing SDK FK parity was skipped; legacy self-consistency does not qualify the new robot.
 

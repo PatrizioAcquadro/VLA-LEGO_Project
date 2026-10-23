@@ -4,9 +4,15 @@
 
 Alex003 builds an **ordered five-block tower**, selecting each requested piece by color and size among distractors. Instructions specify bottom-to-top order; initial solvable tasks use stable support relationships and reachable pieces. Missing pieces or impossible arrangements belong to explicit stop cases.
 
-The two arms must cooperate: the initial behavior is one arm stabilizing the existing structure while the other places a piece, followed by full release. Roles vary across episodes. Alternating independent single-arm placements or moving the idle arm does not establish cooperation. Define observable task-relevant contributions from both arms and record when they occur.
+Each nominal episode starts with loose pieces and an empty designated assembly area. The target is five distinct physical blocks in five vertical levels, with the base on the table and each later block supported by the preceding one. The policy receives the instruction and deployable observations, not target object IDs, simulator coordinates or a teacher-selected next piece. Human arrangement/reset between episodes is allowed; no human manipulation or task guidance occurs after the autonomous attempt begins.
+
+The instruction must identify each requested piece by visible attributes, adding shape when color and size would otherwise be ambiguous. Visibly equivalent duplicate pieces are interchangeable; an invisible serial identity cannot determine success. Include distractors that distinguish color from size: at least one matches a requested color but has the wrong size, and another matches a requested size but has the wrong color. Phase 1 fixes the vocabulary, admitted dimensions and feasible orders; it does not silently sort every tower by footprint instead of following the instruction.
+
+The two arms must cooperate. For the initial task, every successful episode includes at least one placement above the base in which one arm intentionally stabilizes the existing structure while the other aligns and places a block. Their task-relevant actions overlap; incidental contact or an idle arm touching the table does not count. Roles vary across episodes, but a role swap within every episode is not required. Phase 1 defines the contact/motion evidence for functional stabilization, and Phase 7 confirms its observable physical equivalent.
 
 Success requires correct pieces and order, supported placements, complete release of all robot contact and stability through a calibrated dwell. The [qualification page](validation.md#assembly-qualification-targets) owns aggregate targets and campaign rules. Future arrangements include walls and bridges; large tolerant male–female insertions follow only after gravity assembly works, and LEGO is later still.
+
+A recovery is complete only when the robot resumes and finishes that same task within its allowed budget. A dropped piece may be recovered only while it remains reachable under the declared scene rules; a human reset starts a new episode and cannot rescue the previous result. If an instruction is non-completable, the expected behavior is a justified bounded attempt to resolve uncertainty or a safe stop, not an invented replacement task. Non-completable episodes are scored separately from tower completion.
 
 ## Printable catalog
 

@@ -13,6 +13,16 @@ Use a model with existing robotic pretraining, then adapt it to Alex003. The dec
 
 Compare the same Alex observation boundary, pilot task distribution and physical controller. Measure block selection, full completion, cooperation and recovery, plus memory with concurrent services and observation-to-applied-command latency. Choose one primary model; additional integrations must earn their maintenance cost. Checkpoint and code terms must be compatible with intended training and deployment.
 
+## Selection and readiness
+
+First establish whether GR00T has a workable hardware/software path, then use the Phase 3 pilot for bounded task adaptation. Exercise SmolVLA if compatibility, latency, memory or task behavior makes a compact alternative necessary; integrating both is not an unconditional requirement. Additional candidates require a concrete expected benefit. Keep the same admitted task and observation boundary when comparing candidates.
+
+Phase 2 is complete only with actual Orin execution, usable WSG32 integration and a pilot-adapted policy that performs an instruction-conditioned physical pick/place sequence in simulation, with both tool commands supported. Shape-correct random outputs are insufficient. This pilot evidence establishes feasibility; full cooperative five-block success rates belong to Phases 5–7.
+
+Derive a responsiveness budget from the manipulation and recovery timescales observed in Phase 1, then measure observation age, inference and applied-command delay against it with concurrent robot services. Record the chosen numeric budget and measured memory headroom before mass collection. Do not assume a nominal camera rate or an external inference benchmark meets it. All learned online perception/planning used by the policy runs on Orin; offline teachers and training may use the other resources.
+
+If no candidate meets this boundary, keep the phase incomplete and resolve the identified interface/runtime/model limitation. Moving inference off the robot or changing the task target is a scope change, not an implicit fallback.
+
 ## Onboard feasibility
 
 The [Alex guide](https://docs.google.com/document/d/17QtexPK_RqmfRammA7CsvEUuhFZFkicrJfONCdlWkEg/edit?tab=t.sfoy44dcf7kc) describes a Jetson AGX Orin 64 GB on the robot, a Forge carrier and JetPack 6.2.1. As reviewed October 23, 2026, the [GR00T deployment guide](https://github.com/NVIDIA/Isaac-GR00T/blob/main/scripts/deployment/README.md) specifies JetPack 7.2 / Jetson Linux 39.2 / CUDA 13.2 for its current Orin path and excludes JetPack 6.x. That is an unresolved integration constraint, not an instruction to upgrade the robot.

@@ -2,25 +2,26 @@
 
 ## Objective
 
-Establish an essential, maintainable base for the Alex003 assembly roadmap without discarding useful behavior or consequential evidence.
+Turn the current repository into a usable starting point for the new roadmap. Entry is the retained MuJoCo/Qwen baseline; completion does not require a trained model, an assembled tower or a qualified Orin runtime.
 
 ## Design choices
 
-Use Isaac Sim/Lab as the future simulation stack and the shared Alex package as the robot asset owner. Keep task logic, teachers, data and policies in this project. Separate simulation, training and Orin environments according to their actual compatibility needs; use the [resource roles](../cluster.md#planned-resource-roles).
+Use Isaac Sim/Lab and the shared Alex package. Reusable robot assets belong to Alex; task scenes, calibration, teachers, data and policies belong here. Separate simulation, training and Orin environments; their readiness need not occur simultaneously. The [compute plan](../cluster.md#planned-resource-roles) assigns resources without requiring every cluster to be available.
 
-Cleanup follows consumers and replacement readiness. Remove unused duplication and abandoned plans first. Retire MuJoCo, copied robot assets and the custom Qwen model only when their maintained roles have operational replacements. Avoid maintaining two simulators or two robot asset authorities indefinitely.
+Remove material only when it has no maintained consumer or protected evidence. Replace MuJoCo, copied robot assets and the custom Qwen path in stages, preserving the usable baseline until the corresponding successor works.
 
 ## Conceptual activities
 
-- Identify what is used, intentionally retained, replaced or obsolete; retain provenance and meaningful failed/skipped outcomes.
-- Establish ownership and compatibility boundaries across this project, Alex and upstream learning tools.
-- Define the minimal path from scene and observations to teacher data, pretrained policy and onboard execution.
-- Keep migration stages independently usable; recover ordinary implementation history through Git.
+- Classify retained, immediately removable and replacement-dependent capabilities, with a reason for each retained legacy path.
+- Establish a usable GPU simulation environment and shared Alex dependency.
+- Identify training and onboard environment requirements and unresolved compatibility questions for Phase 2.
+- Establish task/asset ownership and a minimal route from observations to robot commands and recorded demonstrations.
+- Remove consumer-free duplication; preserve consequential failures and attribution, using Git for ordinary history.
 
 ## Expected result
 
-A focused development base and a staged retirement decision for each legacy subsystem, with one canonical source per topic.
+A usable simulation foundation, a clear ownership decision, and a staged retirement list identifying each successor and the capability that permits removal. Training and onboard environment choices may still be provisional.
 
 ## Advancement conditions
 
-The minimum Isaac/Alex environment has a viable dependency path, the retained baseline remains usable, and obsolete material has no active consumer or protected evidence. Replacement-dependent removals remain open until their successors work. This phase authorizes no bulk deletion merely because code is old.
+The simulation foundation is usable on at least one suitable GPU, the shared robot package can be consumed without duplicating its assets, and the retained baseline remains usable. Phase 1 can begin task construction. Unresolved Orin/model choices explicitly pass to Phase 2; they do not keep this phase open. A clean directory tree without a usable simulation foundation is insufficient.

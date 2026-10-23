@@ -1,28 +1,29 @@
-# Phase 8 — Consolidation and extensions
+# Phase 8 — Consolidation and optional extensions
 
 ## Objective
 
-Make the demonstrated assembly system repeatable and maintainable, then extend it in increasing order of physical difficulty.
+Complete the current project by making the qualified five-block system repeatable, understandable and maintainable. Extension tasks are subsequent work, not additional requirements for closing the tower project.
 
 ## Design choices
 
-Consolidate the working task before pursuing a new research contribution. Reuse existing models, datasets and methods whenever they accelerate reliable robot performance.
+Consolidate the demonstrated base before seeking a new research contribution. Retain one shared robot asset authority, one task simulator and the selected policy path; a second path requires a concrete continuing consumer.
 
-Finish the retirement decisions from Phase 0 once replacements are operational. Maintain one simulation stack, shared robot asset ownership and one selected policy path unless a second path has a concrete continuing purpose.
+Finish replacement-dependent cleanup from Phase 0. Preserve essential attribution and negative results, while recovering ordinary implementation history through Git.
 
 ## Conceptual activities
 
-- Make simulation, collection, adaptation and onboard operation understandable and repeatable, with measured resource and performance limits.
-- Preserve required asset/data attribution, consequential negative results and the artifacts needed to reproduce the demonstrated behavior.
-- Remove superseded MuJoCo paths, duplicated robot assets, custom model experiments and unused orchestration together with obsolete consumers.
-- Extend gravity assembly to walls and bridges using more stackable shapes, reusing the same data/recovery loop.
-- Only then introduce large, tolerant male–female insertion features, with measured contact and alignment demands.
-- Defer LEGO studs and tight insertion/retention until the preceding capabilities are established; preserve the historical retention failure when designing that work.
+- Deliver the working task/printed catalog, calibration, collection/adaptation method and selected policy with its complete deployment contract.
+- Provide the data or permitted access/generation route, training/deployment requirements, qualification outcomes and known limits.
+- Make setup, episode preparation, execution, stopping and between-episode reset reproducible by another operator.
+- Retire superseded MuJoCo, copied robot assets, custom model experiments and unused orchestration once their maintained roles are replaced.
+- Record an optional progression: gravity walls/bridges, then large tolerant male–female insertions, then LEGO. Each extension needs its own physical task, data and qualification design.
 
 ## Expected result
 
-A focused, usable Alex003 assembly platform and a justified next extension with its own task, data and physical acceptance requirements.
+A usable handoff of the qualified Alex003 tower system and an essential active repository. Future extensions are clearly separated from delivered capability.
 
 ## Advancement conditions
 
-The base task is repeatable on the real robot, current documentation agrees with demonstrated capability, and cleanup preserves active consumers and essential evidence. Each extension requires its own physical demonstrations and qualification; gravity-stacking success does not qualify insertion or LEGO.
+Phases 6 and 7 meet their targets; another operator can reproduce the supported five-block workflow from the delivered instructions and artifacts; required cleanup and attribution are complete. No open issue prevents that supported workflow. Remaining limitations and unsupported cases are explicit.
+
+At that point the current project is complete. Walls, bridges, insertions, LEGO, additional benchmarks and a paper are optional follow-on scope; they neither delay completion nor inherit the tower's qualification. Publishing artifacts or changing a release remains a separate action.

@@ -2,26 +2,27 @@
 
 ## Objective
 
-Establish the data foundation: relevant public knowledge, physically valid Alex demonstrations and useful recovery supervision.
+Produce a small, usable Alex corpus and a reliable way to generate and correct demonstrations. Begin with the Phase 1 minimum scene and Phase 2's provisional contract; complete the handoff jointly with Phase 2.
 
 ## Design choices
 
-Reuse robotic pretraining, selected public robot episodes and an Alex-specific simulated corpus. Human egocentric data is optional and must provide measured benefit under compatible terms; hand trajectories are not Alex actuator labels.
+Reuse pretrained robotic knowledge and selectively admit public data. The [data strategy](../data.md) owns source terms, overlap, action mapping, case distribution and supervision. Every reviewed source receives a decision: additional training data, checkpoint prior only, deferred or excluded, with a reason.
 
-Start with a geometric teacher combining motion planning, feedback and bimanual coordination. Use human demonstrations or corrections for behavior it cannot cover. Larger models may propose programs or annotations offline, but physically executed trajectories remain the authority. The [data strategy](../data.md) owns source admission, case distribution and supervision boundaries.
+Use geometric motion planning, feedback and bimanual coordination for the initial teacher. Human demonstrations/corrections cover gaps. Larger models may assist offline, but physical execution establishes validity.
 
 ## Conceptual activities
 
-- Select public sources by actual availability, terms, embodiment, modalities, action semantics and task relevance; remove aggregate overlap.
-- Produce nominal grasp–transport–place–release sequences and recoveries from consequential errors, including coordination failures.
-- Preserve context, failed actions, corrective interventions and subsequent outcomes without teaching failed actions as successful targets.
-- Expand object-relative subsequences using Mimic/DexMimicGen principles while preserving dependencies between hands.
-- Establish a small pilot spanning nominal, recoverable and non-completable cases, with grouped splits before windowing.
+- Select and inspect relevant public subsets, distinguishing actual accessible episodes from papers, assets or checkpoint priors.
+- Turn Phase 1 reference skills into recorded full-tower demonstrations, with correct language, synchronization and separate privileged channels.
+- Add corrective continuations for the initial error curriculum and appropriate behavior in non-completable cases.
+- Establish how seed demonstrations can be expanded while preserving dependencies between hands; expansion need not already be large-scale.
+- Build the pilot across nominal, recovery and stop categories, keeping all attempts and measuring useful-data yield.
+- Separate generation families before windowing and provide the pilot to Phase 2 for bounded adaptation.
 
 ## Expected result
 
-An admitted source shortlist, executable teachers and a pilot demonstrating useful behavior and corrections, with all attempted episodes accounted for.
+Source-admission decisions, executable nominal/recovery teachers and a pilot usable by the selected model. Include successful full-tower seeds, verified corrective continuations for admitted error families, stop examples, achieved case counts and explicitly uncovered families.
 
 ## Advancement conditions
 
-Pilot actions are physically grounded, observations match the deployable interface, and recovery examples include verified outcomes. Source terms, overlap and action mappings are resolved for admitted data. Scaling waits for Phase 2; public corpus size or fluent annotations alone do not establish readiness.
+The selected model can consume the pilot under the finalized contract, including positive/corrective targets and appropriate masks for other segments. Demonstrations use actual contacts; corrections have observed outcomes. Initial gaps have named Phase 4 coverage requirements. Contract changes require a justified remapping or recollection, never fabricated missing signals. Neither a source bibliography nor successful teacher videos alone completes this phase.

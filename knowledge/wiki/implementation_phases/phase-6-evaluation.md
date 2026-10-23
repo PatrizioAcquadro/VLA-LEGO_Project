@@ -2,26 +2,26 @@
 
 ## Objective
 
-Determine whether the learned policy is ready for controlled physical transfer, including nominal assembly, generalization and recovery.
+Decide whether one fixed learned candidate is ready for controlled physical transfer. Entry requires the Phase 5 candidate and the declared task, held-out groups and calibrated evaluation protocol.
 
 ## Design choices
 
-Use the canonical [task definition](../bricks.md#target-task) and [qualification targets](../validation.md#assembly-qualification-targets). Evaluate autonomous decisions with the same observation boundary, command limits and representative latency as onboard execution.
+Apply the canonical [task definition](../bricks.md#target-task) and all three [simulation qualification targets](../validation.md#assembly-qualification-targets). The same checkpoint, observation boundary and execution configuration must satisfy the separate nominal, generalization and recovery campaigns.
 
-Success requires correct block identities and order, meaningful cooperation, complete release and calibrated dwell stability. Two arms in the scene do not establish bimanual behavior.
+Use measured Orin-equivalent observation age, replanning latency and command timing, including deployment precision/horizon choices. Desktop speed alone is insufficient.
 
 ## Conceptual activities
 
-- Fix campaign conditions, timeouts, allowed recoveries, tolerances and unseen groups before collecting outcomes.
-- Measure nominal five-block assembly, dedicated generalization cases and recoverable perturbations separately.
-- Include realistic camera delay, inference/replanning delay and command execution timing from Orin.
-- Examine wrong-piece choices, interference, instability, unnecessary refusal and unsuccessful recovery, retaining all attempted episodes.
-- Report counts, uncertainty, completion times, interventions and representative failures as well as success.
+- Fix episode sets, distribution, timeout, allowed recoveries, perturbations and evaluator tolerances before the campaign.
+- Evaluate nominal five-block assembly, held-out generalization and recovery-to-full-completion separately.
+- Verify actual cooperative contribution and final release/stability; do not score a corrected grasp alone as a recovered task.
+- Report counts, confidence intervals, timing, interventions and failures, including per-axis generalization and per-error recovery results.
+- Assess appropriate stops separately from assembly completion and report unnecessary refusals on feasible cases.
 
 ## Expected result
 
-A bounded assessment of what the candidate can do, where it fails and which simulation-to-real gaps remain.
+A qualification decision for the fixed candidate, complete campaign outcomes and a ranked account of remaining physical-transfer gaps.
 
 ## Advancement conditions
 
-Meet the simulation criteria in the canonical qualification table without retuning thresholds or substituting favorable retries. If a campaign drives further learning, keep its results and reserve fresh independent qualification episodes. Hardware readiness is an additional transfer condition; simulation performance does not establish physical success.
+The candidate meets all three simulation targets on their full declared denominators, without hidden assistance, favorable retries or adjusted acceptance ranges. A passing aggregate cannot hide a missing required campaign. Failure returns to targeted development; retain the result and reserve fresh qualification episodes if these episodes inform learning. Passing this phase allows controlled transfer work, not a claim of real-robot success.

@@ -9,6 +9,7 @@ Keep only decisions that change interpretation or future development. Use Git fo
 - Prefer robot-pretrained GR00T N1.7 with SmolVLA as compact alternative. Resolve Orin stack and physical WSG32 feasibility before large-scale collection.
 - Make public-data selection, nominal/recovery/stop coverage and policy-driven corrections central. Use RGB-Objects for printable geometry; measure the prints. Real adaptation follows a separately measured transfer baseline.
 - Prioritize reliable task performance over mandatory benchmark replication or paper studies. The revision changes documentation only, with local commits and no push or execution of future phases.
+- Close the current project with the qualified five-block system and repeatable handoff. Further structures/insertion/LEGO are optional; the model–pilot handoff and ownership of measured design decisions are explicit prerequisites for scaling.
 
 ## 2026-10-23 — Earlier maintained scope and task change
 
