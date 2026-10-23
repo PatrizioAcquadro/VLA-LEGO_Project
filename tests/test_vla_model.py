@@ -142,9 +142,7 @@ _ACTION_HEAD_CFG: dict = {
     "tokens_per_action_step": 1,
     "projector": {
         "hidden_dim": None,  # resolved at runtime to backbone.hidden_size
-        "n_layers": 2,
         "activation": "silu",
-        "dropout": 0.0,
     },
     "timestep_embed_dim": 16,  # small for fast CPU tests
     "flow_matching": {
@@ -160,7 +158,6 @@ _ACTION_HEAD_CFG: dict = {
         "lambda_text": 1.0,
         "lambda_action": 1.0,
     },
-    "inference": {"execute_steps": 8},
     "float32_head": True,
 }
 

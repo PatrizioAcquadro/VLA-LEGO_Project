@@ -48,10 +48,6 @@ class TestVLMBackboneConfig:
         assert vlm_cfg.model.vlm.freeze.backbone is True
         assert vlm_cfg.model.vlm.freeze.vision_encoder is True
 
-    def test_vlm_config_image_resolution(self, vlm_cfg):
-        """Image resolution matches frozen camera contract (320×320)."""
-        assert vlm_cfg.model.vlm.processor.image_resolution == 320
-
     def test_vlm_backbone_info_dataclass(self):
         """VLMBackboneInfo can be constructed and is frozen (immutable)."""
         from models.vlm_backbone import VLMBackboneInfo

@@ -1,45 +1,6 @@
-"""
-Experiment tracking module for VLA-LEGO training.
+"""Optional experiment tracking for the future VLA trainer.
 
-This module provides comprehensive experiment tracking using Weights & Biases,
-with support for distributed training, automatic offline fallback, and
-standardized metric/artifact management.
-
-Quick Start:
-    from tracking import ExperimentTracker
-
-    # Initialize tracker (only rank 0 logs)
-    tracker = ExperimentTracker(
-        project="vla-lego",
-        config=config,
-        tags={"model": "eo1", "dataset": "lego", "objective": "ar+fm"},
-    )
-
-    # Log training steps
-    for step in range(num_steps):
-        loss = train_step(...)
-        tracker.log_training_step(
-            loss=loss,
-            step=step,
-            batch_size=batch_size,
-            optimizer=optimizer,
-            model=model,
-        )
-
-    # Save checkpoint with run ID for resume
-    client_state = {"wandb_run_id": tracker.get_run_id()}
-    model_engine.save_checkpoint(ckpt_dir, client_state=client_state)
-    tracker.log_checkpoint(ckpt_dir)
-
-    # Finish run
-    tracker.finish()
-
-Environment Variables:
-    WANDB_MODE: Set to "disabled" to disable tracking entirely.
-    WANDB_DIR: Directory for W&B files (default: ./wandb).
-    WANDB_ENTITY: Default W&B entity (username or team).
-
-See tracking/README.md for full documentation.
+See knowledge/wiki/tracking.md for operating modes and integration boundaries.
 """
 
 from .experiment import ExperimentTracker, create_tracker
