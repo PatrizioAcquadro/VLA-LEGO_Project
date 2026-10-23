@@ -33,6 +33,7 @@ def main() -> None:
         "learned": False,
         "stages": [],
         "settling": "measured_velocity" if args.event_settling else "fixed_wait",
+        "target_integration": True,
     }
     try:
         from isaaclab.app import AppLauncher
@@ -133,7 +134,7 @@ def main() -> None:
                 )
                 joint_move(name + "_transit", side, solution)
                 for tick in range(round(seconds / 0.05)):
-                    feedback = ctrl.command({side: desired})[side]
+                    feedback = ctrl.command({side: desired}, integrate_target=True)[side]
                     trace.write(
                         json.dumps(
                             {
