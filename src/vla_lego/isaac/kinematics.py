@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import math
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 
 def _required(element: ET.Element, name: str) -> ET.Element:
@@ -33,6 +35,8 @@ class ArmKinematics:
         self.root[:3, :3] = matrix_from_quat(root_pose[3:])
         self.root[:3, 3] = root_pose[:3]
         self.chain = []
+        self.link_names = []
+        self.configuration_admission: Callable[[Any], Any] | None = None
         self.names = []
         self.limits = []
         for joint in reversed(joints):
@@ -65,6 +69,7 @@ class ArmKinematics:
                 limit = _required(joint, "limit")
                 self.limits.append([float(limit.attrib["lower"]), float(limit.attrib["upper"])])
             self.chain.append((transform, axis))
+            self.link_names.append(_required(joint, "child").attrib["link"])
         if len(self.names) != 7:
             raise ValueError(f"Expected a seven-joint arm, got {self.names}")
         self.bounds = torch.tensor(self.limits, device=device)
@@ -96,10 +101,38 @@ class ArmKinematics:
         )
         return transform, torch.cat((linear, torch.stack(axes, dim=-1)), dim=1)
 
+    def link_transforms(self, q, names):
+        """URDF link poses for task-external geometric collision planning."""
+        import torch
+        from isaaclab.utils.math import matrix_from_quat, quat_from_angle_axis
+
+        transform = self.root.expand(q.shape[0], -1, -1).clone()
+        index = 0
+        result = {}
+        for name, (origin, axis) in zip(self.link_names, self.chain, strict=True):
+            transform = transform @ origin
+            if axis is not None:
+                rotation = torch.eye(4, device=q.device).repeat(q.shape[0], 1, 1)
+                rotation[:, :3, :3] = matrix_from_quat(
+                    quat_from_angle_axis(q[:, index], axis.expand(q.shape[0], -1))
+                )
+                transform = transform @ rotation
+                index += 1
+            if name in names:
+                result[name] = transform.clone()
+        return result
+
     def solve(self, pose, current_q, *, starts: int = 48, iterations: int = 200):
         import torch
         from isaaclab.utils.math import compute_pose_error, quat_from_matrix
 
+        if starts > 1:
+            # Nearby Cartesian waypoints usually need only the current branch.
+            # The same pose/limit checks apply; retain full multi-start on failure.
+            try:
+                return self.solve(pose, current_q, starts=1, iterations=24)
+            except RuntimeError:
+                pass
         generator = torch.Generator(device=current_q.device).manual_seed(20261023)
         lower, upper = self.bounds[:, 0], self.bounds[:, 1]
         q = lower + torch.rand((starts, 7), generator=generator, device=current_q.device) * (
@@ -131,10 +164,12 @@ class ArmKinematics:
             pose[3:].expand(starts, -1),
         )
         valid = (pos.norm(dim=-1) < 0.003) & (rot.norm(dim=-1) < 0.04)
+        if self.configuration_admission is not None:
+            valid &= self.configuration_admission(q)
         cost = (q - current_q).square().sum(dim=-1).masked_fill(~valid, torch.inf)
         if not bool(valid.any()):
             best = int((pos.norm(dim=-1) + rot.norm(dim=-1)).argmin())
             raise RuntimeError(
-                f"No IK solution: position={float(pos[best].norm()):.4f} m, rotation={float(rot[best].norm()):.4f} rad"
+                f"No admissible IK solution: position={float(pos[best].norm()):.4f} m, rotation={float(rot[best].norm()):.4f} rad"
             )
         return q[int(cost.argmin())]
