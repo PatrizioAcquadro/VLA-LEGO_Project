@@ -97,3 +97,13 @@ def test_marked_corpus_cannot_be_admitted_as_marker_free(tmp_path):
     (tmp_path / "recording/episode.json").write_text("{}")
     with pytest.raises(ValueError, match="Previous marked"):
         audit_episode(tmp_path, PilotCase(case_row(), 0))
+
+
+def test_free_region_default_instruction_does_not_reference_a_marker():
+    from dataclasses import replace
+
+    from vla_lego.isaac.task import initial_tower_task
+
+    task = replace(initial_tower_task(), build_region_xy_m=(0.30, 0.45, -0.13, 0.13))
+    assert "clear, suitable place" in task.instruction
+    assert "square" not in task.instruction

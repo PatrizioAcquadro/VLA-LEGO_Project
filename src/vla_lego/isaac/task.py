@@ -49,6 +49,8 @@ class TowerTask:
         if self.instruction_text is not None:
             return self.instruction_text
         order = ", then ".join(target.description for target in self.targets)
+        if self.build_region_xy_m is not None:
+            return f"Build a five-block tower in a clear, suitable place on the table, bottom to top: {order}."
         return f"Build a five-block tower inside the black square, bottom to top: {order}."
 
     def without_target(self, level: int) -> TowerTask:

@@ -257,6 +257,15 @@ def main() -> None:
         "attempts": len(result["attempts"]),
     }
     args.output.write_text(json.dumps(result, indent=2) + "\n")
+    for split in ("train", "development"):
+        entries = [
+            {"case": name, **row}
+            for name, row in result["episodes"].items()
+            if row["split"] == split
+        ]
+        (args.output.parent / f"{split}-episodes.json").write_text(
+            json.dumps(entries, indent=2) + "\n"
+        )
     if result["episodes"]:
         positions = [*ARM_JOINTS, "NECK_Z", "NECK_Y", *JAW_JOINTS]
         interface = {
