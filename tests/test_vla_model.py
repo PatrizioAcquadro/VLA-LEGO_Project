@@ -12,7 +12,6 @@ Test classes:
     TestVLAModelForward       -- Training forward pass: losses, keys, NaN checks.
     TestVLAModelGradients     -- Gradient routing: action head vs frozen backbone.
     TestVLAModelInference     -- predict_actions shape, finite values, K parameter.
-    TestBackwardCompatibility -- Existing get_model() paths unaffected.
     TestVLAModelGPU           -- Real backbone: loading, forward, inference, gradients.
 """
 
@@ -167,32 +166,11 @@ _ACTION_HEAD_CFG: dict = {
 }
 
 
-class _FakeCfg:
-    """Minimal cfg-like object exposing cfg.model.action_head."""
-
-    class _Model:
-        def __init__(self, ah_cfg: dict) -> None:
-            self.action_head = _DictAttr(ah_cfg)
-
-    def __init__(self, ah_cfg: dict) -> None:
-        self.model = _FakeCfg._Model(ah_cfg)
-
-
-class _DictAttr:
-    """Dict wrapper with attribute-style access (mimics OmegaConf)."""
-
-    def __init__(self, d: dict) -> None:
-        self._d = d
-
-    def __getattr__(self, key: str) -> Any:
-        if key.startswith("_"):
-            raise AttributeError(key)
-        return self._d[key]
-
-
-def _make_cfg() -> _FakeCfg:
+def _make_cfg():
     """Create a minimal cfg with action_head settings."""
-    return _FakeCfg(_ACTION_HEAD_CFG)
+    from omegaconf import OmegaConf
+
+    return OmegaConf.create({"model": {"action_head": _ACTION_HEAD_CFG}})
 
 
 def _make_model(hidden_size: int = 64) -> VLAModel:
@@ -460,47 +438,6 @@ class TestVLAModelInference:
             with torch.no_grad():
                 out = model.predict_actions(input_ids, attention_mask, robot_state, K=K)
             assert out.shape == (B, ACTION_CHUNK_SIZE, ACTION_DIM)
-
-
-@pytest.mark.action_head
-class TestBackwardCompatibility:
-    """Existing get_model() paths are unaffected by Phase 3.2.4 changes."""
-
-    def test_get_model_transformer_unaffected(self) -> None:
-        """get_model('transformer') still works with a valid config."""
-        from omegaconf import OmegaConf
-
-        from models.utils import get_model
-
-        cfg = OmegaConf.create(
-            {
-                "model": {
-                    "architecture": {
-                        "type": "transformer",
-                        "hidden_size": 64,
-                        "num_layers": 1,
-                        "num_attention_heads": 2,
-                        "intermediate_size": 128,
-                        "hidden_dropout": 0.0,
-                        "activation": "relu",
-                        "use_pre_norm": False,
-                        "max_seq_length": 32,
-                    }
-                }
-            }
-        )
-        model = get_model(cfg)
-        assert model is not None
-
-    def test_get_model_unknown_type_raises(self) -> None:
-        """get_model raises ValueError for unknown model types."""
-        from omegaconf import OmegaConf
-
-        from models.utils import get_model
-
-        cfg = OmegaConf.create({"model": {"architecture": {"type": "nonexistent_model"}}})
-        with pytest.raises(ValueError, match="Unknown model type"):
-            get_model(cfg)
 
 
 # ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "vla-lego"
 version = "0.1.0"
-description = "Vision-Language-Action System for Bimanual Robotic LEGO Assembly"
+description = "Vision-Language-Action Components for Lightweight Brick Assembly"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
@@ -88,8 +88,6 @@ dev = [
 ]
 
 [project.scripts]
-vla-train = "train.trainer:main"
-vla-eval = "eval.evaluate:main"
 vla-viewer = "sim.viewer:main"
 vla-lint-assets = "sim.asset_linter_cli:main"
 vla-gen-bricks = "sim.lego.cli:main"
@@ -99,7 +97,7 @@ Repository = "https://github.com/PatrizioAcquadro/VLA-LEGO_Project"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["sim*", "data*", "models*", "train*", "eval*", "configs*"]
+include = ["sim*", "models*", "tracking*", "configs*"]
 
 # ============================================================================
 # Tool Configurations
@@ -122,7 +120,7 @@ exclude = '''
 [tool.isort]
 profile = "black"
 line_length = 100
-known_first_party = ["sim", "data", "models", "train", "eval"]
+known_first_party = ["sim", "models", "tracking", "configs"]
 skip = [".git", ".venv", "build", "dist"]
 
 [tool.ruff]
