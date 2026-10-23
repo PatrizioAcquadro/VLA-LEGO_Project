@@ -89,13 +89,13 @@ paths:
   scratch: "${oc.env:VLA_SCRATCH_ROOT,/scratch/gilbreth/${oc.env:USER}/vla-lego}"
 
   # All large artifacts go to scratch
-  checkpoints: "${paths.scratch}/checkpoints"
-  logs: "${paths.scratch}/logs"
-  cache: "${paths.scratch}/cache"
-  wandb: "${paths.scratch}/wandb"
-  datasets: "${paths.scratch}/datasets"
-  renders: "${paths.scratch}/renders"
-  runs: "${paths.scratch}/runs"
+  checkpoints: "${cluster.paths.scratch}/checkpoints"
+  logs: "${cluster.paths.scratch}/logs"
+  cache: "${cluster.paths.scratch}/cache"
+  wandb: "${cluster.paths.scratch}/wandb"
+  datasets: "${cluster.paths.scratch}/datasets"
+  renders: "${cluster.paths.scratch}/renders"
+  runs: "${cluster.paths.scratch}/runs"
 
 # ============================================================================
 # Environment Modules (load order matters!)

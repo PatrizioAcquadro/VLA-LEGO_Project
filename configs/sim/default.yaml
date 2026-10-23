@@ -1,5 +1,5 @@
 # Simulation control parameters (Phase 1.1.5)
-# Override via CLI: python -m train.trainer sim.control.control_hz=10
+# Shared Alex control and camera contracts.
 
 control:
   control_hz: 20.0           # Policy rate (Hz) — 50 ms per action

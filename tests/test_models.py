@@ -1,82 +1,8 @@
-"""Tests for model module."""
+"""Maintained model utility contracts."""
 
 import pytest
 import torch
-from hydra import compose, initialize
-
-
-class TestTransformerModel:
-    """Test TransformerModel."""
-
-    @pytest.fixture
-    def cfg(self):
-        """Get test configuration."""
-        with initialize(config_path="../configs", version_base=None):
-            cfg = compose(config_name="config", overrides=["model=base", "cluster=local"])
-            return cfg
-
-    def test_model_creation(self, cfg):
-        """Test model can be instantiated."""
-        from models import get_model
-
-        model = get_model(cfg)
-        assert model is not None
-
-    def test_model_forward(self, cfg):
-        """Test forward pass produces correct shapes."""
-        from models import get_model
-
-        model = get_model(cfg)
-
-        batch_size = 2
-        seq_len = 128
-        state_dim = 256  # Matches model input projection
-
-        input_ids = torch.randn(batch_size, seq_len, state_dim)
-        attention_mask = torch.ones(batch_size, seq_len, dtype=torch.long)
-
-        outputs = model(input_ids, attention_mask)
-
-        assert "logits" in outputs
-        assert outputs["logits"].shape == (batch_size, seq_len, state_dim)
-
-    def test_model_loss(self, cfg):
-        """Test loss computation."""
-        from models import get_model
-
-        model = get_model(cfg)
-
-        batch_size = 2
-        seq_len = 128
-        state_dim = 256
-
-        input_ids = torch.randn(batch_size, seq_len, state_dim)
-        labels = torch.randn(batch_size, seq_len, state_dim)
-        attention_mask = torch.ones(batch_size, seq_len, dtype=torch.long)
-
-        outputs = model(input_ids, attention_mask)
-        loss = model.compute_loss(outputs["logits"], labels, attention_mask)
-
-        assert loss.shape == ()  # Scalar
-        assert loss.item() >= 0  # Loss should be non-negative
-
-    def test_model_backward(self, cfg):
-        """Test backward pass works (gradients flow)."""
-        from models import get_model
-
-        model = get_model(cfg)
-
-        input_ids = torch.randn(2, 64, 256)
-        labels = torch.randn(2, 64, 256)
-
-        outputs = model(input_ids)
-        loss = model.compute_loss(outputs["logits"], labels)
-        loss.backward()
-
-        # Check gradients exist
-        for name, param in model.named_parameters():
-            if param.requires_grad:
-                assert param.grad is not None, f"No gradient for {name}"
+from omegaconf import OmegaConf
 
 
 class TestModelUtils:
@@ -118,24 +44,9 @@ class TestModelUtils:
         assert format_params(500) == "500"
 
 
-@pytest.mark.gpu
-class TestModelGPU:
-    """GPU-specific model tests (skipped if no GPU)."""
+def test_retired_model_type_is_rejected():
+    from models import get_model
 
-    @pytest.fixture
-    def cfg(self):
-        with initialize(config_path="../configs", version_base=None):
-            return compose(config_name="config", overrides=["model=base", "cluster=local"])
-
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
-    def test_model_cuda(self, cfg):
-        """Test model works on GPU."""
-        from models import get_model
-
-        device = torch.device("cuda:0")
-        model = get_model(cfg).to(device)
-
-        input_ids = torch.randn(2, 64, 256, device=device)
-        outputs = model(input_ids)
-
-        assert outputs["logits"].device.type == "cuda"
+    cfg = OmegaConf.create({"model": {"architecture": {"type": "transformer"}}})
+    with pytest.raises(ValueError, match="Unknown model type"):
+        get_model(cfg)

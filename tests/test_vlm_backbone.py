@@ -201,34 +201,6 @@ class TestVLMBackboneInfo:
 # ---------------------------------------------------------------------------
 
 
-class TestBackwardCompatibility:
-    """Existing get_model() behavior must be unchanged for non-VLM types."""
-
-    def test_transformer_model_still_works(self):
-        """get_model with model=base returns TransformerModel."""
-        with initialize(config_path="../configs", version_base=None):
-            cfg = compose(config_name="config", overrides=["model=base", "cluster=local"])
-        from models import get_model
-        from models.transformer import TransformerModel
-
-        model = get_model(cfg)
-        assert isinstance(model, TransformerModel)
-
-    def test_unknown_model_type_raises(self):
-        """get_model with an unknown architecture type raises ValueError."""
-        with initialize(config_path="../configs", version_base=None):
-            cfg = compose(config_name="config", overrides=["model=base", "cluster=local"])
-        from omegaconf import OmegaConf
-
-        # Override type to something unrecognised
-        OmegaConf.update(cfg, "model.architecture.type", "nonexistent_model_type")
-
-        from models import get_model
-
-        with pytest.raises(ValueError, match="Unknown model type"):
-            get_model(cfg)
-
-
 # ---------------------------------------------------------------------------
 # Helper dtype resolution
 # ---------------------------------------------------------------------------

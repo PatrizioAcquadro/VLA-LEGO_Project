@@ -92,7 +92,7 @@ jobs:
           pip install -e ".[ci]"
 
       - name: Run mypy
-        run: mypy sim models train eval --ignore-missing-imports
+        run: mypy sim models tracking --ignore-missing-imports
 
   # --------------------------------------------------------------------------
   # Job: Unit Tests
@@ -148,10 +148,7 @@ jobs:
       - name: Test imports
         run: |
           python -c "import sim; print('sim OK')"
-          python -c "import data; print('data OK')"
           python -c "import models; print('models OK')"
-          python -c "import train; print('train OK')"
-          python -c "import eval; print('eval OK')"
 
       - name: Test config parsing
         run: |
@@ -165,16 +162,8 @@ jobs:
               print('Config parsing OK')
           "
 
-      - name: Dry run entrypoint
-        run: |
-          python -m train.trainer --help
-          python -m train.trainer \
-            cluster=local \
-            trainer=debug \
-            trainer.training.max_steps=2 \
-            hydra.run.dir=/tmp/vla_lego_smoke \
-            --cfg job 2>&1 | head -100
-          echo "Smoke test completed"
+      - name: Validate maintained configuration
+        run: python -m scripts.validate_configs
 
   # --------------------------------------------------------------------------
   # Job: Config Validation
@@ -195,11 +184,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install hydra-core omegaconf pyyaml
+          pip install -e ".[ci]"
 
       - name: Validate all config combinations
         run: |
-          python scripts/validate_configs.py
+          python -m scripts.validate_configs
 
   # --------------------------------------------------------------------------
   # Job: CI Success Gate (required for branch protection and CD gating)
