@@ -69,6 +69,7 @@ def main() -> None:
                         {
                             "state": observation["joint_position"].tolist(),
                             "state_names": list(observation["joint_names"]),
+                            "velocity": observation["joint_velocity"].tolist(),
                             "image_shape": list(observation["head_rgb"].shape),
                             "instruction": instruction,
                         },

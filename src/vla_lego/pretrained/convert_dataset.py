@@ -17,6 +17,7 @@ def main() -> None:
     parser.add_argument(
         "--action-representation", choices=("absolute", "measured_arm_offset"), default="absolute"
     )
+    parser.add_argument("--include-arm-velocity", action="store_true")
     args = parser.parse_args()
 
     import numpy as np
@@ -61,8 +62,15 @@ def main() -> None:
     action_labels = first["action_names"]
     if args.action_representation == "measured_arm_offset":
         action_labels = [f"{name}_OFFSET" for name in action_labels[:14]] + action_labels[14:]
+    state_labels = first["state_names"]
+    if args.include_arm_velocity:
+        state_labels = state_labels + [f"{name}_VELOCITY" for name in state_labels[:14]]
     features = {
-        "observation.state": {"dtype": "float32", "shape": (18,), "names": first["state_names"]},
+        "observation.state": {
+            "dtype": "float32",
+            "shape": (len(state_labels),),
+            "names": state_labels,
+        },
         "action": {"dtype": "float32", "shape": (16,), "names": action_labels},
         "observation.images.head": {
             "dtype": "video",
@@ -110,6 +118,11 @@ def main() -> None:
                     raise ValueError("Invalid sensor/action tensor.")
                 if args.action_representation == "measured_arm_offset":
                     action[:14] -= state[:14]
+                if args.include_arm_velocity:
+                    velocity = np.asarray(row["joint_velocity"], dtype=np.float32)
+                    if velocity.shape != (18,) or not np.isfinite(velocity).all():
+                        raise ValueError("Arm velocities must be recorded, ordered and finite.")
+                    state = np.concatenate((state, velocity[:14]))
                 image_path = (directory / row["head_rgb"]).resolve()
                 if not image_path.is_relative_to(directory.resolve()):
                     raise ValueError("Image path escapes its recording.")
@@ -140,6 +153,7 @@ def main() -> None:
         "families": families,
         "max_camera_age_s": max_age,
         "action_representation": args.action_representation,
+        "include_arm_velocity": args.include_arm_velocity,
         "action_targets": "derived from actually applied targets; raw requested/applied values preserved",
         "privileged_inputs_loaded": False,
         "codec": args.codec,
@@ -150,7 +164,9 @@ def main() -> None:
     interface = {
         "action_representation": args.action_representation,
         "action_joint_names": first["action_names"],
-        "state_names": first["state_names"],
+        "state_names": state_labels,
+        "position_names": first["state_names"],
+        "include_arm_velocity": args.include_arm_velocity,
         "control_hz": 20,
     }
     (args.output_dir / "alex_interface.json").write_text(json.dumps(interface, indent=2) + "\n")

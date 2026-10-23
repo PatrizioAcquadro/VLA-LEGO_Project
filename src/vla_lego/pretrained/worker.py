@@ -97,13 +97,26 @@ def main() -> None:
                 if request.get("close"):
                     break
                 state = np.asarray(request["state"], dtype=np.float32)
-                if request["state_names"] != interface["state_names"]:
+                if request["state_names"] != interface.get(
+                    "position_names", interface["state_names"]
+                ):
                     raise ValueError(
                         "Observation signal ordering differs from checkpoint training."
                     )
                 shape = tuple(request["image_shape"])
                 if state.shape != (18,) or shape != (600, 960, 3) or not np.isfinite(state).all():
                     raise ValueError("Policy requires actual Alex18/head RGB inputs.")
+                if interface.get("include_arm_velocity", False):
+                    velocity = np.asarray(request["velocity"], dtype=np.float32)
+                    if velocity.shape != (18,) or not np.isfinite(velocity).all():
+                        raise ValueError("Checkpoint requires actual finite arm velocities.")
+                    state = np.concatenate((state, velocity[:14]))
+                expected_state_dim = policy.config.input_features["observation.state"].shape[0]
+                if (
+                    state.shape != (expected_state_dim,)
+                    or len(interface["state_names"]) != expected_state_dim
+                ):
+                    raise ValueError("Measured state construction differs from trained features.")
                 image = np.frombuffer(image_bytes, dtype=np.uint8).reshape(shape).copy()
                 batch = preprocessor(
                     {

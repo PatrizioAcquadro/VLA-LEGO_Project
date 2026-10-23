@@ -14,6 +14,7 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--cache-dir", type=Path, required=True)
     parser.add_argument("--record", action="store_true")
+    parser.add_argument("--event-settling", action="store_true")
     parser.add_argument("--family")
     parser.add_argument("--split", choices=("train", "development"))
     args = parser.parse_args()
@@ -23,7 +24,12 @@ def main() -> None:
     started = time.monotonic()
     app = None
     recorder = None
-    report: dict = {"kind": "reference_grasp_probe", "learned": False, "stages": []}
+    report: dict = {
+        "kind": "reference_grasp_probe",
+        "learned": False,
+        "stages": [],
+        "settling": "measured_velocity" if args.event_settling else "fixed_wait",
+    }
     try:
         from isaaclab.app import AppLauncher
 
@@ -61,6 +67,15 @@ def main() -> None:
         }
         with (args.output_dir / "trace.jsonl").open("w") as trace:
 
+            def settle(ids, speed: float, max_ticks: int) -> None:
+                quiet = 0
+                for _ in range(max_ticks):
+                    env.step(10)
+                    velocity = env.robot.data.joint_vel.torch[0, ids]
+                    quiet = quiet + 1 if float(velocity.abs().max()) < speed else 0
+                    if quiet >= 3:
+                        break
+
             def joint_move(name: str, side: str, q_goal) -> None:
                 _, ids, _ = ctrl.frames[side]
                 q_start = env.robot.data.joint_pos.torch[0, ids].clone()
@@ -82,7 +97,10 @@ def main() -> None:
                         )
                         + "\n"
                     )
-                env.step(400)
+                if args.event_settling:
+                    settle(ids, 0.02, 40)
+                else:
+                    env.step(400)
                 trace.flush()
 
             def move(name: str, side: str, position: list[float], seconds: float) -> bool:
@@ -162,7 +180,10 @@ def main() -> None:
             if not move("descend", "left", grasp, 5):
                 raise RuntimeError("Reference descent did not converge")
             env.set_joint_targets({"left_WSG32_JAW_OPENING": 0.018})
-            env.step(200)
+            if args.event_settling:
+                settle(env.jaw_ids, 0.001, 20)
+            else:
+                env.step(200)
             grasp_truth = env.task_truth()
             lifted = move("lift", "left", [grasp[0], grasp[1], grasp[2] + 0.10], 6)
             lift_truth = env.task_truth()
@@ -175,7 +196,10 @@ def main() -> None:
             if not move("place", "left", destination, 5):
                 raise RuntimeError("Reference placement failed")
             env.set_joint_targets({"left_WSG32_JAW_OPENING": 0.034})
-            env.step(200)
+            if args.event_settling:
+                settle(env.jaw_ids, 0.001, 20)
+            else:
+                env.step(200)
             destination[2] += 0.12
             if not move("retreat", "left", destination, 5):
                 raise RuntimeError("Reference retreat failed")
