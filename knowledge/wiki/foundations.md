@@ -49,6 +49,10 @@ The first learned rollout failed before command application on an out-of-bounds 
 
 The explicit reference probe uses only robot actuation and contacts under gravity. Both arms move to staging poses; the left arm then grasps a loose 40 mm cube, lifts, transports, places, opens and retreats. The reference alone reads block truth. Head RGB and 18 named arm/neck/WSG32 leader signals remain separate; follower simulation joints are excluded from deployable observations.
 
+`PhysicalReference` extends those tools to loaded multi-block trajectories. Its refinement integrates a 2/s Cartesian velocity servo into the existing commanded joint target, preserving the PD offset that carries a payload. The earlier measured-position replacement produced a steady 6.1 mm blue-block error despite clean bilateral grasp contact; target integration resolved that error under the unchanged 5 mm pose gate. Start, goal and interpolated requests use the actual native joint limits, avoiding a measured one-ULP difference from parsed URDF limits. The original diagnostic controller mode remains available; this does not qualify the earlier failed Cartesian policy interface.
+
+The finite tower reach screens retained 8/20 solved poses with fixed top-down orientation, 48/60 additional yaw candidates, and 14/16 source/upper-clearance candidates after moving the far purple source inward. Rotated grasps admit the higher levels. A subsequent full robot sequence physically grasped/lifted all five pieces but failed assembly: adjacent overhead grippers displaced the blue stabilizer block during green placement. The green piece ended outside the tower; zero qualifying cooperation intervals were recorded. Eight side-stabilizer IK poses solved for both arms, but physical side stabilization and full-task admission remain separate work.
+
 ```bash
 bash scripts/isaac-run.sh -m vla_lego.isaac.grasp_probe \
   --output-dir outputs/grasp-001 --cache-dir outputs/converted-assets

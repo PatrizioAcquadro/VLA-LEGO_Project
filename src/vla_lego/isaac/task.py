@@ -61,7 +61,7 @@ def initial_tower_task() -> TowerTask:
             BlockPlacement(blue, (0.45, -0.30)),
             BlockPlacement(green, (0.56, 0.30)),
             BlockPlacement(yellow, (0.56, -0.15)),
-            BlockPlacement(purple, (0.56, -0.45)),
+            BlockPlacement(purple, (0.45, -0.45)),
             BlockPlacement(BlockSpec("cube", "large", "red"), (0.60, 0.45)),
             BlockPlacement(BlockSpec("cube", "small", "orange"), (0.60, 0.0)),
         ),

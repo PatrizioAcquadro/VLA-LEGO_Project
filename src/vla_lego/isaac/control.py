@@ -75,7 +75,13 @@ class ToolController:
         jac[:, :3] -= skew_symmetric_matrix(lever) @ jac[:, 3:]
         return jac
 
-    def command(self, targets: dict[str, Any], *, period_s: float = 0.05) -> dict:
+    def command(
+        self,
+        targets: dict[str, Any],
+        *,
+        period_s: float = 0.05,
+        integrate_target: bool = False,
+    ) -> dict:
         """Absolute TCP poses in meters/XYZW; bounded joint speed at each tick."""
         import torch
         from isaaclab.utils.math import compute_pose_error
@@ -104,9 +110,19 @@ class ToolController:
             matrix = jac @ jac.transpose(1, 2) + 0.03**2 * torch.eye(6, device=jac.device)
             dq = (jac.transpose(1, 2) @ torch.linalg.solve(matrix, error.unsqueeze(-1)))[:, :, 0]
             _, ids, _ = self.frames[side]
+            if integrate_target:
+                # Integrate a 2/s Cartesian velocity servo into the commanded
+                # joint target, retaining the load-bearing PD offset. Replacing
+                # it with measured q each tick creates a static payload error.
+                dq = dq * (2.0 * period_s)
             # 0.5 rad/s is a provisional pilot speed, below all asset motor limits.
             dq = dq.clamp(-0.5 * period_s, 0.5 * period_s)
-            q = self.env.robot.data.joint_pos.torch[:, ids] + dq
+            base = (
+                self.env.target[:, ids]
+                if integrate_target
+                else self.env.robot.data.joint_pos.torch[:, ids]
+            )
+            q = base + dq
             limits = self.env.robot.data.joint_pos_limits.torch[:, ids]
             q = torch.maximum(torch.minimum(q, limits[:, :, 1]), limits[:, :, 0])
             self.env.set_joint_targets(
