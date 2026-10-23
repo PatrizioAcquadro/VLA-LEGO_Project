@@ -24,13 +24,9 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
-# Ensure project root is importable
-_project_root = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_project_root))
-
-from sim.action_space import ACTION_DIM, ARM_DIM, GRIPPER_DIM  # noqa: E402
-from sim.asset_loader import load_scene  # noqa: E402
-from sim.camera import (  # noqa: E402
+from vla_lego.sim.action_space import ACTION_DIM, ARM_DIM, GRIPPER_DIM
+from vla_lego.sim.asset_loader import load_scene
+from vla_lego.sim.camera import (
     CAMERA_NAMES,
     DEFAULT_CAPTURE_HZ,
     DEFAULT_HEIGHT,
@@ -39,10 +35,10 @@ from sim.camera import (  # noqa: E402
     MultiViewRenderer,
     get_camera_metadata,
 )
-from sim.offscreen import RenderedFrame, resolve_camera_id, save_video  # noqa: E402
-from sim.sim_runner import SimRunner  # noqa: E402
+from vla_lego.sim.offscreen import RenderedFrame, resolve_camera_id, save_video
+from vla_lego.sim.sim_runner import SimRunner
 
-ARTIFACT_DIR = _project_root / "logs" / "camera_validation"
+ARTIFACT_DIR = Path(__file__).resolve().parents[1] / "logs" / "camera_validation"
 
 
 # ---------------------------------------------------------------------------

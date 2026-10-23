@@ -28,9 +28,9 @@ if [[ ! -f /workspace/pyproject.toml ]]; then
 fi
 
 # -----------------------------------------------------------------------------
-# Set PYTHONPATH so imports work without pip install
+# Expose the mounted src package in this dependency-only image
 # -----------------------------------------------------------------------------
-export PYTHONPATH=/workspace:${PYTHONPATH:-}
+export PYTHONPATH=/workspace/src:${PYTHONPATH:-}
 
 # -----------------------------------------------------------------------------
 # Collect and print run info for reproducibility

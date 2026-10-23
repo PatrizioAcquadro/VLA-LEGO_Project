@@ -8,7 +8,7 @@ from omegaconf import OmegaConf
 
 def main() -> int:
     for model, cluster in product(("vlm", "vlm_dev", "vla", "vla_dev"), ("local", "gilbreth")):
-        with initialize_config_module(config_module="configs", version_base=None):
+        with initialize_config_module(config_module="vla_lego.configs", version_base=None):
             cfg = compose(config_name="config", overrides=[f"model={model}", f"cluster={cluster}"])
         OmegaConf.to_container(cfg, resolve=True)
         assert cfg.model.vlm.model_id

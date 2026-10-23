@@ -3,7 +3,7 @@ From: pytorch/pytorch:2.10.0-cuda12.8-cudnn9-runtime
 
 %files
     pyproject.toml /tmp/pyproject.toml
-    scripts/container-dependencies.py /tmp/container-dependencies.py
+    scripts/container_dependencies.py /tmp/container_dependencies.py
     scripts/container-entrypoint.sh /usr/local/bin/entrypoint.sh
 
 %post
@@ -12,10 +12,10 @@ From: pytorch/pytorch:2.10.0-cuda12.8-cudnn9-runtime
     python -m pip uninstall --break-system-packages -y spin
     python -m venv --system-site-packages /opt/vla-env
     export PATH=/opt/vla-env/bin:$PATH
-    python /tmp/container-dependencies.py /tmp/pyproject.toml > /tmp/requirements.txt
+    python /tmp/container_dependencies.py /tmp/pyproject.toml > /tmp/requirements.txt
     python -m pip install --no-cache-dir -r /tmp/requirements.txt
     python -m pip check
-    rm /tmp/pyproject.toml /tmp/container-dependencies.py /tmp/requirements.txt
+    rm /tmp/pyproject.toml /tmp/container_dependencies.py /tmp/requirements.txt
     chmod +x /usr/local/bin/entrypoint.sh
 
 %environment

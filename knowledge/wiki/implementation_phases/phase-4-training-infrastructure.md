@@ -4,7 +4,7 @@ Scope: original 4.1 and 4.2. Build a correct training path for the maintained VL
 
 ## 4.1 Loss function implementation
 
-**State:** 4.1.0–4.1.2 standalone contracts/text/action modules are implemented and tested in `models/losses.py`. The VLA still computes inline weighted losses. Combined modular objective, integration and production validation in 4.1.3–4.1.4 remain unfinished.
+**State:** 4.1.0–4.1.2 standalone contracts/text/action modules are implemented and tested in `src/vla_lego/models/losses.py`. The VLA still computes inline weighted losses. Combined modular objective, integration and production validation in 4.1.3–4.1.4 remain unfinished.
 
 ### Implementation sequence
 

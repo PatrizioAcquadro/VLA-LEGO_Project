@@ -18,4 +18,4 @@ source "$VLA_ENV_DIR/bin/activate"
 export HF_HOME=${HF_HOME:-${VLA_SCRATCH_ROOT:-/scratch/gilbreth/$USER/vla-lego}/cache/huggingface}
 export HF_HUB_CACHE=${HF_HUB_CACHE:-$HF_HOME/hub}
 export MUJOCO_GL=egl
-python -m sim.demo --output-dir "outputs/sim-${SLURM_JOB_ID}"
+python -m vla_lego.sim.demo --output-dir "outputs/sim-${SLURM_JOB_ID}"

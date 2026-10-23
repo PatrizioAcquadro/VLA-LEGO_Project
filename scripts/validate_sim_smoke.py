@@ -22,16 +22,16 @@ from pathlib import Path
 
 import numpy as np
 
-# Add project root to path
+from vla_lego.sim.asset_loader import SCENES_DIR
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
 
 # --- Configuration ---
 SEED = 42
 N_STEPS = 2000
 MAX_PENETRATION_M = 0.05  # 5 cm (box free-fall onto plane has ~28mm with default solver)
 MAX_ENERGY_J = 1000.0
-SCENE_PATH = PROJECT_ROOT / "sim" / "assets" / "scenes" / "test_scene.xml"
+SCENE_PATH = SCENES_DIR / "test_scene.xml"
 CAMERA_NAME = "overhead"
 OUTPUT_DIR = PROJECT_ROOT / "logs" / "sim_smoke"
 
@@ -98,7 +98,7 @@ def run_render_smoke(model) -> dict:
 
     import mujoco
 
-    from sim.offscreen import (
+    from vla_lego.sim.offscreen import (
         RenderConfig,
         create_renderer,
         render_frame,
@@ -188,7 +188,12 @@ def run_io_smoke(model, output_dir: Path) -> dict:
 
     import mujoco
 
-    from sim.offscreen import RenderConfig, render_trajectory, save_sample_frames, save_video
+    from vla_lego.sim.offscreen import (
+        RenderConfig,
+        render_trajectory,
+        save_sample_frames,
+        save_video,
+    )
 
     output_dir.mkdir(parents=True, exist_ok=True)
     config = RenderConfig(camera_name=CAMERA_NAME)
@@ -223,7 +228,7 @@ def run_io_smoke(model, output_dir: Path) -> dict:
     print(f"  [{status}] Frames: {len(saved)} PNGs in {frames_dir.name}/")
 
     # Metadata JSON
-    from sim.env_meta import collect_metadata
+    from vla_lego.sim.env_meta import collect_metadata
 
     meta = collect_metadata(PROJECT_ROOT)
     smoke_meta = {
@@ -322,7 +327,7 @@ def main() -> int:
     try:
         import mujoco  # noqa: F811
 
-        from sim.mujoco_env import load_model
+        from vla_lego.sim.mujoco_env import load_model
     except ImportError as e:
         print(f"FAIL: {e}")
         return 1

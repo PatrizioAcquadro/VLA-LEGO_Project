@@ -2,7 +2,7 @@
 
 ## Objective
 
-Audit all consumers and immediately simplify the commissioned software into a coherent base for lightweight-brick manipulation. Work on `PatrizioAcquadro/audiovisual-policy`, based on `main` at `a5205b2`, with local atomic commits only. Do not merge, push, rewrite history, or delete branches/worktrees. The initial working tree was clean.
+Audit all consumers and immediately simplify the commissioned software into a coherent base for lightweight-brick manipulation. The original audit worked on `PatrizioAcquadro/audiovisual-policy`, based on `main` at `a5205b2`, with local atomic commits and no remote mutation. The initial working tree was clean. The source-layout follow-up below additionally authorizes a feature-branch push; main integration, history rewriting and branch/worktree deletion remain outside scope.
 
 ## Approved implementation
 
@@ -45,3 +45,11 @@ Packaging/configuration milestone: all eight model/cluster compositions, Ruff, s
 Documentation is consolidated into nine phase files (0–8) covering all 22 original subphases, plus canonical operating topics, status and a concise decision log. Historical drafts are recoverable from Git. The old tracked assistant file is removed; the compact local `AGENTS.md` is ignored. The remaining Phase 2 collection, Phase 4 training integration and physical/cluster qualification are explicitly future work.
 
 Final portable checks: `make check` passes, all 102 local documentation links/anchors resolve, nine phase files contain all 22 unique original subphase IDs, and the separate CPU/OSMesa container suite passes 449 tests with 32 GPU tests explicitly deselected. A missing `USER` assumption discovered in that container check was removed from location configuration; failed and corrected logs are preserved. The tracked working tree is intended to be clean after the documentation commit, while ignored local guidance and evidence remain local.
+
+## Source layout follow-up
+
+The user authorized a conventional SWE repository layout and a final push of `PatrizioAcquadro/audiovisual-policy`. Baseline: `dae723a`, clean tracked tree. Keep main untouched and preserve local ignored evidence.
+
+Move the maintained runtime to the single `src/vla_lego` namespace, with simulation assets and Hydra configuration packaged beside their consumers. Group tests by subsystem, consolidate development checks under `scripts/`, and keep scheduler/deployment definitions in `infra/`. Preserve CLI command names and physical/model contracts. Update every internal consumer and operating instruction; remove root import/path workarounds instead of adding compatibility copies. Strengthen installed-wheel verification against the actual source inventory. Validate the native GPU suite and diagnostic/container paths, commit coherent milestones, then push only the requested feature branch without rewriting history.
+
+Source-layout validation passes: 481 native CUDA/EGL tests (32 native model GPU checks), 165 focused CPU tests, mypy on 36 source files, Ruff/Black, eight config compositions, 100 current local documentation links, exact 71-file wheel inventory and installed-package probe, all CLI registrations and the GPU Docker diagnostic demo. Runtime assets retain their contents; only their package location changed.

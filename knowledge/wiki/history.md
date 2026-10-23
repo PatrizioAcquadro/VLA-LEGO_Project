@@ -12,7 +12,7 @@ Ordinary code, plans and run-specific instructions are retained by Git. The base
 | `docs/phase3.1-gpu-validation.md`, `docs/phase3.1-3.2-report.md` | RTX 4090 backbone/head component checks and memory observations; A100 characterization remained pending. | Historical measurements only. Old dependency/config descriptions, training feasibility estimates and Phase 3.3 references are superseded by current plans. |
 | Former random dataset/Transformer/trainer/evaluator and cluster jobs | Infrastructure exercised synthetic tensors and toy checkpoints. | Retired because it did not train or evaluate the maintained VLA on a real task. Its multi-GPU results do not qualify a future VLA trainer. |
 
-Robot extraction sources and transformations remain fully tracked in [asset provenance](../../sim/assets/robots/alex/PROVENANCE.md). They have a continuing scientific and maintenance purpose.
+Robot extraction sources and transformations remain fully tracked in [asset provenance](../../src/vla_lego/sim/assets/robots/alex/PROVENANCE.md). They have a continuing scientific and maintenance purpose.
 
 ## Recovering original plans
 

@@ -16,4 +16,4 @@ For targeted source reading, inspect EO-1's `modeling_eo1.py` for prefix/suffix 
 
 ## Physical assets and printing
 
-IHMC/SAKE source details, pinned SDK revision and local modifications remain in [robot provenance](../../sim/assets/robots/alex/PROVENANCE.md). The optional geometric printing reference and its reuse boundary are documented once in [bricks](bricks.md). No external printable mesh is a runtime dependency.
+IHMC/SAKE source details, pinned SDK revision and local modifications remain in [robot provenance](../../src/vla_lego/sim/assets/robots/alex/PROVENANCE.md). The optional geometric printing reference and its reuse boundary are documented once in [bricks](bricks.md). No external printable mesh is a runtime dependency.

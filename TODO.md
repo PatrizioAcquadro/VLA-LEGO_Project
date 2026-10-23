@@ -1,18 +1,17 @@
-# TODO — Maintained repository and lightweight bricks
+# TODO — Source layout and branch publication
 
-Implementation phase spec: `knowledge/repository-cleanup.md`.
+Implementation phase spec: `knowledge/repository-cleanup.md#source-layout-follow-up`.
 
-Baseline: branch `main` @ `a5205b297ab27f68b788aea0c2084bc259c7cd33`.
-Working branch: `PatrizioAcquadro/audiovisual-policy`.
+Baseline: branch `PatrizioAcquadro/audiovisual-policy` @ `dae723a147356193d0181d450927284e370c9d00`.
 Pre-existing user changes to preserve:
-- None; the baseline working tree was clean.
+- None; the tracked working tree was clean. Ignored local instructions, environment and evidence remain local.
+
+Requested publication: push this feature branch after validation and verify the remote revision.
 
 ## Tasks
 
-- [x] 0. Retire synthetic training, evaluation and their exclusive consumers.
-- [x] 1. Replace LEGO-specific simulation with lightweight bricks, resets and task evaluation.
-- [x] 2. Consolidate simulation demos and retain meaningful behavioral tests.
-- [x] 3. Align packaging, configuration, containers and CI with maintained workflows.
-- [x] 4. Consolidate canonical knowledge and all implementation plans, including historical outcomes and the future LEGO extension.
-- [x] 5. Replace tracked assistant instructions with compact ignored local guidance.
-- [x] 6. Complete proportional software, package, simulation and GPU validation; record limits and local commits.
+- [x] 0. Move runtime code, configuration and assets into one `src/vla_lego` package.
+- [x] 1. Organize tests by subsystem and consolidate repository utilities under scripts.
+- [x] 2. Update package installation, containers, CI and canonical documentation.
+- [x] 3. Validate imports, installed wheel, native GPU/model/simulation behavior and software checks.
+- [ ] 4. Create validated local commits for publication.
