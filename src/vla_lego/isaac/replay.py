@@ -14,6 +14,9 @@ def main() -> None:
     parser.add_argument("--recording", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--cache-dir", type=Path, required=True)
+    parser.add_argument(
+        "--action-representation", choices=("absolute", "measured_arm_offset"), default="absolute"
+    )
     args = parser.parse_args()
     metadata = json.loads((args.recording / "episode.json").read_text())
     if not metadata.get("control_clock_enforced"):
@@ -35,15 +38,27 @@ def main() -> None:
         if metadata["action_names"] != [*ARM_JOINTS, *JAW_JOINTS]:
             raise ValueError("Recorded commands use a different joint interface.")
         env.step(round(metadata["start_time_s"] / 0.005))
+        arm_ids = [env.robot.data.joint_names.index(name) for name in ARM_JOINTS]
+        action_ids = [env.robot.data.joint_names.index(name) for name in metadata["action_names"]]
+        limits = env.robot.data.joint_pos_limits.torch[0, action_ids].cpu().numpy()
         max_state_error = 0.0
+        max_command_error = 0.0
         count = 0
         with (args.recording / "frames.jsonl").open() as stream:
             for line in stream:
                 row = json.loads(line)
                 if abs(row["observation_time_s"] - env.time) > 1e-6:
                     raise ValueError("Replay control clock diverged from the recording.")
+                action = np.asarray(row["action"], dtype=np.float32)
+                if args.action_representation == "measured_arm_offset":
+                    offset = action[:14] - np.asarray(row["joint_position"][:14], dtype=np.float32)
+                    action[:14] = env.robot.data.joint_pos.torch[0, arm_ids].cpu().numpy() + offset
+                action = np.clip(action, limits[:, 0], limits[:, 1])
+                max_command_error = max(
+                    max_command_error, float(np.max(np.abs(action - np.asarray(row["action"]))))
+                )
                 env.set_joint_targets(
-                    dict(zip(metadata["action_names"], row["action"], strict=True))
+                    dict(zip(metadata["action_names"], action.tolist(), strict=True))
                 )
                 env.capture()
                 state = env.observe()["joint_position"]
@@ -72,8 +87,10 @@ def main() -> None:
             recording=str(args.recording),
             frames=count,
             max_joint_state_error=max_state_error,
+            max_decoded_command_error=max_command_error,
             final_truth=final,
             privileged_inputs_used_for_commands=False,
+            action_representation=args.action_representation,
         )
     except Exception:
         report.update(error=traceback.format_exc())

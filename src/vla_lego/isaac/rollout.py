@@ -52,6 +52,7 @@ def main() -> None:
         limits = env.robot.data.joint_pos_limits.torch[0, action_ids].cpu().numpy()
         instruction = "Pick up the small red cube and place it back on the table in the open space to the left."
         chunk: list = []
+        representation: str | None = None
         inference_seconds = []
         clipped_ticks = 0
         clipped_counts = np.zeros(16, dtype=np.int64)
@@ -67,12 +68,19 @@ def main() -> None:
                         connection,
                         {
                             "state": observation["joint_position"].tolist(),
+                            "state_names": list(observation["joint_names"]),
                             "image_shape": list(observation["head_rgb"].shape),
                             "instruction": instruction,
                         },
                         observation["head_rgb"].tobytes(),
                     )
                     response, _ = receive_message(connection)
+                    current_representation = response["action_representation"]
+                    if current_representation not in ("absolute", "measured_arm_offset"):
+                        raise ValueError("Unknown learned command representation.")
+                    if representation is not None and current_representation != representation:
+                        raise ValueError("Command representation changed inside an episode.")
+                    representation = current_representation
                     chunk = response["actions"]
                     if not chunk:
                         raise ValueError("Empty learned action chunk.")
@@ -84,16 +92,23 @@ def main() -> None:
                 action = np.asarray(chunk.pop(0), dtype=np.float32)
                 if action.shape != (16,) or not np.isfinite(action).all():
                     raise ValueError("Expected exactly sixteen finite learned joint targets.")
-                bounded = np.clip(action, limits[:, 0], limits[:, 1])
-                clipped_ticks += int(np.any(action != bounded))
-                clipped_counts += action != bounded
-                max_projection = np.maximum(max_projection, np.abs(action - bounded))
+                requested = action.copy()
+                if representation == "measured_arm_offset":
+                    requested[:14] += (
+                        env.robot.data.joint_pos.torch[0, action_ids[:14]].cpu().numpy()
+                    )
+                bounded = np.clip(requested, limits[:, 0], limits[:, 1])
+                clipped_ticks += int(np.any(requested != bounded))
+                clipped_counts += requested != bounded
+                max_projection = np.maximum(max_projection, np.abs(requested - bounded))
                 trace.write(
                     json.dumps(
                         {
                             "tick": tick,
                             "time_s": env.time,
                             "learned_action": action.tolist(),
+                            "action_representation": representation,
+                            "absolute_request": requested.tolist(),
                             "bounded_request": bounded.tolist(),
                         }
                     )
@@ -136,6 +151,7 @@ def main() -> None:
             max_projection=dict(zip(action_names, max_projection.tolist(), strict=True)),
             max_contact_lift_m=max_contact_lift,
             executed_ticks=args.ticks,
+            action_representation=representation,
             passed=max_contact_lift > 0.07
             and all(
                 abs(sample["block_pose_w"][0] - 0.48) < 0.01
@@ -158,7 +174,22 @@ def main() -> None:
         connection.close()
         report["wall_seconds_before_app_close"] = time.monotonic() - started
         (args.output_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
-        print(json.dumps({k: v for k, v in report.items() if k != "release_dwell"}), flush=True)
+        print(
+            json.dumps(
+                {
+                    k: v
+                    for k, v in report.items()
+                    if k
+                    not in (
+                        "release_dwell",
+                        "inference_seconds",
+                        "clipped_counts",
+                        "max_projection",
+                    )
+                }
+            ),
+            flush=True,
+        )
         if app is not None:
             app.close(exit_code=0 if report["passed"] else 1)
 

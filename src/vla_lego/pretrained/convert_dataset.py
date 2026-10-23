@@ -14,6 +14,9 @@ def main() -> None:
     parser.add_argument("--repo-id", required=True)
     parser.add_argument("--split", choices=("train", "development"), required=True)
     parser.add_argument("--codec", default="h264_nvenc")
+    parser.add_argument(
+        "--action-representation", choices=("absolute", "measured_arm_offset"), default="absolute"
+    )
     args = parser.parse_args()
 
     import numpy as np
@@ -53,9 +56,14 @@ def main() -> None:
     first = admitted[0][1]
     if len(first["state_names"]) != 18 or len(first["action_names"]) != 16 or first["fps"] != 20:
         raise ValueError("Expected the provisional 18-state/16-action, 20 Hz Alex interface.")
+    if first["state_names"][:14] != first["action_names"][:14]:
+        raise ValueError("Arm states and targets must use the same named ordering.")
+    action_labels = first["action_names"]
+    if args.action_representation == "measured_arm_offset":
+        action_labels = [f"{name}_OFFSET" for name in action_labels[:14]] + action_labels[14:]
     features = {
         "observation.state": {"dtype": "float32", "shape": (18,), "names": first["state_names"]},
-        "action": {"dtype": "float32", "shape": (16,), "names": first["action_names"]},
+        "action": {"dtype": "float32", "shape": (16,), "names": action_labels},
         "observation.images.head": {
             "dtype": "video",
             "shape": (600, 960, 3),
@@ -100,6 +108,8 @@ def main() -> None:
                     or not (np.isfinite(state).all() and np.isfinite(action).all())
                 ):
                     raise ValueError("Invalid sensor/action tensor.")
+                if args.action_representation == "measured_arm_offset":
+                    action[:14] -= state[:14]
                 image_path = (directory / row["head_rgb"]).resolve()
                 if not image_path.is_relative_to(directory.resolve()):
                     raise ValueError("Image path escapes its recording.")
@@ -129,13 +139,21 @@ def main() -> None:
         "split": args.split,
         "families": families,
         "max_camera_age_s": max_age,
-        "action_targets": "actually applied position targets; requested targets retained in raw data",
+        "action_representation": args.action_representation,
+        "action_targets": "derived from actually applied targets; raw requested/applied values preserved",
         "privileged_inputs_loaded": False,
         "codec": args.codec,
         "raw_sources_preserved": True,
         "hub_upload": False,
     }
     (args.output_dir / "source_admission.json").write_text(json.dumps(report, indent=2) + "\n")
+    interface = {
+        "action_representation": args.action_representation,
+        "action_joint_names": first["action_names"],
+        "state_names": first["state_names"],
+        "control_hz": 20,
+    }
+    (args.output_dir / "alex_interface.json").write_text(json.dumps(interface, indent=2) + "\n")
     print(json.dumps(report), flush=True)
 
 

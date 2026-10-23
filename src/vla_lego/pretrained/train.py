@@ -45,6 +45,19 @@ def main() -> None:
     policy.scheduler_warmup_steps = min(20, args.steps // 2)
     policy.scheduler_decay_steps = args.steps
     info = json.loads((args.dataset / "meta" / "info.json").read_text())
+    interface_path = args.dataset / "alex_interface.json"
+    if interface_path.exists():
+        interface = json.loads(interface_path.read_text())
+    else:
+        # The first explicitly absolute diagnostic predates the interface sidecar.
+        if admission.get("action_representation", "absolute") != "absolute":
+            raise ValueError("A relative-action dataset requires its explicit interface.")
+        interface = {
+            "action_representation": "absolute",
+            "action_joint_names": info["features"]["action"]["names"],
+            "state_names": info["features"]["observation.state"]["names"],
+            "control_hz": 20,
+        }
     cfg = TrainPipelineConfig(
         dataset=DatasetConfig(
             repo_id=info["repo_id"] if "repo_id" in info else "local/vla-lego-single-block-train",
@@ -80,6 +93,14 @@ def main() -> None:
         flush=True,
     )
     train(cfg)
+    # Native checkpoint configs describe tensor dimensions but do not encode the
+    # meaning of Alex joint values. Save the exact decoding interface with each.
+    interface_text = json.dumps(interface, indent=2) + "\n"
+    (args.output_dir / "alex_interface.json").write_text(interface_text)
+    for checkpoint in {
+        p.resolve() for p in (args.output_dir / "checkpoints").glob("*/pretrained_model")
+    }:
+        (checkpoint / "alex_interface.json").write_text(interface_text)
 
 
 if __name__ == "__main__":

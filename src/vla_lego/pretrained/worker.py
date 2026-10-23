@@ -18,6 +18,8 @@ def main() -> None:
     parser.add_argument("--socket", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=20261023)
+    parser.add_argument("--execution-horizon", type=int)
+    parser.add_argument("--legacy-absolute-interface", action="store_true")
     args = parser.parse_args()
     if args.socket.exists():
         raise FileExistsError(args.socket)
@@ -31,6 +33,29 @@ def main() -> None:
         from lerobot.policies.factory import make_pre_post_processors
         from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
 
+        from vla_lego.isaac.environment import ARM_JOINTS, JAW_JOINTS
+
+        interface_path = args.checkpoint / "alex_interface.json"
+        if interface_path.exists():
+            interface = json.loads(interface_path.read_text())
+        elif args.legacy_absolute_interface:
+            interface = {
+                "action_representation": "absolute",
+                "state_names": [*ARM_JOINTS, "NECK_Z", "NECK_Y", *JAW_JOINTS],
+                "action_joint_names": [*ARM_JOINTS, *JAW_JOINTS],
+                "control_hz": 20,
+            }
+        else:
+            raise ValueError(
+                "Checkpoint lacks its Alex action interface; legacy absolute requires an explicit flag."
+            )
+        if (
+            interface["action_representation"] not in ("absolute", "measured_arm_offset")
+            or interface["action_joint_names"] != [*ARM_JOINTS, *JAW_JOINTS]
+            or interface["control_hz"] != 20
+        ):
+            raise ValueError("Checkpoint uses an incompatible Alex command interface.")
+
         if not torch.cuda.is_available():
             raise RuntimeError("Policy inference requires native CUDA.")
         torch.set_num_threads(8)
@@ -43,10 +68,18 @@ def main() -> None:
             policy.config, pretrained_path=args.checkpoint
         )
         policy.reset()
+        horizon = (
+            policy.config.n_action_steps
+            if args.execution_horizon is None
+            else args.execution_horizon
+        )
+        if not 1 <= horizon <= policy.config.chunk_size:
+            raise ValueError("Execution horizon must fit the learned prediction chunk.")
         report.update(
             load_seconds=time.monotonic() - started,
             device=torch.cuda.get_device_name(),
-            execution_horizon=policy.config.n_action_steps,
+            execution_horizon=horizon,
+            alex_interface=interface,
             seed=args.seed,
             input_keys=["observation.state", "observation.images.head", "task"],
             inference_seconds=[],
@@ -64,6 +97,10 @@ def main() -> None:
                 if request.get("close"):
                     break
                 state = np.asarray(request["state"], dtype=np.float32)
+                if request["state_names"] != interface["state_names"]:
+                    raise ValueError(
+                        "Observation signal ordering differs from checkpoint training."
+                    )
                 shape = tuple(request["image_shape"])
                 if state.shape != (18,) or shape != (600, 960, 3) or not np.isfinite(state).all():
                     raise ValueError("Policy requires actual Alex18/head RGB inputs.")
@@ -79,18 +116,22 @@ def main() -> None:
                 torch.cuda.synchronize()
                 started = time.monotonic()
                 with torch.inference_mode():
-                    actions = policy.predict_action_chunk(batch)[:, : policy.config.n_action_steps]
+                    actions = policy.predict_action_chunk(batch)[:, :horizon]
                     actions = postprocessor(actions)
                 torch.cuda.synchronize()
                 elapsed = time.monotonic() - started
-                if actions.shape != (1, policy.config.n_action_steps, 16):
+                if actions.shape != (1, horizon, 16):
                     raise ValueError(f"Unexpected learned action shape {actions.shape}")
                 if not bool(torch.isfinite(actions).all()):
                     raise ValueError("Learned actions must be finite.")
                 report["inference_seconds"].append(elapsed)
                 send_message(
                     connection,
-                    {"actions": actions.cpu().tolist()[0], "inference_seconds": elapsed},
+                    {
+                        "actions": actions.cpu().tolist()[0],
+                        "inference_seconds": elapsed,
+                        "action_representation": interface["action_representation"],
+                    },
                 )
         report.update(passed=True, peak_allocated_gib=torch.cuda.max_memory_allocated() / 1024**3)
     except Exception:
