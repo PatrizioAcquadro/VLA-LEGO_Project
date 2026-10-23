@@ -1,32 +1,23 @@
-# Implementation plans
+# Development roadmap
 
-Nine canonical files follow website Phases 0–8. Their sections preserve all 22 original subphases, including work already implemented and work still to do. No separate subphase files are needed. These are development specifications; a local ignored `TODO.md` can hold the active implementation checklist.
+Build an **ordered five-block tower with Alex003**, selecting the requested colors and sizes among distractors and coordinating both arms. Establish the capability in Isaac Sim/Lab, then on the Purdue robot with VLA inference entirely on its Jetson AGX Orin. The canonical [task](../bricks.md), [interfaces](../contracts.md), [data strategy](../data.md) and [qualification criteria](../validation.md#assembly-qualification-targets) define the shared requirements.
 
-The [website roadmap](https://websitepresentation.vercel.app/roadmap) and historical repository plans are the sources. The original January 16–April 4, 2026 schedule is historical. There is no new delivery calendar or assumed 8×A100 allocation. Status comes from actual source and [evidence](../validation.md), not the passage of scheduled dates.
+This roadmap replaces the original 22 subphases. **All nine phases below are planned.** Existing MuJoCo/Qwen components are a migration baseline, not completion of these phases; [status](../status.md) distinguishes the two. There is no fixed calendar or guaranteed cluster allocation.
 
-| Phase file | Included subphases | Current state |
+| Phase | Intended result | Depends on |
 |---|---|---|
-| [0 — Foundation](phase-0-foundation.md) | 0.1 Environment, 0.2 MuJoCo, 0.3 Literature | Local runtime established; cluster qualification and literature synthesis incomplete |
-| [1 — Simulation](phase-1-simulation.md) | 1.1 Alex robot, 1.2 Lightweight bricks | Maintained components and local diagnostics; physical calibration/demo collection pending |
-| [2 — Data](phase-2-data.md) | 2.1 Trajectories, 2.2 Annotation, 2.3 Interleaving | Planned for lightweight bricks; no qualified dataset |
-| [3 — Models](phase-3-models.md) | 3.1 Qwen backbone, 3.2 Action head | Implemented components, local native GPU validation; integration/scale limits remain |
-| [4 — Training infrastructure](phase-4-training-infrastructure.md) | 4.1 Losses, 4.2 Distributed training | Standalone loss components partial; real training/distributed path pending |
-| [5 — Training](phase-5-training.md) | 5.1 Initial run, 5.2 Continued training | Planned, blocked on real data and trainer |
-| [6 — Evaluation](phase-6-evaluation.md) | 6.1 Brick tasks, 6.2 LIBERO, 6.3 Ablations | Task evaluator exists; learned benchmarks and all experiments pending |
-| [7 — Adaptation](phase-7-adaptation.md) | 7.1 Task fine-tuning, 7.2 Few-shot | Planned |
-| [8 — Transfer and handoff](phase-8-transfer-handoff.md) | 8.1 Sim-to-real, 8.2 Alex mapping, 8.3 Handoff | Documentation baseline delivered; physical transfer and research artifact handoff pending |
+| [0 — Cleanup and foundations](phase-0-foundation.md) | Essential repository, clear ownership and separate simulation, training and onboard environments | Current baseline |
+| [1 — Alex003 and blocks in Isaac](phase-1-simulation.md) | Hardware-faithful scene and physically executed cooperative stacking | 0 |
+| [2 — VLA and onboard feasibility](phase-2-vla-feasibility.md) | Pretrained model choice, deployable interfaces and demonstrated Orin execution path | Minimum usable environment from 1 |
+| [3 — Data sources and teachers](phase-3-data-teachers.md) | Selected public sources and an Alex pilot with nominal behavior and recovery | Minimum usable environment from 1 |
+| [4 — Collection and coverage](phase-4-collection.md) | Corpus covering task variation, errors and corrections | 1, 2 and 3 |
+| [5 — Iterative learning](phase-5-training.md) | Fine-tuned policy improved through autonomous rollouts and targeted corrections | Initial corpus from 4 |
+| [6 — Simulation qualification](phase-6-evaluation.md) | Measured assembly, generalization and recovery at Orin-equivalent timing | 5 |
+| [7 — Physical transfer](phase-7-transfer.md) | Measured transfer, then targeted real adaptation and onboard qualification | 6 and hardware readiness |
+| [8 — Consolidation and extensions](phase-8-consolidation.md) | Repeatable system, completed retirement of obsolete paths and justified extensions | 7 |
 
-## Scope reconciliation
+Phases 2 and 3 can progress together once the minimum Isaac environment exists. Large-scale collection waits for both: the model/hardware contract and a useful teacher pilot. Phases 4 and 5 then form an iterative collection–learning loop; final qualification uses separate, fixed campaigns.
 
-- Phase 1.2 now models lightweight cuboids and gravity-supported structures. The old studs/tubes, insertion, baseplate and retention plans are retired, with important negative results preserved in [history](../history.md).
-- Phase 2.1 collects actual robot pick-and-place trajectories for these bricks. The old 10K episodes/large storage estimate is a possible later scale, not a prerequisite or an authorized run.
-- Qwen3.5-4B replaces the website's Qwen2.5 reference. Current 17-D actions, 52-D state, four views and 16-step chunks are canonical [contracts](../contracts.md).
-- Phase 4.2 must train the actual VLA on real episodes. Toy Transformer/DeepSpeed jobs and their synthetic tests were removed; their results do not transfer automatically.
-- Original targets (>50% minimum, >70% target, >85% stretch task success) remain historical aspirations. Define a justified brick-specific benchmark, denominators and stopping criteria before claiming any threshold. LEGO connection-quality targets are inapplicable to gravity-based bricks.
-- The [future real-LEGO extension](phase-8-transfer-handoff.md#future-extension-real-lego) is intentionally beyond the current baseline. Bimanual coordination remains a later goal, not a requirement for the first one-arm collection pilot.
+Prioritize a working task and reusable existing technology. LIBERO, custom temporal interleaving, EO-1 replication, mandatory multi-model integration and publication-oriented ablations are outside the required path. Walls and bridges precede tolerant insertion parts; LEGO remains a later extension.
 
-## Dependency order
-
-Foundation and simulation → one real demonstration → pilot dataset → grounded annotations/interleaving → integrated losses and single-GPU training/resume → qualified distributed training → learned task evaluation → adaptation and physical-transfer studies.
-
-Model component development can proceed alongside data work. Passing a component forward or producing attractive diagnostic videos does not satisfy the downstream dataset/training/task gates. Completed repository cleanup is recorded in [history](../history.md) and [validation](../validation.md).
+The [topic pages](../index.md) own design details and operating guidance. Each phase describes only its objective, choices, conceptual work, expected result and advancement conditions. Ordinary earlier plans remain recoverable through [Git history](../history.md).

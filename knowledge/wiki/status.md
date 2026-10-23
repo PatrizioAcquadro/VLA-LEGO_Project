@@ -1,34 +1,37 @@
 # Status
 
-Reviewed on October 23, 2026, against the maintained source and local validation. See [validation](validation.md) for evidence and [plans](implementation_phases/index.md) for completion criteria.
+Reviewed October 23, 2026. This revision implements the **documentation roadmap only**. All [new phases](implementation_phases/index.md) remain planned. Prior component evidence is preserved in [validation](validation.md), without being relabeled as Isaac, Alex003 or learned assembly success.
 
-| Capability | Current state |
+## Existing implementation
+
+| Capability | Current state and limit |
 |---|---|
-| Alex fixed-base upper body and two EZGrippers | Implemented in MuJoCo; native stability/control tests pass. Physical dynamics and hardware operation are unqualified. |
-| Actions, state, synchronized views | Maintained [17-D / 52-D / four-view contracts](contracts.md). |
-| Lightweight bricks | Configurable cuboids, seeded resets, tower and planar triangle goals, support and post-release stability evaluation. |
-| Demonstration artifacts | One `vla-demo` workflow exports scripted robot motion and prearranged brick layouts. This does not demonstrate robot assembly. |
-| Qwen3.5-4B backbone | Native four-view GPU forward, processor metadata, hidden states and freeze contracts verified locally. |
-| VLA head | State/action projectors, flow matching and `(B,16,17)` inference implemented; finite untrained outputs and gradient routing verified. |
-| Loss modules | Standalone text/action losses and masks implemented. Combined modular objective and production integration remain incomplete. |
-| Data collection, annotations, temporal interleaving | Planned; no maintained collector or qualified brick dataset. |
-| Training and learned policy evaluation | Planned; synthetic placeholder trainer/evaluator retired. No learned brick success claim. |
-| Packaging and infrastructure | sdist-to-wheel probe and local GPU Docker demo pass. Hosted checks run on feature-branch pushes; see [GitHub Actions](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/actions/workflows/ci-cd.yml) for the current revision. Apptainer and Gilbreth/A100 execution remain unverified. |
-| Physical transfer, LIBERO, few-shot experiments | Not implemented or measured. |
+| Robot simulation | MuJoCo fixed-base Alex V1 upper body and two EZGrippers; native control/stability evidence exists, hardware dynamics unqualified. |
+| Interfaces | Legacy 17-D actions, 52-D state, four synchronized views and 16-step chunks. These remain current code, not requirements for the new embodiment. |
+| Blocks and diagnostics | Configurable cuboids, seeded resets, tower/planar-triangle evaluation and scripted robot clips. Prearranged goals are not assembly demonstrations. |
+| Model components | Qwen3.5-4B plus custom untrained action head; real GPU forward and gradient-routing evidence, no learned task capability. |
+| Losses and tracking | Standalone components exist; no maintained production trainer, collector or learned rollout evaluator. |
+| Data and policy | No qualified assembly corpus or trained assembly checkpoint. |
+| Packaging | Local installed-package and GPU Docker evidence. Apptainer, cluster training and onboard inference are unqualified. |
 
-## Next development sequence
+## Planned target
 
-1. Calibrate a small printable brick set and verify one physical grasp with the existing action pipeline ([1.2](implementation_phases/phase-1-simulation.md#12-lightweight-brick-environment), [2.1](implementation_phases/phase-2-data.md#21-robot-trajectory-generation)).
-2. Record one complete robot pick-and-place episode, then a bounded pilot with failures retained. Do not scale to the historical 10K target before replay and data alignment pass.
-3. Implement evidence-grounded annotation and interleaving ([2.2](implementation_phases/phase-2-data.md#22-vlm-based-annotation), [2.3](implementation_phases/phase-2-data.md#23-interleaved-data-construction)); resolve model positional/masking limits before training.
-4. Complete [4.1](implementation_phases/phase-4-training-infrastructure.md#41-loss-function-implementation) and a real single-GPU training/resume path in [4.2](implementation_phases/phase-4-training-infrastructure.md#42-distributed-training-setup). Qualify distributed execution only when the single-GPU path is correct.
+| Area | Direction |
+|---|---|
+| Task | Ordered five-block tower, color/size selection among distractors, stabilize–place cooperation and recovery. |
+| Platform | Isaac Sim/Lab using shared Alex003 assets, fixed pedestal, two WSG32/UMI grippers and head ZED X Mini. |
+| Policy | Robot-pretrained VLA; GR00T N1.7 leads, SmolVLA is the compact alternative. Selection remains conditional on task and Orin feasibility. |
+| Data | Selected public knowledge plus physically executed Alex simulation demonstrations, corrections and later targeted real data. |
+| Deployment | Entire VLA inference on Orin, with the established low-level robot controller. |
+| Progression | Qualify simulation, measure transfer before adaptation, adapt on separate real data, then qualify the physical task. |
 
-## Open questions and limits
+## Immediate priorities and unresolved facts
 
-- Printed mass, friction, grip aperture and contact behavior have not been measured. Default dimensions/masses are provisional, not a qualified manufacturing specification.
-- A triangle currently means three separated planar target locations. Continuous triangular frames and non-cuboid pieces require a separate design and evaluator.
-- Robot demonstrations need task-space control, collision-aware approach/lift/release and actual gripper contact. Resetting pieces into goals is not a teacher trajectory.
-- VLA embedding assembly uses sequential positions for injected vision/state/action embeddings. Native multimodal positional equivalence, temporal layouts and attention leakage need explicit validation.
-- Kinematics self-consistency is historical evidence. The independent SDK FK comparison was skipped because the source inertia encoding did not load; it remains open.
-- Single-arm manipulation is the initial collection target. Bimanual coordination remains an intended later capability, with both arms retained in the interface.
-- The original website still describes LEGO and an old calendar. It is a historical planning source; these repository plans define the current scope.
+1. Begin Phase 0 ownership/environment cleanup and Phase 1 minimum Isaac scene. Retire legacy paths only as replacements become operational.
+2. Resolve the Orin software compatibility path and actual WSG32 command/feedback interface early. Simulated gripper readiness does not establish physical integration.
+3. Calibrate the initial printed set and physically executed cooperative teacher, then select the model using a bounded pilot. Large-scale collection waits for both Phase 2 and Phase 3.
+4. Iterate coverage, fine-tuning and corrections toward the [qualification targets](validation.md#assembly-qualification-targets).
+
+The [GR00T/JetPack mismatch](models.md#onboard-feasibility) is unresolved; no upgrade or onboard run is claimed. Print properties, Alex-specific latency, head-camera sufficiency, physical performance and resource allocations remain to be measured. Existing SDK FK parity was skipped; legacy self-consistency does not qualify the new robot.
+
+LIBERO, custom interleaving, EO-1 replication and paper-oriented ablations are outside the required roadmap. The historical website/calendar no longer determines development order.

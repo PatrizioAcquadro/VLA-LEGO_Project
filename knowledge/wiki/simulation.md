@@ -1,5 +1,7 @@
 # Simulation workflows
 
+This page operates the **existing MuJoCo/Alex V1 diagnostics**. The planned Isaac Sim/Lab environment uses the [shared Alex003 setup](architecture.md#planned-robot-and-ownership) and [new interfaces](contracts.md#planned-alex003-contract), with physical contacts, calibrated prints and cooperating arms. It is not implemented by the commands below; [Phase 1](implementation_phases/phase-1-simulation.md) defines its development outcome. Keep this legacy path only until its maintained roles have working replacements.
+
 Install the simulation extra as described in [development](development.md). Run commands below from the repository root with that environment activated. Native MuJoCo physics runs on the CPU; EGL rendering uses the GPU. Set `MUJOCO_GL` before importing MuJoCo.
 
 ## Inspect and export

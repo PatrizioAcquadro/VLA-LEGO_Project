@@ -1,6 +1,33 @@
 # Validation and evidence
 
-## Current local evidence — October 23, 2026
+## Assembly qualification targets
+
+These are initial roadmap acceptance targets, **not achieved results or guarantees from external benchmarks**. The [task definition](bricks.md#target-task) governs success: correct five pieces and order, meaningful stabilize–place cooperation, full release and stability through a calibrated interval. Use evidence of each arm's task contribution rather than counting motion or the presence of two arms.
+
+| Campaign | Initial acceptance target |
+|---|---|
+| Nominal simulation | At least 90 successful episodes out of 100 |
+| Dedicated generalization | At least 80 out of 100 held-out episodes; report color–shape combinations, dimensions, layouts and instructions separately |
+| Recoverable-error simulation | At least 70 out of 100 episodes with predefined recoverable errors |
+| Physical robot after adaptation | At least 40 out of 50 episodes across at least two sessions, with VLA inference entirely on Orin |
+
+Measure the physical zero-adaptation baseline separately, after required calibration and hardware readiness but before learning from real task demonstrations. Predefine its bounded episode set; no numerical success guarantee is assumed. Adapt on separate real demonstrations/corrections, then evaluate on independent episodes. A workstation policy server does not satisfy the physical criterion.
+
+Before each campaign, fix the task distribution, distractors, required cooperative roles, timeout, allowed recovery attempts, perturbation types/severity and physical acceptance ranges. Calibrate pose, speed and dwell tolerances against meaningful measurement error and print/contact variability. Distinguish hard robot safety limits, empirical acceptance ranges and numerical tolerances; avoid arbitrary stacked margins and unjustified refusals.
+
+Simulated qualification includes measured Orin-equivalent observation age, inference/replanning and command timing. Report successes/attempts, confidence intervals, completion times, placement/recovery errors, interventions, stops and failures. All attempted episodes remain visible; favorable retries cannot replace failed trials. Report unavailable episodes explicitly instead of silently shrinking the denominator. Non-completable cases need appropriate-stop and unnecessary-refusal reporting, separate from the recoverable-error success rate.
+
+Qualification is autonomous: no teacher coordinates, future frames, hidden corrective controller, object forces or human intervention counted as learned success. Preserve results when revising a model; if qualification episodes inform training, use fresh independent episodes for the next claim. Do not adjust thresholds merely to pass a campaign. Simulation success permits controlled transfer work, not a claim of physical safety certification or performance.
+
+## Documentation revision — October 23, 2026
+
+The new roadmap contains nine plans with the requested five-part structure and no software recipes. All 121 local Markdown links/anchors resolve. Ruff, Black on all 65 versioned Python files, mypy on 36 source files and all eight existing configuration combinations pass; runtime code, assets and packaging were not changed or requalified.
+
+The full `make check` invocation encounters two pre-existing, ignored history-preparation scripts under `outputs/history-messages-20261023/` that Black would reformat. Those local artifacts were preserved; the remaining checks were completed separately. This is not a failure of the versioned documentation or Python formatting. No simulator, training, cluster or robot qualification campaign was run.
+
+## Existing local component evidence — October 23, 2026
+
+The results below predate this roadmap revision and apply to the retained MuJoCo/Qwen implementation. They were not rerun as Isaac/Alex003 or pretrained-policy experiments.
 
 | Check | Result and boundary |
 |---|---|
@@ -30,10 +57,10 @@ Report implementation, component validation, task performance and physical quali
 
 ## Source layout verification
 
-After migration to `src/vla_lego`, the complete native CUDA/EGL suite still passes all 481 tests, including the 32 native model GPU checks. The installed wheel contains exactly the 71 expected Python/configuration/asset files from `src/`, and its probe passes outside the checkout. `make check` passes with the new namespace, subsystem test directories and 100 current local documentation links. Evidence: `outputs/src-native-tests.log`, `outputs/src-package-check.log` and `outputs/src-quality-check.log`.
+After migration to `src/vla_lego`, the complete native CUDA/EGL suite passed all 481 tests, including the 32 native model GPU checks. The installed wheel contained exactly the 71 expected Python/configuration/asset files from `src/`, and its probe passed outside the checkout. `make check` passed with the new namespace, subsystem test directories and that revision's 100 local documentation links. Evidence: `outputs/src-native-tests.log`, `outputs/src-package-check.log` and `outputs/src-quality-check.log`.
 
 The dependency-only Docker image was rebuilt with `/workspace/src` exposure and exported the robot/tower/triangle GPU diagnostics successfully (`outputs/src-container-demo/`). All five installed CLIs resolve to `vla_lego.*` and the strict asset linter passes. Obsolete generated root-level egg metadata was removed after it was found shadowing current entry-point metadata; no tracked evidence was changed.
 
-The feature branch is published. Hosted CI runs on branch pushes; [GitHub Actions](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/actions/workflows/ci-cd.yml) is the source for the current revision's status. A branch push does not publish a container or merge main.
+The earlier feature branch was published and subsequently integrated. Hosted CI runs on branch pushes; [GitHub Actions](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/actions/workflows/ci-cd.yml) is the source for a revision's status. This documentation revision performs no remote publication or hosted validation.
 
-Root-file cleanup preserves that runtime unchanged. `make check`, the 71-file installed-wheel probe, all five CLIs and the relocated Docker build pass; the current wiki has 94 valid local links. Container definitions now live in `infra/containers`. Evidence: `outputs/essential-root-check.log`, `outputs/essential-root-package.log` and `outputs/essential-root-docker-build.log`.
+Root-file cleanup preserved that runtime unchanged. `make check`, the 71-file installed-wheel probe, all five CLIs and the relocated Docker build passed; that revision had 94 valid local documentation links. Container definitions now live in `infra/containers`. Evidence: `outputs/essential-root-check.log`, `outputs/essential-root-package.log` and `outputs/essential-root-docker-build.log`.

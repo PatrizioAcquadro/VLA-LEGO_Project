@@ -1,31 +1,40 @@
-# Lightweight bricks and tasks
+# Blocks and tasks
 
-## Scope and physical model
+## Target task
 
-Current bricks are lightweight, variable-size cuboids that can be picked, placed and stacked under gravity. They have no studs, sockets, baseplate locking, magnetic connection, weld or retention assistance. Actual LEGO is deferred to its [extension plan](implementation_phases/phase-8-transfer-handoff.md#future-extension-real-lego).
+Alex003 builds an **ordered five-block tower**, selecting each requested piece by color and size among distractors. Instructions specify bottom-to-top order; initial solvable tasks use stable support relationships and reachable pieces. Missing pieces or impossible arrangements belong to explicit stop cases.
 
-`BrickSpec` validates positive finite XYZ dimensions in metres, mass in kilograms and RGBA color. The initial catalog is [packaged YAML](../../src/vla_lego/configs/bricks/default.yaml):
+The two arms must cooperate: the initial behavior is one arm stabilizing the existing structure while the other places a piece, followed by full release. Roles vary across episodes. Alternating independent single-arm placements or moving the idle arm does not establish cooperation. Define observable task-relevant contributions from both arms and record when they occur.
 
-| Piece | XYZ dimensions | Effective mass |
+Success requires correct pieces and order, supported placements, complete release of all robot contact and stability through a calibrated dwell. The [qualification page](validation.md#assembly-qualification-targets) owns aggregate targets and campaign rules. Future arrangements include walls and bridges; large tolerant male–female insertions follow only after gravity assembly works, and LEGO is later still.
+
+## Printable catalog
+
+Use [DeepMind RGB-Objects](https://github.com/google-deepmind/dm_robotics/tree/main/py/manipulation/props/rgb_objects): 152 documented STL geometries derived from a cube, with shape/scale parameters and existing stacking research. The repository uses [Apache-2.0](https://github.com/google-deepmind/dm_robotics/blob/main/LICENSE); preserve applicable notices and source attribution when importing assets. Reuse the meshes, not its MuJoCo runtime.
+
+Start with cubes and rectangular prisms, two graspable scales and six distinct colors. Assign color independently of geometry in simulation and the expanded physical catalog; do not inherit the source benchmark's fixed color/shape associations.
+
+| Seed asset | Documented source scale | Intended use |
 |---|---|---|
-| Cube | 40×40×40 mm | 20 g |
-| Short | 60×30×30 mm | 18 g |
-| Long | 90×30×30 mm | 25 g |
+| [s0 cube STL](https://github.com/google-deepmind/dm_robotics/blob/main/py/manipulation/props/rgb_objects/assets/rgb_v1.3/meshes/test_triplets/s0_sds4_shr0_drf0_hlw0_shx0_shy0_scx50_scy50_scz50.stl) | 50 × 50 × 50 mm | Simple grasp and flat support |
+| [f6 rectangular prism STL](https://github.com/google-deepmind/dm_robotics/blob/main/py/manipulation/props/rgb_objects/assets/rgb_v1.3/meshes/heldout/f6_sds4_shr0_drf0_hlw0_shx0_shy0_scx47_scy47_scz68.stl) | 47 × 47 × 68 mm | Different dimensions and support orientation |
 
-Masses represent provisional hollow/low-infill prints, not solid ABS density. Inertia uses a uniform cuboid approximation. Contact friction starts at 0.6. The table top is at 0.77 m, centered at `(0.45,0)`, with a 0.50×0.60 m surface. None of these defaults qualifies a printable design or a robot grasp.
+Select two final print scales from gripper clearance and stable support, starting with a **12-piece calibration sample** covering both geometry families, both scales and all six colors. This small sample is not a full factorial dataset or sufficient evidence of generalization. Expand and cross color/shape/scale combinations before broad physical training or qualification, including multiple distinguishable target and distractor pieces.
 
-`scene_xml()` composes bricks with the maintained Alex scene; standalone exported MJCF is also available. `EpisodeManager` compiles once, resolves free-joint addresses by name, clears state/forces on reset, samples separated yawed bounding boxes from a seed and settles for 0.4 s. Custom catalogs are supplied through `load_bricks(path)` or the constructor; changing YAML alone does not prove grasp feasibility.
+The source includes 103 training meshes, 13 test-triplet meshes and 36 held-out meshes. Using its held-out cuboids as project training pieces is allowed by our task design, but does not preserve the original benchmark split. Define project splits explicitly and claim only the corresponding generalization.
 
-## Goals and evaluation
+## Physical calibration
 
-`make_goal(bricks, "tower")` orders pieces by footprint, centers them and records the supporting brick for each level. `"triangle"` requires exactly three pieces and creates three separated target positions in a plane. It does not form a filled triangle, an interlocking frame or triangular individual pieces.
+These are lightweight, easily separable gravity blocks, without studs, sockets, locks, magnets, welds or force-assisted retention. STL geometry does not specify printed mass, friction, wall stiffness or grasp quality. Measure dimensions, mass, surface/slip behavior, compliance, gripper clearance and released stability on actual prints; represent relevant print-to-print variation in simulation.
 
-`evaluate_goal()` checks position, yaw with footprint symmetries, positive support contact, low linear/angular velocity and absence of robot contact. Default position tolerance is 10% of the shortest piece dimension; yaw tolerance is 5°. Linear/angular speed bounds are 0.01 m/s and 0.1 rad/s. All six samples across a 0.25-s dwell must pass. These are simulation evaluation tolerances requiring calibration against printed pieces; they are not hard safety limits. A misplaced, unsupported, moving or still-held piece must fail even if it looks close in one image.
+The shared Alex measurements record about 70 mm fully open inner finger spacing. This is a geometric reference, not usable clearance for every approach or an established safe grasp envelope. Confirm actual fingertips, orientation and access. Treat print material, wall/infill settings and contact calibration as a consistent initial manufacturing choice before adding variation.
 
-See [simulation](simulation.md) for executable examples and [2.1](implementation_phases/phase-2-data.md#21-robot-trajectory-generation) for actual assembly demonstrations.
+No STL has been imported or printed by this revision. The earlier optional printing reference is replaced by this catalog; its unverified training terms are not a dependency.
 
-## Printable prototype direction
+## Existing MuJoCo behavior
 
-A relevant public design is [Endless Design Blocks by EndlessDesignLab](https://cults3d.com/en/3d-model/art/endless-design-blocks-an-infinitely-scalable-building-block-set-for-geometric): a scalable geometric building set with STL/3MF files, assembled through geometry and gravity rather than snaps, magnets or locking. The pieces have a dual-sided cube-corner/triangular geometry, rather than the simple cuboids used here. The listing identifies CC BY-SA and also displays a “No AI” label. Treat it as a printing reference; resolve the additional label before any use in model training or synthetic-data generation, and retain required attribution. No third-party mesh or license-dependent asset has been imported into this repository.
+Current code uses three provisional cuboids: 40 × 40 × 40 mm / 20 g, 60 × 30 × 30 mm / 18 g, and 90 × 30 × 30 mm / 25 g. Uniform-cuboid inertia, friction 0.6 and the current table geometry are uncalibrated defaults, not the new printing specification.
 
-Use the design as an optional physical reference, not a qualified Alex part. A simpler first prototype is a hollow cuboid matching the catalog, printed with enough wall stiffness for gripping. Measure actual mass, dimensions, grip opening and slip/stack behavior; then update the catalog and acceptance ranges from those measurements. Scale must account for gripper clearance and stable support area. Begin with a small set and one pick-and-place before expanding shapes or buying hardware.
+The existing tower goal orders pieces by footprint, not by a language instruction. The triangle goal is three separate planar locations. Seeded reset and support/release evaluation exist; robot assembly does not.
+
+The current evaluator uses position tolerance of 10% of the shortest dimension, 5° yaw tolerance, speed bounds of 0.01 m/s and 0.1 rad/s, and six samples over a 0.25 s dwell. These are legacy provisional tolerances, not automatically the future physical acceptance criteria. [Simulation workflows](simulation.md) describe that implementation.

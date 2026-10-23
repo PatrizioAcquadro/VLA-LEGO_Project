@@ -1,6 +1,26 @@
-# Cluster and containers
+# Compute and containers
 
-All commands in this page run from a source checkout. Image names and scheduler directives are templates, not evidence of current remote availability or allocation permission. This audit has not submitted jobs or published images.
+## Planned resource roles
+
+| Resource | Intended role | Boundary |
+|---|---|---|
+| Local RTX 4090, 24 GB | Interactive development, visual simulation, small experiments and profiling | Larger VLA adaptation depends on measured fit; do not assume full fine-tuning fits. |
+| Blackwell workstation, about 96 GB | Broader rendered collection, training and larger offline teachers | Planning inspection identified RTX PRO 6000 Blackwell Max-Q. Shared availability and throughput still need workload-specific measurement. |
+| Gautschi | H100 training; RTX-capable L40-class nodes for rendering when available | Partition visibility is not a guaranteed allocation; select the actual available GPU and compatible runtime. |
+| Gilbreth | A100/H100 training; compatible A10 nodes for rendering | Access, account limits, memory and allocation must match the job. |
+| Robot Orin | All final VLA inference together with sensing, logging and robot communication | Qualify concurrent load on the real system; the NUC retains low-level control. |
+
+The planning inspection found the local 4090 and approximately 96 GB Blackwell device, Gautschi H100/L40 partitions and Gilbreth A10/A100/H100 partitions. These are hardware/access observations, not evidence of qualified Isaac or VLA jobs. [Gautschi](https://docs.rcac.purdue.edu/userguides/gautschi/overview/) and [Gilbreth](https://docs.rcac.purdue.edu/userguides/gilbreth/overview/) documentation describe system resources; actual allocations govern use.
+
+[Isaac Sim's RTX renderer requires supported RT hardware](https://docs.isaacsim.omniverse.nvidia.com/6.0.0/installation/requirements.html). A100/H100 are training destinations, not supported visual-rendering destinations. Separate rendered collection from training rather than treating every CUDA GPU as interchangeable.
+
+Maintain separate compatible environments for Isaac/Alex, model training and Orin deployment. The shared Alex package and selected VLA may require different Python/CUDA stacks. Choose collection and distributed-training scale from measured useful-data throughput, memory, storage and queue availability; no eight-GPU allocation or mandatory distributed framework is assumed.
+
+The [model page](models.md#onboard-feasibility) owns Orin compatibility and memory constraints. No new simulator, scheduler, training or deployment workload was run for this documentation revision.
+
+## Existing MuJoCo and Qwen operations
+
+All commands below run from a source checkout and operate the retained legacy stack. They do not install Isaac or qualify the new VLA. Image names and scheduler directives are templates, not evidence of current remote availability or allocation permission.
 
 ## Local Docker
 
@@ -47,4 +67,4 @@ Inspect the `#SBATCH` account/partition/QoS/resource lines before submitting the
 | `sim_smoke.sh` | One GPU, EGL diagnostic demo |
 | `validate_model.sh` | One GPU, native Qwen/VLA smoke |
 
-The simulation/model jobs write unique `outputs/*-${SLURM_JOB_ID}` directories and scheduler logs. Ensure these directories live on appropriate scratch storage for your checkout. Keep failed runs and scheduler exit status. No distributed training template is maintained until [4.2](implementation_phases/phase-4-training-infrastructure.md#42-distributed-training-setup) implements a real training/resume path; the old toy-job results cannot qualify that path.
+The simulation/model jobs write unique `outputs/*-${SLURM_JOB_ID}` directories and scheduler logs. Ensure these directories live on appropriate scratch storage for your checkout. Keep failed runs and scheduler exit status. No distributed training template is maintained. Future training belongs to [Phase 5](implementation_phases/phase-5-training.md), using the selected pretrained VLA; old toy-job results cannot qualify it.

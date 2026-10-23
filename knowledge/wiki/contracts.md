@@ -1,8 +1,29 @@
-# Runtime contracts
+# Observation and action contracts
 
-The source constants and packaged configuration are authoritative. Changes to these interfaces require updating their actual consumers and meaningful regression tests together.
+The new Alex003 interface below is a design direction, not implemented dimensions or a compatibility promise. Current source constants remain authoritative for the existing MuJoCo/Qwen path. Migration must update real consumers together; do not reinterpret legacy tensors as Alex003 commands.
 
-## Robot and control
+## Planned Alex003 contract
+
+| Boundary | Design direction |
+|---|---|
+| Policy observations | Head ZED RGB, timestamped real joint/gripper proprioception, measured or kinematically derived tool poses, and the language instruction. Use only signals obtainable on the robot at decision time. |
+| Additional sensing | Stereo/depth only if explicitly supported by the selected model and onboard budget. Wrist cameras only if measured occlusion limits justify the hardware and inference cost. No mandatory four-view rig. |
+| Policy actions | Coordinated left/right end-effector motion and gripper opening targets. Choose absolute versus relative poses, rotation representation, reference frame and units with the selected model and hardware controller. |
+| Low-level realization | IK and bounded robot control enforce joint, velocity, effort and collision constraints. Define the role of any torso motion explicitly; no inherited spine action or extra degree of freedom is assumed. |
+| Gripper semantics | Map opening/closing commands and available feedback to actual WSG32 behavior; do not assume EZGripper normalization, effort sensing or hardware support carries over. |
+| Timing | Separate capture, inference/replanning and command application rates. Declare observation age, predicted horizon, executed prefix, interpolation, stale-command handling and recovery from missed deadlines. |
+| Normalization | Specify joint/tool ordering, frame conventions and scaling; fit learned statistics only on training data. No fixed 17-D action, 52-D state or 16-step chunk requirement. |
+| Outcome/stop | Represent completion and justified inability to continue through an explicit deployable mechanism. A hardware stop enforces limits but does not supply hidden task decisions. |
+
+The VLA owns piece selection, sequence, cooperation and recovery. A low-level controller may reject or constrain a motion for physical reasons, but may not replace the policy's task choice. Keep requested and actually applied commands distinguishable in data and reporting.
+
+Finalize this contract in Phase 2 using the minimum scene and Phase 3 pilot before mass collection. Reproduce real observation availability and latency in simulation; missing hardware signals are not filled with simulator truth. The [data strategy](data.md) owns synchronization, source mapping and leakage prevention.
+
+## Existing MuJoCo and Qwen contract
+
+The sections below describe the retained implementation only. They remain useful while the replacement is built and do not constrain its design.
+
+### Robot and control
 
 Alex has a fixed base at world `(0,0,1)` m, 15 spine/arm joints and eight coupled finger joints, with 17 actuators. World axes are X forward, Y left, Z up. Quaternions use MuJoCo `wxyz`; tool poses are in the world frame. Source asset provenance remains [beside the robot](../../src/vla_lego/sim/assets/robots/alex/PROVENANCE.md).
 
@@ -10,7 +31,7 @@ The normalized action is 17-D: spine; seven left-arm joints; seven right-arm joi
 
 `AlexActionSpace` maps commands to position-actuator targets with joint and velocity bounds. `SimRunner.step()` advances one 20-Hz control tick: 25 physics substeps at 0.002 s in the default scene. The MJCF enforces actuator effort limits. These simulation constraints are not a certified hardware safety controller.
 
-## State
+### State
 
 | Slice | Quantity | Units / frame |
 |---|---|---|
@@ -23,13 +44,13 @@ The normalized action is 17-D: spine; seven left-arm joints; seven right-arm joi
 
 `AlexRobotState` provides structured, flat and normalized forms. Normalize using its actual joint limits and declared workspace/velocity ranges; do not mix raw and normalized tensors. Workspace bounds and velocity normalization ceilings are scaling conventions, not physical safety limits.
 
-## Cameras and timing
+### Cameras and timing
 
 Canonical ordered views are `overhead`, `left_wrist_cam`, `right_wrist_cam`, `third_person`. Each defaults to 320×320 at 20 Hz. `robot_cam` remains a debug camera. RGB is `uint8 (H,W,3)`; depth/segmentation are available for diagnostics and planned auxiliary uses, and must not become undeclared policy inputs.
 
 `MultiViewRenderer.capture(data, step_index=...)` captures all views from one simulation state, with live camera extrinsics for wrist views. A recorder must preserve timestamps and the distinction between `observation_t`, applied `action_t` and `observation_t+1`.
 
-## Model tensors
+### Model tensors
 
 | Quantity | Shape / convention |
 |---|---|
@@ -43,6 +64,6 @@ Canonical ordered views are `overhead`, `left_wrist_cam`, `right_wrist_cam`, `th
 
 Flow matching uses `t=0` noise and `t=1` data, `x_t=(1-t)noise+t*action`, target velocity `action-noise`. This is the opposite time direction of the historical EO-1 example. Missing action tails require explicit valid-step masks. Text targets use `-100` for ignored positions and causal shifting on the full sequence.
 
-## Task truth
+### Task truth
 
 Brick poses, support contacts and velocities are evaluator data. [Brick evaluation](bricks.md) advances physics over a dwell interval; callers must account for that time advance. Layout resets are diagnostic initial conditions, not actions, demonstrations or learned outcomes.

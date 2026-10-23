@@ -1,25 +1,27 @@
-# Lightweight Brick Assembly VLA
+# Alex003 Bimanual Assembly VLA
 
-This project develops vision-language-action components for Alex to pick up lightweight bricks and arrange them into structures. The current repository provides simulation and model components; it does not yet provide a trained assembly policy.
+The target is an **ordered five-block tower**, built autonomously by Alex003 from pieces of different colors and sizes among distractors, with genuine cooperation between the arms. Develop it in Isaac Sim/Lab, then transfer it to Purdue Alex with VLA inference entirely on the onboard Jetson AGX Orin.
+
+The repository currently contains MuJoCo/Alex V1 and untrained Qwen-based components. The Isaac/Alex003 task, data collection, trained assembly policy and real deployment are **planned**, not implemented by this documentation revision.
 
 ## Start here
 
 | Need | Canonical page |
 |---|---|
-| Understand capabilities, limits and priorities | [Status](status.md) |
-| Install and contribute | [Development](development.md) |
-| Run or inspect the simulation | [Simulation](simulation.md) |
-| Understand what counts as a brick or a successful structure | [Bricks and tasks](bricks.md) |
-| Understand module ownership and execution | [Architecture](architecture.md) |
-| Implement compatible observations, actions and cameras | [Contracts](contracts.md) |
-| Use Qwen and the flow-matching head | [Models](models.md) |
-| Develop the future dataset | [Data specification](data.md) |
-| Operate containers and Gilbreth jobs | [Cluster and containers](cluster.md) |
-| Integrate experiment logging | [Tracking](tracking.md) |
-| Assess what has actually been validated | [Validation](validation.md) |
-| Develop the next phase or review every original plan | [Implementation plans](implementation_phases/index.md) |
-| Understand retired work and recover its sources | [Historical findings](history.md) |
-| Find external architecture and printing references | [References](references.md) |
-| Read consequential project decisions | [Decision log](log.md) |
+| See current capability and unresolved decisions | [Status](status.md) |
+| Follow the nine development phases | [Roadmap](implementation_phases/index.md) |
+| Understand the robot, sensors and ownership | [Architecture](architecture.md) |
+| Define deployable observations, actions and timing | [Contracts](contracts.md) |
+| Define the tower, printable pieces and progression | [Blocks and tasks](bricks.md) |
+| Select public data, teachers, recovery cases and splits | [Data strategy](data.md) |
+| Select a pretrained VLA and establish Orin feasibility | [Models](models.md) |
+| Allocate local, Blackwell, Purdue and onboard compute | [Compute and containers](cluster.md) |
+| Understand success criteria and existing evidence | [Validation](validation.md) |
+| Find research rationale and primary sources | [References](references.md) |
+| Install or maintain the current software | [Development](development.md) |
+| Run existing MuJoCo diagnostics | [Simulation](simulation.md) |
+| Use existing experiment logging | [Tracking](tracking.md) |
+| Recover retired work and negative results | [History](history.md) |
+| Read consequential scope decisions | [Decision log](log.md) |
 
-The package and repository retain the names `vla-lego` and `VLA-LEGO_Project` for continuity. In current development, “bricks” means variable-size lightweight pieces; real LEGO connections are a [future extension](implementation_phases/phase-8-transfer-handoff.md#future-extension-real-lego).
+Topic pages own shared details; phase plans link to them. Operating instructions describe the implementation they actually run. The names `VLA-LEGO_Project` and `vla-lego` remain for continuity; LEGO connections belong to the later [extension phase](implementation_phases/phase-8-consolidation.md).

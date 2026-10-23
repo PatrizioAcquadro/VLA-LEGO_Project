@@ -6,9 +6,9 @@
 
 [Documentation](knowledge/wiki/index.md) · [Project status](knowledge/wiki/status.md) · [Implementation plans](knowledge/wiki/implementation_phases/index.md) · [Validation](knowledge/wiki/validation.md)
 
-The goal is to teach Alex to pick up lightweight, variable-size bricks and arrange them into structures. The repository combines a MuJoCo environment, robot and camera interfaces, and a Qwen3.5-4B backbone with a flow-matching action head.
+The target is an ordered five-block tower built by **Alex003**, selecting the requested colors and sizes among distractors with genuine cooperation between both arms. The new roadmap uses Isaac Sim/Lab and a robot-pretrained VLA, then transfers to Purdue Alex with inference entirely on the onboard Jetson AGX Orin.
 
-**Current stage:** simulation and model components are implemented and locally validated. Real demonstration collection, integrated training and a learned assembly policy remain planned. See [status and open questions](knowledge/wiki/status.md) for the current development boundary.
+**Current stage:** the repository still implements the MuJoCo/Alex V1 environment and Qwen3.5-4B components described below. Isaac/Alex003 integration, demonstration collection, pretrained VLA adaptation and learned assembly remain planned. See [status and open questions](knowledge/wiki/status.md) for the capability boundary.
 
 | Alex in MuJoCo | Lightweight-brick tower |
 |:---:|:---:|
@@ -25,7 +25,7 @@ The goal is to teach Alex to pick up lightweight, variable-size bricks and arran
 | **Model components** | Qwen3.5-4B processing, state/action projectors, flow matching and 16-step action chunks. See [models and limitations](knowledge/wiki/models.md). |
 | **Development tools** | Diagnostic CLIs, packaged assets/configuration, subsystem tests, installed-wheel checks, containers and GitHub Actions. |
 
-Here, “bricks” means lightweight pieces intended for physical prototyping, including 3D printing. Simulation currently uses cuboids; printed geometry and contact properties still need calibration. Real LEGO connections are a [future extension](knowledge/wiki/implementation_phases/phase-8-transfer-handoff.md#future-extension-real-lego). The repository and package names, `VLA-LEGO_Project` and `vla-lego`, are retained for continuity.
+Here, “bricks” means lightweight pieces intended for 3D printing and gravity assembly. The [new print catalog](knowledge/wiki/bricks.md#printable-catalog) uses RGB-Objects; current MuJoCo cuboids and contact defaults remain provisional. Real LEGO connections are a [later extension](knowledge/wiki/implementation_phases/phase-8-consolidation.md). The repository and package names, `VLA-LEGO_Project` and `vla-lego`, are retained for continuity.
 
 ## Quick start
 
@@ -61,7 +61,7 @@ make package                # Build and verify an installed wheel
 
 The full suite needs CUDA, VLM dependencies and pretrained weights for its native model tests. GPU-less CI uses an explicit CPU/OSMesa path. Report skipped tests separately from passed checks. [Validation evidence](knowledge/wiki/validation.md) records tested configurations, results and outstanding qualification work.
 
-Keep changes focused, preserve the public contracts and add tests for maintained behavior or meaningful regressions. Contribution practices and container/cluster instructions live in [development](knowledge/wiki/development.md) and [operations](knowledge/wiki/cluster.md).
+Keep changes focused and migrate interfaces with their consumers. The [contracts](knowledge/wiki/contracts.md) distinguish current tensors from the planned Alex003 interface. Contribution practices and container/cluster instructions live in [development](knowledge/wiki/development.md) and [operations](knowledge/wiki/cluster.md).
 
 ## Repository structure
 
@@ -82,12 +82,12 @@ Install the package before running scripts or tests. Runtime imports use the sin
 
 ## Development roadmap
 
-The [nine phase plans, 0–8](knowledge/wiki/implementation_phases/index.md), cover all 22 original subphases, completed components and remaining work. The next milestones are:
+The [new nine phases, 0–8](knowledge/wiki/implementation_phases/index.md), replace the original subphase sequence. The next milestones are:
 
-1. Calibrate a printable brick set and demonstrate a robot pick-and-place episode.
-2. Collect a bounded pilot dataset, then add grounded annotations and temporal interleaving.
-3. Integrate losses and single-GPU training/resume before qualifying distributed training.
-4. Evaluate learned assembly, adaptation and physical transfer against explicit task criteria.
+1. Establish shared Alex003 assets and an Isaac scene while retiring obsolete paths in stages.
+2. Qualify a pretrained VLA's Orin execution path and produce a physically valid teacher pilot before mass collection.
+3. Expand nominal and recovery data, fine-tune, and collect corrections to actual policy errors.
+4. Qualify simulated assembly, measure physical transfer, then adapt with targeted real data and evaluate separately.
 
 The phase plans define completion gates and dependencies. The [data specification](knowledge/wiki/data.md) defines the planned dataset; the [decision log](knowledge/wiki/log.md) records consequential scope changes.
 

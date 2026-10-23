@@ -1,42 +1,28 @@
-# Phase 5 — Training execution
+# Phase 5 — Iterative learning
 
-Scope: original 5.1 and 5.2. **State: planned; no task-trained checkpoint or learning curve exists.** Start only after Phases 2–4 deliver a qualified dataset, correct multimodal/loss path, single-GPU resume and a measured resource budget. The original multiweek eight-A100 schedule is historical.
+## Objective
 
-## 5.1 Initial training run
+Adapt the selected pretrained VLA into a policy that chooses the correct pieces and coordinates assembly and recovery from deployable observations.
 
-### Run design
+## Design choices
 
-Define the primary hypothesis before using a large allocation: can the maintained observation/state/action model learn real lightweight-brick pick-and-place and generalize to held-out episode groups? Begin with the simplest validated action-conditioning layout. Interleaved reasoning is an experimental factor, not an assumed improvement.
+Follow the selected model's supported adaptation path. Begin with the least expensive adaptation scope that can learn the task; widen trainable capacity only for an observed limitation. Preserve pretrained knowledge with a deliberate, source-aware mixture.
 
-Fix training/validation splits, data mixture, normalization, model revision, freeze policy, action horizon, optimizer/scheduler, global batch and compute budget. Declare validation cadence, checkpoint selection, maximum steps/wall time and stopping conditions. Stop for nonfinite losses/gradients, data leakage, inconsistent action alignment, repeated unrecoverable runtime failures or exhausted budget. Do not extend a run simply until a favorable checkpoint appears.
+Task sequence, piece choice and correction decisions belong to the policy. Kinematics and physical command limits belong to the controller. No hidden teacher completes autonomous rollouts.
 
-### Execution
+## Conceptual activities
 
-1. Run a bounded pilot using actual recorded episodes and the GPU. Confirm data loading, updates, memory, logging and restart with the production configuration reduced only in scale.
-2. Launch the initial training run at the qualified device/node scale. Track total/text/action objectives, valid sample/token counts, gradient norm, learning rate, throughput and memory.
-3. Evaluate fixed held-out losses and periodic closed-loop task trials through the actual controller. Keep teacher/reference results separate from learned commands.
-4. Diagnose issues from concrete evidence. Change one causal factor at a time where practical; retain the baseline run and earlier failures. Do not alter the test set or task tolerances in response to a disappointing score.
+- Fine-tune on the admitted corpus with appropriate successful and corrective action targets.
+- Measure full-task rollout behavior on development episodes, including language grounding, coordination and recovery.
+- Collect corrections to actual policy errors, then repeat training; use the practical intervention principle from IntervenGen and RECAP.
+- Diagnose whether failures arise from coverage, perception, control, timing or model capacity before increasing data or model size.
+- Retain useful earlier behavior while adapting, and select checkpoints by task outcomes rather than training loss alone.
+- Scale compute only when it removes a measured bottleneck.
 
-### Completion gate and artifacts
+## Expected result
 
-Deliver a reloadable checkpoint, complete run configuration, denominator-aware learning curves, stop reason, resource measurements and fixed held-out task results. A finite or decreasing loss meets an optimization diagnostic only. The original >50% simple-task aspiration requires a predefined brick task set and actual released/stable assemblies before it can become a task result.
+A reloadable candidate policy and an evidence-based collection/adaptation recipe, with observed improvements and remaining failure modes.
 
-## 5.2 Continued training with adjustments
+## Advancement conditions
 
-### Decision sequence
-
-1. Review the initial run against fixed validation and failure taxonomy. Distinguish perception/grounding errors, grasp/contact failures, placement errors and horizon/controller problems before modifying the model.
-2. Continue unchanged when evidence supports it. If changing hyperparameters, freeze policy, data mixture or curriculum, state the reason and keep an interpretable comparison to the prior checkpoint/budget.
-3. Introduce curriculum only for a demonstrated bottleneck: single placements → short towers → varied sizes/planar layouts → later bimanual tasks. Preserve held-out difficulty and avoid treating a simpler curriculum stage as improved final-task success.
-4. Save a bounded set of checkpoints at fixed intervals and milestone decisions. Select by the preregistered validation rule, never the final test score. Keep necessary optimizer state for continuation and avoid redundant artifact copies without a retention purpose.
-5. Record consequential training decisions, resource use and negative results. Ordinary source changes belong in Git, not a growing experiment diary in the wiki.
-
-### Completion gate and handoff
-
-Provide the selected model and earlier baseline, checkpoint-selection rule, total compute/data exposure, held-out results with uncertainty and remaining failure modes. “Training complete” means the declared budget/stopping condition was reached; it does not imply the target quality was achieved. The historical >70% target and >85% stretch aspiration must be interpreted through the actual Phase 6 benchmark, with failures retained.
-
-Phase 6 receives reloadable candidates and an explicit baseline. Phase 7 must start from a declared checkpoint without retrospectively changing pretraining exposure. No physical-transfer claim is permitted from simulation training alone.
-
-## Source trace
-
-Both subphases come from the website's training execution stage: initial launch/monitoring/early fixes, followed by justified adjustments, possible curriculum, checkpoint comparison and a concise decision record. Implementation details now depend on the real-data trainer rather than the retired placeholder stack.
+Autonomous development rollouts demonstrate the intended behavior without privileged observations or external task selection. The candidate has a feasible Orin execution configuration and enough evidence to justify the fixed [qualification campaigns](../validation.md#assembly-qualification-targets). Final qualification data is not used for routine tuning.

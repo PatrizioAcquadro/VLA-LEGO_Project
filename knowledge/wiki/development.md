@@ -1,5 +1,7 @@
 # Development
 
+This guide describes the retained MuJoCo/Qwen package. Isaac/Alex integration and the selected pretrained VLA require the separate environments planned in [Phase 0](implementation_phases/phase-0-foundation.md) and [compute](cluster.md#planned-resource-roles). Existing installation commands do not provision the future stack.
+
 ## Environment
 
 Use Python 3.10 or newer and a dedicated environment. The validated host uses Python 3.10; the locally tested Docker image uses Python 3.12. GPU models require a compatible NVIDIA driver/PyTorch CUDA runtime. Current dependency ranges and optional groups are defined only in [pyproject.toml](../../pyproject.toml).
@@ -30,7 +32,9 @@ The package check builds an sdist, builds its wheel, installs it in a temporary 
 
 ## Change discipline
 
-For substantial work, use a local ignored `TODO.md` checklist linked to one phase specification; do not commit completed agent-task checklists. Keep canonical operating knowledge here and completed ordinary source history in Git. Preserve pre-existing changes; work on the explicitly requested branch. The current cleanup works directly on main after the user’s merge and publishes the verified result. The user explicitly approved removing the four obsolete branches; their history was saved in a local bundle. History rewriting and worktree deletion remain outside scope. Create small local commits after coherent validated changes.
+For substantial work, use a local ignored `TODO.md` checklist linked to one phase specification; do not commit completed agent-task checklists. Preserve pre-existing changes and work on the explicitly requested branch. Create small local commits after coherent validated changes; remote publication, history rewriting and branch/worktree deletion require separate authorization. Earlier cleanup permissions are historical.
+
+Keep one canonical topic page and high-level phase plans containing objectives, choices, conceptual activities, outputs and advancement conditions. Commands and software checks belong in operating guides, not phase plans. Record ordinary implementation history in Git. Remove obsolete consumers when their replacement is operational, preserving consequential findings and required provenance.
 
 Retain tests that protect maintained behavior: native simulation, contracts, support/stability, camera alignment, masks, gradients, processor metadata and package contents. Small model doubles are useful for isolated sequence/mask regressions; they do not replace native GPU integration. Remove tests that merely mirror constants or support retired placeholder behavior.
 

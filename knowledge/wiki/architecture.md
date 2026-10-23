@@ -1,44 +1,44 @@
 # Architecture
 
-## Maintained components
+## Planned robot and ownership
 
-| Owner | Responsibility | Active consumers |
-|---|---|---|
-| `src/vla_lego/sim/asset_loader.py`, `src/vla_lego/sim/asset_linter.py` | Portable scene loading, include/mesh path validation | Viewer, simulation, installed-wheel check |
-| `src/vla_lego/sim/action_space.py`, `control.py`, `end_effector.py` | Normalized commands, actuator limits, EZGripper interface | `SimRunner`, robot validators/tests |
-| `src/vla_lego/sim/robot_state.py`, `sim_runner.py` | Named state extraction and fixed-rate stepping | Demo, model smoke, future collector |
-| `src/vla_lego/sim/offscreen.py`, `camera.py` | RGB/depth/segmentation and synchronized camera metadata | Demo, native model smoke, future recorder |
-| `src/vla_lego/sim/bricks/` | Brick catalog, generated scenes, reset and task evaluation | Brick CLI, demo, physical regression tests |
-| `src/vla_lego/models/vlm_backbone.py` | Lazy pretrained loading, multimodal processing and hidden-state access | VLA, GPU smoke/profiler |
-| `src/vla_lego/models/action_head.py`, `vla_model.py` | Projectors, flow-matching math and model assembly | Model smoke, meaningful component/GPU tests |
-| `src/vla_lego/models/losses.py` | Explicit text/action loss and masking contracts | Loss tests; intended Phase 4.1 integration |
-| `src/vla_lego/tracking/` | Experiment metadata, metrics, GPU monitoring and optional W&B adapter | Maintained integration library for Phase 4.2; no current trainer |
-| `src/vla_lego/configs/` | Model composition, simulation/brick contracts and location metadata | Hydra, CLI/operator workflows, installed package |
-| `scripts/`, `infra/gilbreth/` | Focused diagnostics, containers and scheduler templates | Developers/operators |
-| `tests/` | Simulation, model and tracking behavioral regressions | Local development and CI |
+The future environment uses the shared [Alex asset repository](https://github.com/PatrizioAcquadro/purdue-alex-assets), available locally at `/home/pacquadr/Desktop/Alex`. The inspected revision `9ac4bd4` provides `ihmc_alex_isaaclab`, including the fixed-base Purdue WSG32/UMI profile, pedestal and head ZED integration. Its documented target is Isaac Sim 6.0.1 / Isaac Lab release/3.0.0-beta2; project integration remains future work.
 
-## Execution boundary
+| Element | Design and boundary |
+|---|---|
+| Embodiment | Fixed-base Purdue Alex003 on the measured pedestal, both arms active; no locomotion task. |
+| End-effectors | Two WSG32-068 with UMI v1 fingers. Shared assets are simulation-ready; physical commands, feedback and stopping must be established early. |
+| Sensing | Head ZED X Mini RGB baseline with real proprioception and language. Additional stereo/depth use requires a declared deployable input; wrist cameras require demonstrated occlusion benefit. |
+| Onboard compute | Jetson AGX Orin for VLA inference, sensing and communication; the robot's NUC retains low-level control duties. |
+| Shared Alex repository | Reusable robot/gripper/sensor/pedestal assets, default configuration, frames and physical reference measurements. |
+| This project | Task scene, calibration, control adapter, teachers, data, learning, qualification and deployment integration. |
+
+The [Alex usage guide](https://docs.google.com/document/d/17QtexPK_RqmfRammA7CsvEUuhFZFkicrJfONCdlWkEg/edit?tab=t.sfoy44dcf7kc) describes the Orin/NUC and robot-control setup. It documents SAKE/Ability hand support, which does not establish WSG32 command integration. The local AlexDoor-XAS and SquadBot projects already consume the WSG32/head-ZED setup: reuse established frame/sensor handling, without importing their task logic. Physical configuration still governs this project's calibration.
+
+## Planned execution boundary
 
 ```mermaid
 flowchart LR
-    S[MuJoCo scene] --> O[Four views and robot state]
-    O --> M[Qwen backbone and action head]
-    M --> A[Predicted 16-step action chunk]
-    A -. planned closed loop .-> C[SimRunner and constrained actuators]
-    C --> S
-    S --> E[Privileged task evaluator]
+    W[Isaac world or physical Alex] --> O[Head images and real proprioception]
+    I[Language instruction] --> P[Pretrained VLA adapted to Alex]
+    O --> P
+    P --> A[Coordinated tool motion and gripper commands]
+    A --> C[Kinematics and bounded low-level control]
+    C --> W
+    W --> E[Separate task evaluator]
+    W -. simulation truth .-> T[Teacher for collection]
+    T -. demonstrations and corrections .-> D[Training corpus]
+    D -. adaptation .-> P
 ```
 
-The model smoke connects real rendered observations to model outputs. It does not execute those untrained outputs on the robot. A learned closed-loop runner, dataset reader, trainer and task benchmark remain future work.
+The VLA chooses pieces, sequence, arm roles and corrective behavior. The controller handles motion realization, limits, stale commands and stopping; it does not secretly solve the assembly task. Privileged teacher inputs and evaluator truth never become undeclared policy inputs. Teacher-assisted collection and autonomous qualification are separate execution modes.
 
-Simulator object poses/contact forces support reset, teacher development and evaluation. They must not silently enter policy observations or learned action selection. Keep teacher/evaluator data separate from the deployable [observation contract](contracts.md).
+Camera capture, model replanning and actuator command rates are separate. The chosen observation/action representation and timing are defined in [contracts](contracts.md); model and onboard constraints in [models](models.md).
 
-## Removed consumers
+## Existing implementation and migration
 
-The random dataset, generic Transformer, synthetic trainer/evaluator and toy distributed jobs had no maintained task behavior. Their imports, CLIs, presets and exclusive tests were removed together. LEGO connection geometry, insertion assistance and hybrid retention were also retired from the active runtime. [History](history.md) preserves consequential outcomes and retrieval pointers.
+The current `src/vla_lego` package contains MuJoCo scene loading/control/cameras/bricks, Qwen and flow-matching components, standalone losses, optional tracking and packaged configuration. Repository utilities and scheduler/container templates are separate from the distributable runtime. See [development](development.md) for the actual layout and [simulation](simulation.md) for working diagnostics.
 
-## Repository boundaries
+Existing model smoke connects rendered observations to untrained predictions without executing them. There is no collector, trainer or learned closed loop. Existing package and behavioral evidence applies only to that path.
 
-`src/vla_lego/` is the only distributable Python namespace. Configuration and simulation assets are part of that package, so installed code works outside a checkout. Tests consume the installed package and are organized by subsystem. `scripts/` contains operator/development commands and package/documentation checks; it is not a runtime package. `infra/` owns scheduler templates, and `.github/workflows/` owns automation. `knowledge/` remains the canonical development reference.
-
-This layout separates shipped code from repository utilities and prevents accidental imports of source from the working directory. There are no compatibility copies of the retired root-level packages.
+[Phase 0](implementation_phases/phase-0-foundation.md) establishes ownership and staged retirement; [Phase 8](implementation_phases/phase-8-consolidation.md) completes it. Preserve [legacy robot provenance](../../src/vla_lego/sim/assets/robots/alex/PROVENANCE.md) until those assets and their consumers retire, retaining attribution for any reused content. Do not duplicate shared Alex assets to create another authority.
