@@ -134,6 +134,7 @@ class PhysicalReference:
         yaw_deg: float = 0.0,
         *,
         quaternion_xyzw: list[float] | None = None,
+        linear: bool = False,
     ) -> None:
         from PIL import Image
 
@@ -142,6 +143,18 @@ class PhysicalReference:
         )
         desired = [*xyz, *orientation]
         _, ids, _ = self.ctrl.frames[side]
+        if linear:
+            start = self.ctrl.pose(side)[0, :3].tolist()
+            count = max(1, math.ceil(math.dist(start, xyz) / 0.004))
+            for waypoint in range(1, count):
+                intermediate = [
+                    a + (b - a) * waypoint / count for a, b in zip(start, xyz, strict=True)
+                ]
+                solution = self.solvers[side].solve(
+                    self.env.target.new_tensor([*intermediate, *orientation]),
+                    self.env.robot.data.joint_pos.torch[0, ids],
+                )
+                self.joint_move(stage, side, solution)
         solution = self.solvers[side].solve(
             self.env.target.new_tensor(desired), self.env.robot.data.joint_pos.torch[0, ids]
         )

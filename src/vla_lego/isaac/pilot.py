@@ -114,6 +114,22 @@ class PilotCase:
         rng = random.Random(20261023 + self.ordinal * 101)
         slots = [(x, y) for x in (0.43, 0.54) for y in (-0.45, -0.15, 0.15, 0.45)]
         rng.shuffle(slots)
+        inherited = self.name.startswith("T") and self.name.endswith("N3")
+        if inherited:
+            order = self.row["order"].split(" > ")
+            base_row = dict(
+                self.row,
+                case=self.name[:-1] + "1",
+                order=" > ".join(order[-2:] + order[:-2]),
+                cooperative_placement="4",
+                variation="nominal spread",
+            )
+            base = PilotCase(base_row, self.ordinal - 2).task()
+            coordinates = {p.spec: p.xy_m for p in base.placements}
+            slots = [coordinates[spec] for spec in inventory]
+            # Swap the actual near/far size-confusable sources, then relocate
+            # the layout by 6 cm and add the approved yaw changes.
+            slots[3], slots[5] = slots[5], slots[3]
         if self.category != "stop":
             stabilizer = self.row["stabilizer"]
             requirements = [
@@ -123,6 +139,8 @@ class PilotCase:
             if self.name.endswith("N1") and self.name.startswith("T"):
                 requirements.append((1, "right" if stabilizer == "left" else "left"))
             protected = {index for index, _ in requirements}
+            if inherited:
+                protected.update((3, 5))
             for index, side in requirements:
                 if (slots[index][1] > 0) != (side == "left"):
                     other = next(
@@ -131,15 +149,27 @@ class PilotCase:
                         if j not in protected and (xy[1] > 0) == (side == "left")
                     )
                     slots[index], slots[other] = slots[other], slots[index]
+            if (
+                self.name.startswith("T")
+                and self.name.endswith("N1")
+                and slots[0][0] == slots[5][0]
+            ):
+                other = next(
+                    j
+                    for j, xy in enumerate(slots)
+                    if j not in (0, 1, 2, 3, 5) and xy[0] != slots[0][0]
+                )
+                slots[5], slots[other] = slots[other], slots[5]
         relocated = (
             self.name.endswith("N3") or self.name.startswith("D") and self.name.endswith("N2")
         )
         placements = []
         for spec, (x, y) in zip(inventory, slots, strict=True):
             # Independent reachable layouts; N3 adds a 6 cm relocation and 15–35° yaw.
-            x += ((self.ordinal % 3) - 1) * 0.01
+            if not inherited:
+                x += ((self.ordinal % 3) - 1) * 0.01
             if relocated:
-                y += -0.06 if y > 0 else 0.06
+                y += (-0.06 if abs(y) > 0.3 else 0.06) * (1 if y > 0 else -1)
             yaw = rng.choice((-35.0, -25.0, 20.0, 30.0)) if relocated else 0.0
             placements.append(BlockPlacement(spec, (x, y), yaw_deg=yaw))
         return TowerTask(

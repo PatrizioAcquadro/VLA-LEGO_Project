@@ -32,7 +32,7 @@ def pick_fault(reference, case: PilotCase, task: TowerTask, target_index: int) -
         ("approach", [source[0], y, source[2] + 0.10]),
         ("descend", [source[0], y, source[2] + 0.06]),
     ):
-        reference.move(f"{prefix}_{phase}", side, xyz, yaw)
+        reference.move(f"{prefix}_{phase}", side, xyz, yaw, linear=phase == "descend")
     reference.grip(prefix + "_close", side, placement.spec.dimensions_m[1])
     reference.move(prefix + "_lift", side, [source[0], y, source[2] + 0.16], yaw)
     after = env.task_truth(index)

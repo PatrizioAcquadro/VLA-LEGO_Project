@@ -262,7 +262,13 @@ def main() -> None:
                     ("approach", [block[0], block[1], block[2] + 0.10]),
                     ("descend", [block[0], block[1], block[2] + 0.06]),
                 ):
-                    reference.move(f"{prefix}_{stage}", side, xyz, yaw)
+                    reference.move(
+                        f"{prefix}_{stage}",
+                        side,
+                        xyz,
+                        yaw,
+                        linear=pilot_case is not None and stage == "descend",
+                    )
                 reference.grip(f"{prefix}_grip", side, target.dimensions_m[1])
                 release_z = bottom + target.dimensions_m[2] / 2 + 0.06
                 lift_z = block[2] + 0.16
