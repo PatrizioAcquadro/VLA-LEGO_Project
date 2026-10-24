@@ -451,6 +451,11 @@ def main() -> None:
                             [*build_xy, release + 0.025],
                             [*build_xy, release],
                             [*build_xy, release + target.dimensions_m[2] / 2 + 0.025],
+                            [
+                                build_xy[0],
+                                build_xy[1] + (0.15 if side == "left" else -0.15),
+                                release + target.dimensions_m[2] / 2 + 0.025,
+                            ],
                         ],
                         object_index=index,
                     )
@@ -544,7 +549,27 @@ def main() -> None:
                 reference.wait(5 if args.event_settling else 20, f"{prefix}_supported_hold")
                 reference.grip(f"{prefix}_release", side, None)
                 retreat_z = release_z + target.dimensions_m[2] / 2 + 0.025
-                reference.move(f"{prefix}_retreat", side, [*build_xy, retreat_z], yaw)
+                reference.move(
+                    f"{prefix}_retreat",
+                    side,
+                    [*build_xy, retreat_z],
+                    yaw,
+                    linear=pilot_case is not None,
+                )
+                if pilot_case:
+                    # Clear the released stack before a joint-space return can dip.
+                    reference.move(
+                        f"{prefix}_clear_tower",
+                        side,
+                        [
+                            build_xy[0],
+                            build_xy[1] + (0.15 if side == "left" else -0.15),
+                            retreat_z,
+                        ],
+                        yaw,
+                        linear=True,
+                        linear_step_m=0.02,
+                    )
                 reference.move(
                     f"{prefix}_exit", side, [0.40, 0.40 if side == "left" else -0.40, 1.05], yaw
                 )
