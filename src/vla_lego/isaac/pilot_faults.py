@@ -34,6 +34,7 @@ def pick_fault(reference, case: PilotCase, task: TowerTask, target_index: int) -
             [source[0], y, source[2] + 0.06],
             [source[0], y, source[2] + 0.16],
             [source[0], y, 1.02],
+            [0.40, 0.40 if side == "left" else -0.40, 1.05],
         ],
         object_index=index,
     )
@@ -83,7 +84,13 @@ def pick_fault(reference, case: PilotCase, task: TowerTask, target_index: int) -
         )
     reference.grip(prefix + "_correct_open", side, None)
     reference.move(prefix + "_correct_retreat", side, [source[0], y, 1.02], yaw)
-    reference.park(side)
+    reference.move(
+        prefix + "_correct_exit",
+        side,
+        [0.40, 0.40 if side == "left" else -0.40, 1.05],
+        yaw,
+        linear=True,
+    )
     if wrong:
         from vla_lego.isaac.environment import TABLE_TOP
         from vla_lego.isaac.evaluation import _corners
