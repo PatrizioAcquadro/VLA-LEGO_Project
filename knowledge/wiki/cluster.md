@@ -16,7 +16,21 @@ The planning inspection found the local 4090 and approximately 96 GB Blackwell d
 
 Maintain separate compatible environments for Isaac/Alex, model training and Orin deployment. The shared Alex package and selected VLA may require different Python/CUDA stacks. Choose collection and distributed-training scale from measured useful-data throughput, memory, storage and queue availability; no eight-GPU allocation or mandatory distributed framework is assumed.
 
-The [model page](models.md#onboard-feasibility) owns Orin compatibility and memory constraints. No new simulator, scheduler, training or deployment workload was run for this documentation revision.
+The [model page](models.md#onboard-feasibility) owns Orin compatibility and memory constraints.
+
+## Active pilot training
+
+The October 24, 2026 SmolVLA pilot campaign uses **one Gilbreth A100 80 GB**, account `euge`, partition `a100-80gb`, QoS `normal`, eight CPU cores and 64 GB host memory. The actual preflight job `12013348` verified batch-64 optimization, checkpoint reload and resume on an A100 80 GB PCIe device, using about 9.73 GiB peak allocated CUDA memory. Main job **12013446** started successfully with an initial 30,000-update endpoint and 12-hour allocation. Gautschi remains an alternative rather than a duplicate concurrent run. Do not interfere with other projects' allocations.
+
+Remote campaign root is `/depot/euge/data/pacquadr/vla-lego/pilot-training-20261024`: isolated LeRobot/Python 3.12.15, PyTorch 2.11.0+cu128, offline model cache, admitted corpus, train-only statistics and resumable run. The 60 selected episodes and 333,373 RGB images were verified present before launch. Isaac simulation/evaluation uses the separate Blackwell RTX environment; A100 is not the rendering destination. The [model page](models.md#active-marker-free-pilot-adaptation--october-24-2026) owns the frozen training recipe and stopping criteria.
+
+Local `outputs/pilot-training-20261024/cluster.json` owns the job identity and allocation history. The compact status command is:
+
+```bash
+.venv/bin/python scripts/pilot_cluster.py status --state outputs/pilot-training-20261024/cluster.json
+```
+
+The `advance` action submits only when no campaign job is active, resumes the latest complete checkpoint, and requires inspection after an unexpected termination. It extends the same run through the declared endpoints rather than restarting learning. An active thread heartbeat, `continua-pilot-smolvla-alex003`, checks every 15 minutes, performs remaining independent work, and ends healthy waiting turns promptly. After training, it proceeds to the bounded paired development panel. Retain scheduler accounting and all failed/incomplete evidence; disable the heartbeat when this assignment finishes or only a human-resolvable block remains.
 
 ## Existing MuJoCo and Qwen operations
 

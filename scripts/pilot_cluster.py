@@ -118,7 +118,11 @@ def main() -> None:
             job = remote(state, "sbatch --parsable", data=script).split(";")[0]
             if not job.isdigit():
                 raise RuntimeError(f"Unconfirmed scheduler submission: {job}")
-            state.update(job_id=job, submitted_at=time.time(), allocation_until=endpoint)
+            submitted_at = time.time()
+            state.update(job_id=job, submitted_at=submitted_at, allocation_until=endpoint)
+            state.setdefault("allocations", []).append(
+                {"job_id": job, "until_step": endpoint, "submitted_at": submitted_at}
+            )
             args.state.write_text(json.dumps(state, indent=2) + "\n")
             allocation = args.state.parent / f"main-{job}.sbatch"
             allocation.write_text(script)

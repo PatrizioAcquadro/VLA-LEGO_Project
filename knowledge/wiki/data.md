@@ -1,6 +1,6 @@
 # Data strategy and pilot
 
-The marker-free Alex003 pilot is complete: 50 training and 10 development episodes, physically executed in Isaac Sim/Lab with causal sensor/action recording. The [bounded collection milestone](#approved-5010-collection-milestone) owns its evidence and limits. No assembly policy was trained in this assignment; further collection, adaptation and qualification require a new instruction.
+The marker-free Alex003 pilot is complete: 50 training and 10 development episodes, physically executed in Isaac Sim/Lab with causal sensor/action recording. The [bounded collection milestone](#approved-5010-collection-milestone) owns its evidence and limits. Collection ended without model training. A subsequent explicit assignment now authorizes [bounded SmolVLA adaptation and a before/after development panel](models.md#active-marker-free-pilot-adaptation--october-24-2026); larger collection and final qualification remain separate decisions.
 
 ## Public sources and admission
 
