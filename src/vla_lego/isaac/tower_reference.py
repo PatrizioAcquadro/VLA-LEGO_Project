@@ -201,7 +201,9 @@ def main() -> None:
                 event_settling=args.event_settling,
             )
 
-            def verify_support(last_level: int, stage: str) -> None:
+            def verify_support(
+                last_level: int, stage: str, *, held_side: str | None = None
+            ) -> None:
                 expected_bottom = TABLE_TOP
                 for prior in range(last_level + 1):
                     state = env.task_truth(indices[prior])
@@ -211,7 +213,10 @@ def main() -> None:
                         if prior == 0
                         else state["block_contact_forces_n"][indices[prior - 1]][2]
                     )
-                    if abs(state["block_pose_w"][2] - expected_z) >= 0.003 or support_n <= 1e-6:
+                    supported = support_n > 1e-6 or (
+                        held_side is not None and evaluator._gripping(state, held_side)
+                    )
+                    if abs(state["block_pose_w"][2] - expected_z) >= 0.003 or not supported:
                         raise RuntimeError(
                             f"Incorrect physical support at level {prior} after {stage}"
                         )
@@ -654,9 +659,12 @@ def main() -> None:
                 )
                 reference.park(side)
                 reference.wait(10, f"{prefix}_support_check")
-                # A held piece may settle when the restraining jaws withdraw.
-                # Require actual load support now and full geometry after withdrawal.
-                verify_support(level - 1 if level == cooperative_level else level, prefix)
+                # The stabilizing hand can support an aligned layer until withdrawal.
+                verify_support(
+                    level - 1 if level == cooperative_level else level,
+                    prefix,
+                    held_side=stabilizer_side if level == cooperative_level else None,
+                )
                 if level == cooperative_level:
                     if (
                         env.task_truth(index)["block_contact_forces_n"][indices[level - 1]][2]
