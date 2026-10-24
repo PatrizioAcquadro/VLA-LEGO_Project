@@ -160,6 +160,31 @@ def test_grabbing_an_already_supported_upper_piece_is_not_a_placement():
     assert not result["passed"]
 
 
+@pytest.mark.parametrize("held_gap,expected", [(0.0007, True), (0.02, False)])
+def test_aligned_hand_supported_lower_piece_requires_full_load_transfer_later(held_gap, expected):
+    task = initial_tower_task()
+    scorer = TowerEvaluator(task, PATHS)
+    scorer.update(0, states(task))
+    approach = states(task, levels=3)
+    approach[2]["block_pose_w"][2] += held_gap
+    approach[2]["block_contact_forces_n"][1][2] = 0
+    approach[3]["block_pose_w"][:3] = [*task.assembly_xy_m, scorer.expected_z[3] + 0.03]
+    approach[3]["nonrobot_contact_force_n"] = 0
+    grip(approach, 2, "left")
+    grip(approach, 3, "right")
+    scorer.update(0.05, approach)
+    assert not scorer.result()["cooperation_events"]
+    contact = states(task, levels=4)
+    grip(contact, 2, "left")
+    grip(contact, 3, "right")
+    for tick in range(6):
+        scorer.update(0.1 + tick * 0.05, contact)
+    assert bool(scorer.result()["cooperation_events"]) == expected
+    for tick in range(41):
+        scorer.update(0.4 + tick * 0.05, states(task, levels=5))
+    assert scorer.result()["passed"] == expected
+
+
 @pytest.mark.parametrize(
     "support_returns,grip_lost,expected",
     [(True, False, True), (False, False, False), (True, True, False)],

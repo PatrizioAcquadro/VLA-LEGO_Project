@@ -164,6 +164,7 @@ class TowerEvaluator:
         released = all(state["robot_contact_force_n"] < CONTACT_ZERO_N for state in blocks)
         checks = []
         for assignment in self.assignments:
+            aligned = []
             placed = []
             for level, index in enumerate(assignment):
                 state = blocks[index]
@@ -172,13 +173,13 @@ class TowerEvaluator:
                     if level == 0
                     else state["block_contact_forces_n"][assignment[level - 1]][2]
                 )
-                placed.append(
+                aligned.append(
                     finite
                     and abs(state["block_pose_w"][2] - self.expected_z[level])
                     < POSITION_TOLERANCE_M
                     and _footprint_inside(self.task, index, state["block_pose_w"])
-                    and support > CONTACT_ZERO_N
                 )
+                placed.append(aligned[-1] and support > CONTACT_ZERO_N)
             stable = all(self._stable(blocks[index]) for index in assignment)
             site_valid = withdrawn = True
             if self.task.build_region_xy_m is not None:
@@ -218,7 +219,10 @@ class TowerEvaluator:
                             key, {"approach": False, "contact_start": None}
                         )
                         if (
-                            all(placed[: lower_level + 1])
+                            # The stabilizing hand can carry the aligned lower
+                            # piece before the incoming load restores its support.
+                            all(placed[:lower_level])
+                            and aligned[lower_level]
                             and support <= CONTACT_ZERO_N
                             and upper["block_pose_w"][2] - self.expected_z[upper_level]
                             >= POSITION_TOLERANCE_M
