@@ -22,7 +22,7 @@ Native evidence is retained locally in `outputs/blackwell/foundation-001` throug
 | Interfaces | Native pilot: 32 measured state features, 16 applied motor commands plus 2 decision outputs, head RGB at 20 Hz. Legacy 17-D/52-D/four-view/16-step consumers remain separate. |
 | Blocks and diagnostics | Configurable cuboids, seeded resets, tower/planar-triangle evaluation and scripted robot clips. Prearranged goals are not assembly demonstrations. |
 | Model components | Qwen3.5-4B plus custom untrained action head; real GPU forward and gradient-routing evidence, no learned task capability. |
-| Losses and tracking | Resumable masked SmolVLA trainer, balanced sampling and fixed diagnostics run natively on A100; marker-free learned evaluation integration is being completed. |
+| Losses and tracking | Resumable masked SmolVLA trainer, balanced sampling and fixed diagnostics run natively on A100. Marker-free evaluation components, worker/video and physical recovery initialization pass; the learned comparison remains pending. |
 | Data and policy | Admitted marker-free 50+10 pilot and running adaptation; autonomous pilot improvement and final qualification remain unmeasured. |
 | Packaging | Local installed-package/GPU Docker evidence and actual isolated Gilbreth training. Apptainer and onboard inference remain unqualified. |
 
