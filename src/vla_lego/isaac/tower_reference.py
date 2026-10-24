@@ -101,6 +101,17 @@ def main() -> None:
             )
         stabilizer_side, placer_side = roles[cooperative_level - 1][0], roles[cooperative_level][0]
         stabilizer_y = 0.20 if stabilizer_side == "left" else -0.20
+        stabilizer_level = cooperative_level - 1
+        if pilot_case:
+            # Keep the 40 mm pads away from a wider layer directly below a short cube.
+            while (
+                stabilizer_level > 0
+                and task.targets[stabilizer_level].dimensions_m[2] < 0.05
+                and task.targets[stabilizer_level - 1].dimensions_m[1]
+                > task.targets[stabilizer_level].dimensions_m[1]
+            ):
+                stabilizer_level -= 1
+            report["stabilized_layer"] = stabilizer_level + 1
         stabilizer_grip_floor: float | None = None
         env = AssemblyEnvironment(
             args.cache_dir.resolve(),
@@ -171,7 +182,7 @@ def main() -> None:
                 env.set_joint_targets({name: max(stabilizer_grip_floor, previous - 0.0005)})
             if not stage.startswith(f"level{cooperative_level}_"):
                 return
-            lower, upper = truth[indices[cooperative_level - 1]], truth[indices[cooperative_level]]
+            lower, upper = truth[indices[stabilizer_level]], truth[indices[cooperative_level]]
             stabilizer = sum(
                 sum(v * v for v in lower["robot_contact_forces_n"][i]) ** 0.5
                 for i in contact_ids[stabilizer_side]
@@ -229,10 +240,10 @@ def main() -> None:
 
                 from vla_lego.isaac.evaluation import _corners
 
-                state = env.task_truth(indices[cooperative_level - 1])
+                state = env.task_truth(indices[stabilizer_level])
                 lower = state["block_pose_w"][:3]
-                nominal_width = task.targets[cooperative_level - 1].dimensions_m[1]
-                lower_height = task.targets[cooperative_level - 1].dimensions_m[2]
+                nominal_width = task.targets[stabilizer_level].dimensions_m[1]
+                lower_height = task.targets[stabilizer_level].dimensions_m[2]
                 width = nominal_width
                 stabilizer_pose = [lower[0] - 0.01, lower[1], lower[2]]
                 approach = (
@@ -261,6 +272,28 @@ def main() -> None:
                         preferred_sign * 90,
                         -preferred_sign * 90,
                     )
+                    outline = _corners(
+                        task.targets[stabilizer_level].dimensions_m, state["block_pose_w"]
+                    )
+
+                    def projected_gap(angle):
+                        radians = math.radians(angle)
+                        coordinates = [
+                            -math.sin(radians) * corner[0] + math.cos(radians) * corner[1]
+                            for corner in outline
+                        ]
+                        return max(coordinates) - min(coordinates)
+
+                    angles = tuple(sorted(angles, key=lambda angle: round(projected_gap(angle), 3)))
+                    stack_top = max(
+                        corner[2]
+                        for prior in range(cooperative_level)
+                        for corner in _corners(
+                            task.targets[prior].dimensions_m,
+                            env.task_truth(indices[prior])["block_pose_w"],
+                        )
+                    )
+                    approach_high_z = max(1.02, stack_top + 0.06)
                     profiles = ((0, 0.045),) if lower_height < 0.05 else ((0, 0.045), (10, 0.060))
                     for yaw_deg in angles:
                         for pitch_deg, reach in profiles:
@@ -275,14 +308,7 @@ def main() -> None:
                             axis = quat_apply(
                                 candidate, env.target.new_tensor([0.0, 1, 0])
                             ).tolist()
-                            projections = [
-                                sum(v * a for v, a in zip(corner, axis, strict=True))
-                                for corner in _corners(
-                                    task.targets[cooperative_level - 1].dimensions_m,
-                                    state["block_pose_w"],
-                                )
-                            ]
-                            gap = max(projections) - min(projections)
+                            gap = projected_gap(yaw_deg)
                             if gap > 0.070:
                                 continue
                             pose = [v - reach * d for v, d in zip(lower, finger, strict=True)]
@@ -290,8 +316,8 @@ def main() -> None:
                             pose[2] -= max(0.0, 0.025 - lower_height / 2)
                             orientation = candidate.tolist()
                             path = (
-                                ("high", [0.40, stabilizer_y, 1.02]),
-                                ("above", [pose[0], pose[1], pose[2] + 0.06]),
+                                ("high", [0.40, stabilizer_y, approach_high_z]),
+                                ("above", [pose[0], pose[1], max(pose[2] + 0.06, approach_high_z)]),
                                 ("grasp", pose),
                             )
                             seed = env.robot.data.joint_pos.torch[0, joint_ids]
@@ -401,6 +427,7 @@ def main() -> None:
                             if pilot_case and name == "high"
                             else stabilizer_quaternion
                         ),
+                        # Change orientation in the clear high pose, then descend straight.
                         linear=pilot_case is not None and name == "grasp",
                     )
                 if pilot_case:
