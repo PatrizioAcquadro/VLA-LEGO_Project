@@ -16,8 +16,33 @@ def _separated(points, axes, obstacle_points, obstacle_axes):
     return _separation_distance(points, axes, obstacle_points, obstacle_axes) > 0
 
 
+def _unit_axes(vectors):
+    import torch
+
+    length = vectors.norm(dim=-1)
+    axes = vectors[length > 1e-12] / length[length > 1e-12, None]
+    return torch.unique(torch.round(axes * 1e6) / 1e6, dim=0)
+
+
+def _mesh_axes(points, counts, indices):
+    """Face and edge directions of the native convex collision mesh."""
+    import torch
+
+    triangles, start = [], 0
+    for count in counts:
+        face = indices[start : start + count]
+        triangles.extend((face[0], face[i], face[i + 1]) for i in range(1, count - 1))
+        start += count
+    faces = points[torch.tensor(triangles, device=points.device)]
+    first, second = faces[:, 1] - faces[:, 0], faces[:, 2] - faces[:, 0]
+    return _unit_axes(torch.linalg.cross(first, second)), _unit_axes(
+        torch.cat((first, second, faces[:, 2] - faces[:, 1]))
+    )
+
+
 def source_grasp_clearance(env, controller, side: str, object_index: int):
     """Rank source approaches by open-jaw clearance from other visible pieces."""
+    import torch
     from isaaclab.utils.math import matrix_from_quat, quat_apply, quat_apply_inverse
     from pxr import Gf, Usd, UsdGeom, UsdPhysics
 
@@ -47,7 +72,12 @@ def source_grasp_clearance(env, controller, side: str, object_index: int):
                 ]
             )
             world = quat_apply(pose[3:].expand(len(points), -1), points) + pose[:3]
-            geometry.append(quat_apply_inverse(tcp[3:].expand(len(points), -1), world - tcp[:3]))
+            local = quat_apply_inverse(tcp[3:].expand(len(points), -1), world - tcp[:3])
+            mesh = UsdGeom.Mesh(prim)
+            normals, edges = _mesh_axes(
+                local, mesh.GetFaceVertexCountsAttr().Get(), mesh.GetFaceVertexIndicesAttr().Get()
+            )
+            geometry.append((local, normals, edges))
     if not geometry:
         raise RuntimeError("Native jaw geometry unavailable")
     obstacles = []
@@ -63,11 +93,18 @@ def source_grasp_clearance(env, controller, side: str, object_index: int):
         )
 
     def clear(pose):
-        axes = matrix_from_quat(pose[3:]).T[None]
+        rotation = matrix_from_quat(pose[3:])
         distance = float("inf")
-        for points in geometry:
+        for points, normals, edges in geometry:
             world = quat_apply(pose[3:].expand(len(points), -1), points) + pose[:3]
             for obstacle_points, obstacle_axes in obstacles:
+                crossing = _unit_axes(
+                    (edges @ rotation.T)[:, None, :]
+                    .expand(-1, 3, -1)
+                    .cross(obstacle_axes[None].expand(len(edges), -1, -1), dim=-1)
+                    .reshape(-1, 3)
+                )
+                axes = torch.cat((rotation.T, normals @ rotation.T, crossing))[None]
                 distance = min(
                     distance,
                     float(
