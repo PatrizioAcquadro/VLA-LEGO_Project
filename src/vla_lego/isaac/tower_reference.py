@@ -568,6 +568,11 @@ def main() -> None:
                     yaw,
                     linear=pilot_case is not None,
                 )
+                if pilot_case:
+                    # Use the physically held grasp offset, not its nominal 60 mm value.
+                    held_z = env.task_truth(index)["block_pose_w"][2]
+                    tool_z = float(reference.ctrl.pose(side)[0, 2])
+                    release_z = bottom + target.dimensions_m[2] / 2 + tool_z - held_z
                 if (
                     pilot_case
                     and pilot_case.category == "recovery"

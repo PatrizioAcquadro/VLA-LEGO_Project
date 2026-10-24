@@ -126,7 +126,13 @@ def placement_fault(
     reference.wait(4, prefix + "_failed_load_transfer")
     truth = env.task_truth(index)
     support = truth["block_contact_forces_n"][indices[case.error_level - 1]][2]
-    expected_z = release_z - 0.06
+    from vla_lego.isaac.environment import TABLE_TOP
+
+    expected_z = (
+        TABLE_TOP
+        + sum(target.dimensions_m[2] for target in task.targets[: case.error_level])
+        + task.targets[case.error_level].dimensions_m[2] / 2
+    )
     gap = truth["block_pose_w"][2] - expected_z
     verified = support <= 1e-6 and gap > 0.01 and truth["robot_contact_force_n"] > 0.5
     event = {
