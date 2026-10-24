@@ -54,7 +54,7 @@ def main() -> None:
         from PIL import Image
 
         from vla_lego.isaac.environment import TABLE_TOP, AssemblyEnvironment
-        from vla_lego.isaac.evaluation import COOPERATION_S, PERIOD_S, TowerEvaluator
+        from vla_lego.isaac.evaluation import COOPERATION_S, PERIOD_S, TowerEvaluator, _corners
         from vla_lego.isaac.recording import EpisodeRecorder
         from vla_lego.isaac.reference import PhysicalReference
         from vla_lego.isaac.task import initial_tower_task
@@ -499,20 +499,45 @@ def main() -> None:
                 release_z = bottom + target.dimensions_m[2] / 2 + 0.06
                 lift_z = block[2] + 0.16
                 transit_z = release_z + 0.025
-                reference.move(f"{prefix}_lift", side, [block[0], block[1], lift_z], yaw)
+                reference.move(
+                    f"{prefix}_lift",
+                    side,
+                    [block[0], block[1], lift_z],
+                    yaw,
+                    linear=pilot_case is not None,
+                    linear_step_m=0.02,
+                )
                 if env.task_truth(index)["block_pose_w"][2] < block[2] + 0.07:
                     raise RuntimeError(f"No verified contact-only lift at {prefix}")
-                if pilot_case and transit_z < lift_z:
-                    # Cross the loose inventory at lift height before descending
-                    # over the assembly area, rather than sweeping through props.
-                    reference.move(
-                        f"{prefix}_transport_high",
-                        side,
-                        [*build_xy, lift_z],
-                        yaw,
-                        linear=True,
-                        linear_step_m=0.02,
+                carry_z = transit_z
+                if pilot_case:
+                    held = env.task_truth(index)["block_pose_w"]
+                    top = (
+                        max(
+                            c[2]
+                            for c in _corners(
+                                task.targets[level - 1].dimensions_m,
+                                env.task_truth(indices[level - 1])["block_pose_w"],
+                            )
+                        )
+                        if level
+                        else TABLE_TOP
                     )
+                    lowest = min(c[2] for c in _corners(target.dimensions_m, held))
+                    carry_z = max(
+                        lift_z,
+                        transit_z,
+                        float(reference.ctrl.pose(side)[0, 2]) + top + 0.025 - lowest,
+                    )
+                    if carry_z > lift_z:
+                        # Gain payload clearance while still away from the tower.
+                        reference.move(
+                            f"{prefix}_carry_raise",
+                            side,
+                            [block[0], block[1], carry_z],
+                            yaw,
+                            linear=True,
+                        )
                 if level >= cooperative_level:
                     # Gain clearance away from the existing tower before the
                     # carried object's footprint crosses into the assembly area.
@@ -520,10 +545,27 @@ def main() -> None:
                         reference.move(
                             f"{prefix}_carry_clearance_{waypoint}",
                             side,
-                            [build_xy[0], build_xy[1] + (y if side == "left" else -y), transit_z],
+                            [build_xy[0], build_xy[1] + (y if side == "left" else -y), carry_z],
                             yaw,
+                            linear=pilot_case is not None,
+                            linear_step_m=0.02,
                         )
-                reference.move(f"{prefix}_transport", side, [*build_xy, transit_z], yaw)
+                if pilot_case:
+                    reference.move(
+                        f"{prefix}_transport_high",
+                        side,
+                        [*build_xy, carry_z],
+                        yaw,
+                        linear=True,
+                        linear_step_m=0.02,
+                    )
+                reference.move(
+                    f"{prefix}_transport",
+                    side,
+                    [*build_xy, transit_z],
+                    yaw,
+                    linear=pilot_case is not None,
+                )
                 if (
                     pilot_case
                     and pilot_case.category == "recovery"
@@ -541,7 +583,13 @@ def main() -> None:
                         yaw,
                         release_z,
                     )
-                reference.move(f"{prefix}_place", side, [*build_xy, release_z], yaw)
+                reference.move(
+                    f"{prefix}_place",
+                    side,
+                    [*build_xy, release_z],
+                    yaw,
+                    linear=pilot_case is not None,
+                )
                 if level == cooperative_level:
                     # A single contact sample can precede a bounce. Establish
                     # persistent load transfer with the same bounded robot descent.
@@ -563,6 +611,7 @@ def main() -> None:
                                 side,
                                 [*build_xy, release_z - (descent + 1) * 0.001],
                                 yaw,
+                                linear=pilot_case is not None,
                             )
                     if not coordinated:
                         raise RuntimeError("No persistent physical cooperative load transfer.")
