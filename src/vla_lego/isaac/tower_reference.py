@@ -173,10 +173,15 @@ def main() -> None:
                 and stabilizer_side in reference.hold_targets
                 and not any(
                     evaluator._gripping(truth[i], stabilizer_side)
+                    and sum(
+                        math.sqrt(sum(v * v for v in truth[i]["robot_contact_forces_n"][jaw]))
+                        for jaw in evaluator.jaws[stabilizer_side]
+                    )
+                    >= 1.0
                     for i in indices[:cooperative_level]
                 )
             ):
-                # Retain real jaw restraint as the stack settles under load.
+                # Maintain a 1 N grip margin with normal, force-limited jaw commands.
                 name = f"{stabilizer_side}_WSG32_JAW_OPENING"
                 previous = float(env.target[0, env.robot.data.joint_names.index(name)])
                 env.set_joint_targets({name: max(stabilizer_grip_floor, previous - 0.0005)})
@@ -454,7 +459,8 @@ def main() -> None:
                     reference.hold_targets[stabilizer_side] = reference.ctrl.pose(stabilizer_side)[
                         0
                     ].tolist()
-                    stabilizer_grip_floor = nominal_width / 2 - 0.002
+                    jaw = env.robot.data.joint_names.index(f"{stabilizer_side}_WSG32_JAW_OPENING")
+                    stabilizer_grip_floor = float(env.robot.data.joint_pos_limits.torch[0, jaw, 0])
                 return withdraw
 
             for side in ("left", "right"):
