@@ -101,6 +101,7 @@ def main() -> None:
             )
         stabilizer_side, placer_side = roles[cooperative_level - 1][0], roles[cooperative_level][0]
         stabilizer_y = 0.20 if stabilizer_side == "left" else -0.20
+        stabilizer_grip_floor: float | None = None
         env = AssemblyEnvironment(
             args.cache_dir.resolve(),
             placements=task.placements,
@@ -156,6 +157,18 @@ def main() -> None:
                     side: reference.ctrl.pose(side)[0, :3].tolist() for side in ("left", "right")
                 },
             )
+            if (
+                stabilizer_grip_floor is not None
+                and stabilizer_side in reference.hold_targets
+                and not any(
+                    evaluator._gripping(truth[i], stabilizer_side)
+                    for i in indices[:cooperative_level]
+                )
+            ):
+                # Retain real jaw restraint as the stack settles under load.
+                name = f"{stabilizer_side}_WSG32_JAW_OPENING"
+                previous = float(env.target[0, env.robot.data.joint_names.index(name)])
+                env.set_joint_targets({name: max(stabilizer_grip_floor, previous - 0.0005)})
             if not stage.startswith(f"level{cooperative_level}_"):
                 return
             lower, upper = truth[indices[cooperative_level - 1]], truth[indices[cooperative_level]]
@@ -206,6 +219,7 @@ def main() -> None:
 
             def engage_stabilizer():
                 nonlocal stabilizer_quaternion, stabilizer_clear_quaternion, stabilizer_clear_z
+                nonlocal stabilizer_grip_floor
                 from isaaclab.utils.math import quat_apply, quat_mul
 
                 from vla_lego.isaac.evaluation import _corners
@@ -213,6 +227,7 @@ def main() -> None:
                 state = env.task_truth(indices[cooperative_level - 1])
                 lower = state["block_pose_w"][:3]
                 nominal_width = task.targets[cooperative_level - 1].dimensions_m[1]
+                lower_height = task.targets[cooperative_level - 1].dimensions_m[2]
                 width = nominal_width
                 stabilizer_pose = [lower[0] - 0.01, lower[1], lower[2]]
                 approach = (
@@ -241,8 +256,9 @@ def main() -> None:
                         preferred_sign * 90,
                         -preferred_sign * 90,
                     )
+                    profiles = ((0, 0.045),) if lower_height < 0.05 else ((0, 0.045), (10, 0.060))
                     for yaw_deg in angles:
-                        for pitch_deg, reach in ((0, 0.045), (10, 0.060)):
+                        for pitch_deg, reach in profiles:
                             yaw, pitch = math.radians(yaw_deg) / 2, math.radians(pitch_deg) / 2
                             candidate = quat_mul(
                                 env.target.new_tensor([0, 0, math.sin(yaw), math.cos(yaw)]),
@@ -265,6 +281,8 @@ def main() -> None:
                             if gap > 0.070:
                                 continue
                             pose = [v - reach * d for v, d in zip(lower, finger, strict=True)]
+                            # The 40 mm distal pads need clearance below the next piece.
+                            pose[2] -= max(0.0, 0.025 - lower_height / 2)
                             orientation = candidate.tolist()
                             path = (
                                 ("high", [0.40, stabilizer_y, 1.02]),
@@ -400,6 +418,8 @@ def main() -> None:
                     verify_support(cooperative_level - 1, "stabilizer acquisition")
                     if not pilot_case or width - closure * 0.002 <= nominal_width:
                         raise RuntimeError("No actual bilateral stabilizer contact")
+                if pilot_case:
+                    stabilizer_grip_floor = nominal_width / 2 - 0.002
                 return withdraw
 
             for side in ("left", "right"):
