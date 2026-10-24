@@ -684,7 +684,8 @@ def main() -> None:
                 reference.move(
                     f"{prefix}_exit", side, [0.40, 0.40 if side == "left" else -0.40, 1.05], yaw
                 )
-                reference.park(side)
+                if not pilot_case:
+                    reference.park(side)
                 reference.wait(10, f"{prefix}_support_check")
                 # The stabilizing hand can support an aligned layer until withdrawal.
                 verify_support(
@@ -722,7 +723,8 @@ def main() -> None:
                         [stabilizer_withdraw[0], stabilizer_y, stabilizer_clear_z],
                         quaternion_xyzw=stabilizer_clear_quaternion,
                     )
-                    reference.park(stabilizer_side)
+                    if not pilot_case:
+                        reference.park(stabilizer_side)
                     verify_support(level, "stabilizer withdrawal")
                 bottom += target.dimensions_m[2]
             reference.wait(40, "final_released_dwell")
