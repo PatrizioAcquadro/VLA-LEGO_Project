@@ -22,9 +22,15 @@ def main() -> None:
     parser.add_argument("--ticks", type=int, default=6000)
     parser.add_argument("--mirror", action="store_true")
     parser.add_argument("--missing-target", type=int, choices=range(5))
+    parser.add_argument("--pilot-corpus", type=Path)
+    parser.add_argument("--pilot-case")
     args = parser.parse_args()
     if args.ticks < 1:
         parser.error("--ticks must be positive")
+    if bool(args.pilot_corpus) != bool(args.pilot_case):
+        parser.error("Pilot corpus and case must be supplied together")
+    if args.pilot_case and (args.mirror or args.missing_target is not None):
+        parser.error("Recorded pilot cases cannot be combined with legacy scene variants")
     args.output_dir.mkdir(parents=True, exist_ok=False)
     report = {
         "kind": "autonomous_tower_diagnostic",
@@ -53,11 +59,27 @@ def main() -> None:
         from vla_lego.isaac.evaluation import TowerEvaluator
         from vla_lego.isaac.task import initial_tower_task
 
-        task = initial_tower_task(mirror=args.mirror)
-        if args.missing_target is not None:
-            task = task.without_target(args.missing_target)
+        source_report = directory = None
+        if args.pilot_case:
+            from vla_lego.isaac.pilot_scenario import recorded_scenario
+
+            task, source_report, directory = recorded_scenario(args.pilot_corpus, args.pilot_case)
+        else:
+            task = initial_tower_task(mirror=args.mirror)
+            if args.missing_target is not None:
+                task = task.without_target(args.missing_target)
+        assumptions = (
+            source_report.get("simulation_assumptions", {"table_lighting": "light_wood"})
+            if source_report
+            else {}
+        )
         env = AssemblyEnvironment(
-            args.cache_dir.resolve(), placements=task.placements, assembly_xy_m=task.assembly_xy_m
+            args.cache_dir.resolve(),
+            placements=task.placements,
+            assembly_xy_m=None if task.build_region_xy_m is not None else task.assembly_xy_m,
+            mass_scale=assumptions.get("mass_scale", 1.0),
+            friction=tuple(assumptions.get("effective_friction", (0.6, 0.5))),
+            appearance=assumptions.get("table_lighting", "legacy"),
         )
         env.step(400)
         connection.connect(str(args.socket))
@@ -66,15 +88,49 @@ def main() -> None:
         ids = [env.robot.data.joint_names.index(n) for n in names]
         limits = env.robot.data.joint_pos_limits.torch[0, ids].cpu().numpy()
         evaluator = TowerEvaluator(task, env.contact_robot_paths)
-        evaluator.update(env.time, [env.task_truth(i) for i in range(len(env.blocks))])
+        tools = None
+        if task.build_region_xy_m is not None:
+            from vla_lego.isaac.control import ToolController
+
+            tools = ToolController(env)
+
+        def update_evaluation():
+            truth = [env.task_truth(i) for i in range(len(env.blocks))]
+            positions = (
+                {side: tools.pose(side)[0, :3].tolist() for side in ("left", "right")}
+                if tools is not None
+                else None
+            )
+            evaluator.update(env.time, truth, tool_positions=positions)
+            return truth
+
+        update_evaluation()
+        report.update(pilot_case=args.pilot_case, teacher_prefix_ticks=0)
+        if source_report and source_report["pilot_case"]["category"] == "recovery":
+            from vla_lego.isaac.pilot_scenario import replay_recovery
+
+            assert directory is not None
+
+            def recovery_tick(prefix_tick):
+                if prefix_tick % 100 == 0:
+                    send_message(connection, {"prepare": True})
+                    receive_message(connection)
+                update_evaluation()
+
+            report.update(replay_recovery(env, task, source_report, directory, recovery_tick))
+            report["ordered_levels_at_handoff"] = evaluator.max_ordered_levels
         chunk: list = []
         inference_seconds: list[float] = []
         representation = None
         decision_names: list[str] = []
         terminal, executed, clipped_ticks = "budget", 0, 0
         report["autonomy_started"] = True
+        budget = args.ticks - report["teacher_prefix_ticks"] - (40 if args.pilot_case else 0)
+        if budget < 1:
+            raise ValueError("The recovery prefix consumes the declared whole-case budget")
+        report["policy_tick_budget"] = budget
         with (args.output_dir / "trace.jsonl").open("w") as trace:
-            for tick in range(args.ticks):
+            for tick in range(budget):
                 env.capture()
                 if not chunk:
                     observation = env.observe()
@@ -123,8 +179,7 @@ def main() -> None:
                     env.set_joint_targets(dict(zip(names, bounded.tolist(), strict=True)))
                     env.step(10)
                     executed += 1
-                    truth = [env.task_truth(i) for i in range(len(env.blocks))]
-                    evaluator.update(env.time, truth)
+                    truth = update_evaluation()
                 else:
                     # A model decision freezes the last applied targets, including any grasp.
                     terminal = decision
@@ -154,8 +209,7 @@ def main() -> None:
             for _ in range(40):
                 env.capture()
                 env.step(10)
-                truth = [env.task_truth(i) for i in range(len(env.blocks))]
-                evaluator.update(env.time, truth)
+                truth = update_evaluation()
                 hold.append(truth)
                 trace.write(
                     json.dumps(
@@ -173,6 +227,14 @@ def main() -> None:
             terminal == "abstain"
             and not task.requested_pieces_available
             and all(b["robot_contact_force_n"] < 1e-6 for row in hold for b in row)
+            and all(
+                b["nonrobot_contact_force_n"] > 1e-6
+                or any(force[2] > 1e-6 for force in b["block_contact_forces_n"])
+                for row in hold
+                for b in row
+            )
+            and len(evaluation["dwell_corner_displacement_m"]) == len(env.blocks)
+            and max(evaluation["dwell_corner_displacement_m"]) <= 0.003
         )
         passed = evaluation["passed"] and terminal == "complete"
         report.update(
@@ -180,7 +242,7 @@ def main() -> None:
             tower_constructed=evaluation["passed"],
             passed=passed,
             justified_stop=justified_stop,
-            case_passed=justified_stop if args.missing_target is not None else passed,
+            case_passed=justified_stop if not task.requested_pieces_available else passed,
             terminal_decision=terminal,
             learned_completion_signal=bool(decision_names),
             task_decision_names=decision_names,

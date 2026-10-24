@@ -1,0 +1,118 @@
+"""Restore the collected development condition without exposing it to the policy."""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+from vla_lego.isaac.catalog import BlockPlacement, BlockSpec
+from vla_lego.isaac.task import TowerTask
+
+
+def recorded_scenario(root: Path, name: str) -> tuple[TowerTask, dict, Path]:
+    entries = json.loads((root / "development-episodes.json").read_text())
+    entry = next(row for row in entries if row["case"] == name)
+    directory = root / "attempts" / Path(entry["path"]).parent.name / "recording"
+    metadata = json.loads((directory / "episode.json").read_text())
+    if metadata["split"] != "development" or metadata.get("collection_condition") != (
+        "marker_free_continuous_site_v1"
+    ):
+        raise ValueError("Evaluation requires the admitted marker-free development case")
+    report = json.loads((directory.parent / "report.json").read_text())
+    source = report["task"]
+    task = TowerTask(
+        placements=tuple(
+            BlockPlacement(BlockSpec(**row["spec"]), tuple(row["xy_m"]), row["yaw_deg"])
+            for row in source["placements"]
+        ),
+        targets=tuple(BlockSpec(**row) for row in source["targets"]),
+        assembly_xy_m=tuple(source["assembly_xy_m"]),
+        instruction_text=metadata["instruction"],
+        build_region_xy_m=tuple(source["build_region_xy_m"]),
+    )
+    if len(task.placements) != 8 or task.build_region_xy_m is None:
+        raise ValueError("Pilot evaluation requires eight objects and no destination marker")
+    return task, report, directory
+
+
+def recovery_prefix(directory: Path) -> tuple[list[dict], dict, list[dict]]:
+    frames = [json.loads(line) for line in (directory / "frames.jsonl").open()]
+    annotations = [json.loads(line) for line in (directory / "annotations.jsonl").open()]
+    boundary = next(
+        i
+        for i in range(1, len(annotations))
+        if annotations[i]["positive_imitation"] and not annotations[i - 1]["positive_imitation"]
+    )
+    with (directory / "privileged.jsonl").open() as stream:
+        expected = next(
+            json.loads(line)["blocks"] for i, line in enumerate(stream) if i == boundary
+        )
+    return frames[:boundary], frames[boundary], expected
+
+
+def recovered_fault_is_present(task: TowerTask, report: dict, truth: list[dict]) -> bool:
+    from vla_lego.isaac.environment import TABLE_TOP
+
+    fault = report["fault"]
+    kind = fault["type"]
+    if kind in ("missed grasp", "wrong distractor picked"):
+        index = fault["object_index"]
+        state = truth[index]
+        lift = (
+            state["block_pose_w"][2] - TABLE_TOP - task.placements[index].spec.dimensions_m[2] / 2
+        )
+        if kind == "missed grasp":
+            return bool(abs(lift) < 0.005 and state["robot_contact_force_n"] < 0.02)
+        return bool(lift > 0.02 and state["robot_contact_force_n"] > 0.02)
+    if kind != "physically consequential incomplete placement":
+        raise ValueError("Unknown recorded recovery condition")
+    level = fault["target_level"] - 1
+    index = next(i for i, p in enumerate(task.placements) if p.spec == task.targets[level])
+    lower = next(i for i, p in enumerate(task.placements) if p.spec == task.targets[level - 1])
+    expected_z = TABLE_TOP + sum(p.dimensions_m[2] for p in task.targets[:level])
+    expected_z += task.targets[level].dimensions_m[2] / 2
+    return bool(
+        truth[index]["block_pose_w"][2] - expected_z > 0.005
+        and truth[index]["block_contact_forces_n"][lower][2] < 0.02
+        and truth[index]["robot_contact_force_n"] > 0.02
+    )
+
+
+def replay_recovery(
+    env: Any, task: TowerTask, report: dict, directory: Path, on_tick: Callable[[int], None]
+) -> dict:
+    """Execute the recorded physical prefix, then verify the actual error state."""
+    import numpy as np
+
+    from vla_lego.isaac.environment import ARM_JOINTS, JAW_JOINTS
+
+    frames, expected_observation, expected_truth = recovery_prefix(directory)
+    for tick, row in enumerate(frames):
+        env.set_joint_targets(dict(zip((*ARM_JOINTS, *JAW_JOINTS), row["action"], strict=True)))
+        env.step(10)
+        on_tick(tick)
+    truth = [env.task_truth(i) for i in range(len(env.blocks))]
+    position_error = max(
+        float(np.linalg.norm(np.asarray(a["block_pose_w"][:3]) - b["block_pose_w"][:3]))
+        for a, b in zip(truth, expected_truth, strict=True)
+    )
+    fault_present = recovered_fault_is_present(task, report, truth)
+    if not fault_present or position_error > 0.01:
+        raise RuntimeError("Recorded prefix did not establish the intended physical recovery state")
+    env.capture()
+    return {
+        "teacher_prefix_ticks": len(frames),
+        "recovery_initialization": True,
+        "prefix_object_position_error_m": position_error,
+        "prefix_joint_error_rad": float(
+            np.max(
+                np.abs(
+                    env.observe()["joint_position"][:16]
+                    - expected_observation["joint_position"][:16]
+                )
+            )
+        ),
+        "recovery_fault_present": fault_present,
+    }

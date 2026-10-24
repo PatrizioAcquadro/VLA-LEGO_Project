@@ -7,6 +7,7 @@ import json
 import socket
 import time
 import traceback
+from fractions import Fraction
 from pathlib import Path
 
 from vla_lego.pretrained.transport import receive_message, send_message
@@ -20,6 +21,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=20261023)
     parser.add_argument("--execution-horizon", type=int)
     parser.add_argument("--legacy-absolute-interface", action="store_true")
+    parser.add_argument("--record-video", action="store_true")
     args = parser.parse_args()
     if args.socket.exists():
         raise FileExistsError(args.socket)
@@ -27,6 +29,7 @@ def main() -> None:
     report: dict = {"kind": "native_policy_runtime", "checkpoint": str(args.checkpoint)}
     listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     bound = False
+    video = video_stream = None
     try:
         import numpy as np
         import torch
@@ -90,6 +93,24 @@ def main() -> None:
             input_keys=["observation.state", "observation.images.head", "task"],
             inference_seconds=[],
         )
+        if args.record_video:
+            import av
+
+            video = av.open(
+                str(args.output_dir / "observations.mp4"),
+                mode="w",
+                options={"movflags": "faststart"},
+            )
+            video_stream = video.add_stream("h264_nvenc", rate=Fraction(20, horizon))
+            video_stream.width, video_stream.height = 960, 600
+            video_stream.pix_fmt = "yuv420p"
+            video_stream.time_base = Fraction(horizon, 20)
+            video_stream.options = {"cq": "23", "bf": "0"}
+            report.update(
+                video_fps=20 / horizon,
+                video_frames=0,
+                video_scope="actual policy observations; simulation time",
+            )
         listener.bind(str(args.socket))
         bound = True
         listener.listen(1)
@@ -102,6 +123,11 @@ def main() -> None:
                 request, image_bytes = receive_message(connection)
                 if request.get("close"):
                     break
+                if request.get("prepare"):
+                    # Long physical recovery prefixes keep the transport alive;
+                    # this message never enters model observations or inference.
+                    send_message(connection, {"ready": True})
+                    continue
                 state = np.asarray(request["state"], dtype=np.float32)
                 if request["state_names"] != interface.get(
                     "position_names", interface["state_names"]
@@ -124,6 +150,13 @@ def main() -> None:
                 ):
                     raise ValueError("Measured state construction differs from trained features.")
                 image = np.frombuffer(image_bytes, dtype=np.uint8).reshape(shape).copy()
+                if video is not None and video_stream is not None:
+                    frame = av.VideoFrame.from_ndarray(image, format="rgb24")
+                    frame.pts = report["video_frames"]
+                    frame.time_base = Fraction(horizon, 20)
+                    for packet in video_stream.encode(frame):
+                        video.mux(packet)
+                    report["video_frames"] += 1
                 batch = preprocessor(
                     {
                         "observation.state": torch.from_numpy(state),
@@ -158,6 +191,13 @@ def main() -> None:
         report.update(passed=False, error=traceback.format_exc())
         raise
     finally:
+        if video is not None and video_stream is not None:
+            try:
+                for packet in video_stream.encode():
+                    video.mux(packet)
+                video.close()
+            except Exception:
+                report["video_error"] = traceback.format_exc()
         listener.close()
         if bound:
             args.socket.unlink(missing_ok=True)

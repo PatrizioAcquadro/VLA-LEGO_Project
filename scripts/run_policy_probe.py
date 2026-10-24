@@ -43,9 +43,16 @@ def main() -> int:
     parser.add_argument("--task", choices=("single_block", "tower"), default="single_block")
     parser.add_argument("--mirror", action="store_true")
     parser.add_argument("--missing-target", type=int, choices=range(5))
+    parser.add_argument("--pilot-corpus", type=Path)
+    parser.add_argument("--pilot-case")
+    parser.add_argument("--wall-seconds", type=int, default=3600)
     args = parser.parse_args()
     if args.task != "tower" and (args.mirror or args.missing_target is not None):
         parser.error("Scene variants require --task tower")
+    if bool(args.pilot_corpus) != bool(args.pilot_case) or (
+        args.pilot_case and args.task != "tower"
+    ):
+        parser.error("Recorded pilot evaluation requires --task tower, corpus and case")
     root = Path(__file__).resolve().parents[1]
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -85,6 +92,8 @@ def main() -> int:
             ]
             if args.execution_horizon is not None:
                 worker_command += ["--execution-horizon", str(args.execution_horizon)]
+            if args.pilot_case:
+                worker_command += ["--record-video"]
             with (
                 (output / "worker.log").open("w") as worker_log,
                 (output / "rollout.log").open("w") as client_log,
@@ -132,13 +141,23 @@ def main() -> int:
                         ["--missing-target", str(args.missing_target)]
                         if args.missing_target is not None
                         else []
+                    )
+                    + (
+                        [
+                            "--pilot-corpus",
+                            str(args.pilot_corpus.resolve()),
+                            "--pilot-case",
+                            args.pilot_case,
+                        ]
+                        if args.pilot_case
+                        else []
                     ),
                     cwd=root,
                     stdout=client_log,
                     stderr=subprocess.STDOUT,
                     start_new_session=True,
                 )
-                code = client.wait()
+                code = client.wait(timeout=args.wall_seconds)
                 result_path = output / "rollout" / "report.json"
                 if result_path.exists():
                     result = json.loads(result_path.read_text())

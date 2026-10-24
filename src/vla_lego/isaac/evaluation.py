@@ -105,6 +105,7 @@ class TowerEvaluator:
         self.coordination: dict[tuple, dict] = {}
         self.events: dict[tuple, dict] = {}
         self.samples = 0
+        self.max_ordered_levels = 0
         self.clock_gaps = 0
 
     def _gripping(self, state: dict, side: str) -> bool:
@@ -181,6 +182,8 @@ class TowerEvaluator:
                 )
                 placed.append(aligned[-1] and support > CONTACT_ZERO_N)
             stable = all(self._stable(blocks[index]) for index in assignment)
+            prefix = next((i for i, valid in enumerate(placed) if not valid), len(placed))
+            self.max_ordered_levels = max(self.max_ordered_levels, prefix)
             site_valid = withdrawn = True
             if self.task.build_region_xy_m is not None:
                 x0, x1, y0, y1 = self.task.build_region_xy_m
@@ -342,6 +345,7 @@ class TowerEvaluator:
             "final_assignment_indices": list(passing[0]) if passing else None,
             "cooperation_events": list(self.events.values()),
             "samples": self.samples,
+            "max_ordered_supported_levels": self.max_ordered_levels,
             "clock_gaps_outside_scored_intervals": self.clock_gaps,
             "last_sample_checks": self.history[-1][1] if self.history else [],
             "calibration": "provisional native simulation; print/hardware ranges unmeasured",
