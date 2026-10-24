@@ -169,6 +169,17 @@ class PhysicalReference:
             ),
         )
 
+    def _refine(self, stage: str, side: str, desired, *, ticks: int = 200) -> dict:
+        feedback = {}
+        for _ in range(ticks):
+            feedback = self.ctrl.command(
+                {**self.hold_targets, side: desired}, integrate_target=True
+            )[side]
+            self.sample(stage + "_refine")
+            if feedback["position_error_m"] < 0.003 and feedback["rotation_error_rad"] < 0.04:
+                break
+        return feedback
+
     def move(
         self,
         stage: str,
@@ -186,31 +197,27 @@ class PhysicalReference:
             self.orientation(side, yaw_deg).tolist() if quaternion_xyzw is None else quaternion_xyzw
         )
         desired = [*xyz, *orientation]
+        if self.env.recorder is not None:
+            self.env.recorder.stage = stage
         _, ids, _ = self.ctrl.frames[side]
         if linear:
             if not 0 < linear_step_m <= 0.02:
                 raise ValueError("Cartesian waypoint spacing must be in (0, 0.02] meters.")
             start = self.ctrl.pose(side)[0, :3].tolist()
             count = max(1, math.ceil(math.dist(start, xyz) / linear_step_m))
-            for waypoint in range(1, count):
+            for waypoint in range(1, count + 1):
                 intermediate = [
                     a + (b - a) * waypoint / count for a, b in zip(start, xyz, strict=True)
                 ]
-                solution = self.solvers[side].solve(
-                    self.env.target.new_tensor([*intermediate, *orientation]),
-                    self.env.robot.data.joint_pos.torch[0, ids],
-                )
-                self.joint_move(stage, side, solution, settle_at_end=not self.event_settling)
-        solution = self.solvers[side].solve(
-            self.env.target.new_tensor(desired), self.env.robot.data.joint_pos.torch[0, ids]
-        )
-        self.joint_move(stage, side, solution)
-        for _ in range(200):
-            targets = {**self.hold_targets, side: desired}
-            feedback = self.ctrl.command(targets, integrate_target=True)[side]
-            self.sample(stage + "_refine")
-            if feedback["position_error_m"] < 0.003 and feedback["rotation_error_rad"] < 0.04:
-                break
+                feedback = self._refine(stage, side, [*intermediate, *orientation], ticks=100)
+                if feedback["position_error_m"] >= 0.005 or feedback["rotation_error_rad"] >= 0.05:
+                    raise RuntimeError(f"Native Cartesian waypoint did not converge at {stage}")
+        else:
+            solution = self.solvers[side].solve(
+                self.env.target.new_tensor(desired), self.env.robot.data.joint_pos.torch[0, ids]
+            )
+            self.joint_move(stage, side, solution)
+        feedback = self._refine(stage, side, desired)
         actual = self.ctrl.pose(side)[0]
         position_error = float((actual[:3] - actual.new_tensor(xyz)).norm())
         result = {
