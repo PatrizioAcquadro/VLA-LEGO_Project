@@ -47,7 +47,14 @@ def pick_fault(reference, case: PilotCase, task: TowerTask, target_index: int) -
     ):
         reference.move(f"{prefix}_{phase}", side, xyz, yaw, linear=phase == "descend")
     reference.grip(prefix + "_close", side, placement.spec.dimensions_m[1])
-    reference.move(prefix + "_lift", side, [source[0], y, source[2] + 0.16], yaw)
+    reference.move(
+        prefix + "_lift",
+        side,
+        [source[0], y, source[2] + 0.16],
+        yaw,
+        linear=True,
+        linear_step_m=0.02,
+    )
     after = env.task_truth(index)
     delta = after["block_pose_w"][2] - source[2]
     verified = (
@@ -67,7 +74,12 @@ def pick_fault(reference, case: PilotCase, task: TowerTask, target_index: int) -
     recorder.positive_imitation = True
     if wrong:
         reference.move(
-            prefix + "_correct_return", side, [source[0], source[1], source[2] + 0.06], yaw
+            prefix + "_correct_return",
+            side,
+            [source[0], source[1], source[2] + 0.06],
+            yaw,
+            linear=True,
+            linear_step_m=0.02,
         )
     reference.grip(prefix + "_correct_open", side, None)
     reference.move(prefix + "_correct_retreat", side, [source[0], y, 1.02], yaw)
@@ -105,7 +117,11 @@ def placement_fault(
     # Stop the physical placement 18 mm above support; retain the block for correction.
     # A harmless horizontal offset is never treated as an error.
     reference.move(
-        prefix, side, [task.assembly_xy_m[0] + 0.015, task.assembly_xy_m[1], release_z + 0.018], yaw
+        prefix,
+        side,
+        [task.assembly_xy_m[0] + 0.015, task.assembly_xy_m[1], release_z + 0.018],
+        yaw,
+        linear=True,
     )
     reference.wait(4, prefix + "_failed_load_transfer")
     truth = env.task_truth(index)
