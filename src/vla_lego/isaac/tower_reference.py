@@ -399,10 +399,9 @@ def main() -> None:
                         linear=pilot_case is not None and name == "grasp",
                     )
                 if pilot_case:
-                    reference.hold_targets[stabilizer_side] = [
-                        *stabilizer_pose,
-                        *stabilizer_quaternion,
-                    ]
+                    reference.hold_targets[stabilizer_side] = reference.ctrl.pose(stabilizer_side)[
+                        0
+                    ].tolist()
                 for closure in range(18):
                     reference.grip(
                         "stabilizer_close" if closure == 0 else "stabilizer_acquire_contact",
@@ -419,6 +418,10 @@ def main() -> None:
                     if not pilot_case or width - closure * 0.002 <= nominal_width:
                         raise RuntimeError("No actual bilateral stabilizer contact")
                 if pilot_case:
+                    # Freeze the acquired physical grasp instead of creeping toward a nominal pose.
+                    reference.hold_targets[stabilizer_side] = reference.ctrl.pose(stabilizer_side)[
+                        0
+                    ].tolist()
                     stabilizer_grip_floor = nominal_width / 2 - 0.002
                 return withdraw
 
