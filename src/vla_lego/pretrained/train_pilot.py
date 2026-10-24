@@ -31,6 +31,11 @@ from vla_lego.pretrained.pilot_learning import (
 from vla_lego.pretrained.pilot_training_data import SAMPLING_DESCRIPTION, PilotTrainingData
 
 
+def data_worker_init(_worker: int) -> None:
+    # The trainer handles Slurm's early warning after completing its update.
+    signal.signal(signal.SIGUSR1, signal.SIG_IGN)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--corpus", type=Path, required=True)
@@ -44,7 +49,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=20261024)
     parser.add_argument("--resume", type=Path)
     args = parser.parse_args()
-    if 64 % args.microbatch or not 0 < args.until_step <= args.maximum_step:
+    if args.microbatch < 1 or 64 % args.microbatch or not 0 < args.until_step <= args.maximum_step:
         parser.error("Microbatch must divide 64; allocation endpoint must fit the global schedule")
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "checkpoints").mkdir(exist_ok=True)
@@ -163,6 +168,7 @@ def main() -> None:
             generator=generator,
             prefetch_factor=2 if args.workers else None,
             multiprocessing_context="spawn" if args.workers else None,
+            worker_init_fn=data_worker_init,
         )
         iterator = iter(loader)
         accumulation = 64 // args.microbatch
