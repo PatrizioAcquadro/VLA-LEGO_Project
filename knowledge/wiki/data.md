@@ -1,6 +1,6 @@
-# Data strategy — planned
+# Data strategy and pilot
 
-Data coverage and correction quality are the central development priority. The native collector records causal nominal/corrective sensor–action pairs and one complete cooperative tower seed; there is no qualified assembly corpus or trained assembly policy. [Phases 3–5](implementation_phases/index.md) build this capability; large-scale collection waits for the teacher pilot and the selected deployable model/interface.
+The marker-free Alex003 pilot is complete: 50 training and 10 development episodes, physically executed in Isaac Sim/Lab with causal sensor/action recording. The [bounded collection milestone](#approved-5010-collection-milestone) owns its evidence and limits. No assembly policy was trained in this assignment; further collection, adaptation and qualification require a new instruction.
 
 ## Public sources and admission
 
@@ -41,7 +41,7 @@ No public foreign-robot actions are currently admitted as Alex action supervisio
 
 The complete ninth tower reference is now explicitly admitted through its passing functional reassessment: 4,925 aligned frames in `tower-seed-0`, training only, converted to LeRobot with head RGB, 32 measured position/arm-velocity features and 16 actually applied joint/gripper commands. `convert_dataset --reassessments` checks that the positive assessment belongs to the requested complete nominal reference and covers its recorded frames. The conversion report preserves the original negative label and identifies the new assessment; raw reports and labels are untouched. This is one teacher seed, not independent coverage, a trained full-task policy or a qualified corpus.
 
-These are initial source decisions, not completion of Phase 3. The first required useful corpus remains physically executed Alex data with verified nominal/corrective/stop labels and grouped splits. Revisit additional public data when a measured pilot or development failure supports its value.
+These are source-admission decisions, not completion of the full Phase 3/model handoff. The completed pilot below supplies physically executed Alex nominal/corrective/stop data and grouped splits. Revisit additional public data only when a measured pilot or development failure supports its value.
 
 ## Human egocentric data
 
@@ -63,7 +63,17 @@ A declared disturbance may create a failure state for recovery collection or eva
 
 ### Approved 50+10 collection milestone
 
-The explicit marker-free revision supersedes all marked-area and fixed-destination requirements in that proposal. The main corpus must contain 60 freshly executed marker-free episodes; changing an old rendering does not create a new episode. The previous marked corpus is preserved separately under `outputs/pilot-collection-20261023` (35 attempts: 22 passed, 11 failed, 2 interrupted at the transition), contributing zero to the new quota. The new collection root is `outputs/pilot-markerfree-20261023`.
+Delivered October 24, 2026 under `outputs/pilot-markerfree-20261023`. The exact approved CSV is fulfilled: training **30 nominal / 15 recovery / 5 stop**, development **6 / 3 / 1**, with no missing or extra admitted cases. The 15 training recoveries contain five missed grasps, five physically incomplete placements and five wrong-distractor picks at the assigned levels. All 20 admitted combinations occur; the four reserved combinations are excluded from targets and distractors. Nominal training stabilizers are 15 left / 15 right, with actual overlapping restraint and placement.
+
+The 54 released towers span measured X 0.3056–0.4486 m and Y −0.1257–0.1176 m. All nine sectors of a retrospective spatial summary are occupied; 49/54 towers lie over 3 cm from the former center. Both stabilizer roles span all nine sectors. These are measured outcomes of continuous free-space choices, not a fixed list of points. The final teacher leaves a 5 mm tracking margin inside its construction region; the valid region and physical evaluator remain unchanged. Later placements reference the actual base.
+
+Collection yielded **60/116 usable native attempts (51.7%)**. The 53 failed and 3 interrupted attempts remain intact; two launcher-only failures are also preserved (60/118, 50.8%, including bootstrap). The previous marked corpus remains separate: 35 attempts, 22 passed, 11 failed, 2 interrupted, contributing zero new-quota episodes. One new attempt was physically stable/cooperative but rejected at the declared workspace boundary; its original negative outcome remains, and a fresh complete run used the teacher margin. No easier semantic replacement or favorable relabeling filled a quota.
+
+The corpus retains 333,373 synchronized frames: 328,886 positive-supervision frames and 4,487 erroneous-action frames excluded by masks. Audit verified all 60 recordings and original family splits, actual physical error consequences for all 18 recoveries, dynamic matte-block properties, support/cooperation/release and two-second stability. All final/stop images were inspected, 180 sparse RGB checks passed, and the actual reader passed all categories and corrective mask boundaries. Maximum final-dwell corner motion was 0.803 mm under the unchanged 3 mm bound. Mass/friction remain simulated assumptions, not print measurements.
+
+Local delivery files: `delivery-report.md`, `visual-review.md`, `spatial-coverage.png`, `corpus-index.json`, `corpus-review.json`, `train-episodes.json`, `development-episodes.json` and `alex_interface.json` inside the collection root. Every attempt and executed source is retained in `attempts/` and `sources/`; these data are intentionally ignored by Git. No normalization, duplicate windows, reconstructed marked episodes, new foreign-robot/human corpus or model training was added. The assignment ends here; it does not authorize Phase 5/6, expansion, physical deployment or Orin execution.
+
+The explicit marker-free revision supersedes all marked-area and fixed-destination requirements in that proposal. The main corpus contains 60 freshly executed marker-free episodes; changing an old rendering does not create a new episode. The previous marked corpus is preserved separately under `outputs/pilot-collection-20261023` (35 attempts: 22 passed, 11 failed, 2 interrupted at the transition), contributing zero to the new quota. The new collection root is `outputs/pilot-markerfree-20261023`.
 
 The teacher selects continuous free tabletop space relative to the loose inventory, without a marker or a destination cue in the image/instruction. After the first release, subsequent placements track the actual base. The evaluator uses the shared workspace and physical outcomes rather than distance to the teacher point. Both hands must release and withdraw, with the unchanged two-second support/stability dwell. Native checks at several positions precede full collection; code/kinematic tests alone do not establish spatial coverage. Scene derivatives retain their original family and split. Position distributions and collection yield include actual outcomes and failures.
 
@@ -126,4 +136,4 @@ The initial Phase 4 handoff contains:
 - Training/development/qualification groups defined before windowing, with no transformed seed descendants crossing groups.
 - Data consumable under the Phase 2 contract, with no unresolved mapping, missing-signal fabrication or privileged policy inputs.
 
-This initial handoff starts Phase 5. Later batches address measured errors; the full collection/learning cycle must cover all seven named recovery families and the declared generalization axes before final qualification. At the end of each bounded batch or learning iteration, decide which gap to address next or whether the candidate is ready for Phase 6. No fixed episode quota or improving training loss alone establishes sufficient coverage.
+This initial handoff can support a separately authorized Phase 5; the bounded collection assignment stops at delivery. Later batches address measured errors; the full collection/learning cycle must cover all seven named recovery families and the declared generalization axes before final qualification. At the end of each bounded batch or learning iteration, decide which gap to address next or whether the candidate is ready for Phase 6. No fixed episode quota or improving training loss alone establishes sufficient coverage.

@@ -8,7 +8,7 @@
 
 The target is an ordered five-block tower built by **Alex003**, selecting the requested colors and sizes among distractors with genuine cooperation between both arms. The new roadmap uses Isaac Sim/Lab and a robot-pretrained VLA, then transfers to Purdue Alex with inference entirely on the onboard Jetson AGX Orin.
 
-**Current stage:** native Isaac/Alex003 now consumes shared WSG32/UMI, pedestal and head-ZED assets and has a contact-only single-block grasp/lift/transport/release reference. SmolVLA pretrained CUDA tensor inference is verified; Alex adaptation, full cooperative towers and learned assembly remain unfinished. The MuJoCo/Qwen baseline below remains available during migration. See [status and open questions](knowledge/wiki/status.md) and [native operations/evidence](knowledge/wiki/foundations.md).
+**Current stage:** the native Isaac/Alex003 teacher has produced the complete marker-free **50 training + 10 development episode pilot**, with physical cooperation, corrections and stops. The [data handoff](knowledge/wiki/data.md#approved-5010-collection-milestone) documents local recordings, coverage and preserved failures. No assembly policy was trained in this assignment; collection has stopped pending a new instruction. The MuJoCo/Qwen baseline below remains available during migration. See [status](knowledge/wiki/status.md) and [native operations](knowledge/wiki/foundations.md).
 
 | Alex in MuJoCo | Lightweight-brick tower |
 |:---:|:---:|
@@ -82,14 +82,14 @@ Install the package before running scripts or tests. Runtime imports use the sin
 
 ## Development roadmap
 
-The [new nine phases, 0–8](knowledge/wiki/implementation_phases/index.md), replace the original subphase sequence. The next milestones are:
+The [new nine phases, 0–8](knowledge/wiki/implementation_phases/index.md), replace the original subphase sequence. They cover:
 
 1. Establish shared Alex003 assets and an Isaac scene while retiring obsolete paths in stages.
 2. Qualify a pretrained VLA's Orin execution path and produce a physically valid teacher pilot before mass collection.
 3. Expand nominal and recovery data, fine-tune, and collect corrections to actual policy errors.
 4. Qualify simulated assembly, measure physical transfer, then adapt with targeted real data and evaluate separately.
 
-The phase plans define completion gates and dependencies. The [data specification](knowledge/wiki/data.md) defines the planned dataset; the [decision log](knowledge/wiki/log.md) records consequential scope changes.
+The phase plans define completion gates and dependencies. This collection assignment stops at pilot delivery; later work requires a new instruction. The [data specification](knowledge/wiki/data.md) defines the pilot and future data strategy; the [decision log](knowledge/wiki/log.md) records consequential scope changes.
 
 ## License and attribution
 

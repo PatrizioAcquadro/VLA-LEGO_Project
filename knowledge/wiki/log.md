@@ -2,6 +2,12 @@
 
 Keep only decisions that change interpretation or future development. Use Git for ordinary edits and commit history.
 
+## 2026-10-24 — Marker-free pilot delivery boundary
+
+- Replace marked/fixed destinations with continuous free bimanual construction sites; later placements track the actual base and physical evaluation accepts any valid location in the declared region.
+- Preserve the previous marked corpus separately and rerun every approved case without markers, retaining scene families and derivatives in their original splits.
+- Deliver the completed 50+10 corpus and stop. Training, expansion, hardware execution and automatic roadmap progression require a new assignment; [data](data.md#approved-5010-collection-milestone) owns measured outcomes.
+
 ## 2026-10-23 — Alex003 bimanual assembly roadmap
 
 - Replace the old 22 subphases with nine outcome-driven phases: cooperative five-block tower in Isaac, then Purdue Alex003 with VLA inference entirely on Orin. This supersedes the earlier model and phase-planning direction below.

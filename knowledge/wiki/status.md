@@ -1,6 +1,6 @@
 # Status
 
-Reviewed October 23, 2026. The active assignment is the **marker-free 50 training + 10 development episode data pilot**, as described in [data strategy](data.md#approved-5010-collection-milestone). The explicit marker-free revision requires fresh collection at continuous valid build positions and preserves the earlier marked corpus separately (22 passed, 11 failed, 2 interrupted; zero new-quota contribution). Marker-free collection and native spatial verification are in progress. It supersedes earlier automatic progression through Phases 0–6: stop at corpus delivery, with no training, expansion or qualification campaign. Native simulation, a single-block physical reference and causal command replay are verified on Blackwell. Earlier SmolVLA diagnostics do not establish autonomous assembly; the full assembly checkpoint and qualified corpus remain unverified. Prior component evidence is preserved in [validation](validation.md).
+Reviewed October 24, 2026. The **marker-free 50 training + 10 development episode pilot is complete**. [Data strategy](data.md#approved-5010-collection-milestone) records exact composition, actual spatial/physical coverage, preserved failures and local delivery files. The previous marked corpus remains separate and contributes zero to the new quota. This completes the bounded collection assignment only: no model training, expansion, hardware/Orin run or automatic progression through Phases 0–6 follows. Native teacher demonstrations and admitted pilot data do not establish autonomous assembly or final qualification. Earlier component/learned diagnostics remain in [validation](validation.md).
 
 ## Implementation progress
 
@@ -8,8 +8,8 @@ Reviewed October 23, 2026. The active assignment is the **marker-free 50 trainin
 |---|---|
 | 0 | Native CUDA PhysX scene consumes shared Alex003 WSG32/UMI, measured pedestal and official head ZED without copied task robot assets. Gravity/table support, both jaw commands, fixed root, finite states and visible block passed. Ownership, separate environments and staged retirement documented in [foundations](foundations.md). |
 | 1 | Single-block reference, shared TCP/FK checks, licensed catalog, loose five-target scene and rotated-grasp reach checks verified. Loaded-target servo bias resolved. The eighth reference passed released stability but failed cooperative alignment. The ninth achieved three seconds of qualifying cooperation and correct released geometry. It failed historical speed gates but passes an explicit reassessment using functional released-dwell displacement: maximum corner motion 0.169 mm over two seconds. Original outcomes and raw labels are preserved. Twenty-one analytical scoring/motion regressions pass; the reassessed 4,925-frame seed has been explicitly converted for training. A fresh event-settled teacher also passes (3,316 frames, one second of cooperation); physical calibration remains open. [Evidence and limits](foundations.md#tcp-control-and-single-block-reference). |
-| 2 | GR00T native inference blocked by gated-backbone HTTP 403. SmolVLA CUDA adaptation/reload/resume and sensor-only autonomous execution demonstrated; all twelve bounded learned attempts failed across distinct diagnostic conditions. Provisional named joint interface follows three retained failed Cartesian replays. Successful task-conditioned pilot, final selection, Orin and physical WSG32 readiness remain open. |
-| 3–5 | Causal single-block diagnostic: six single-block collection attempts: the first excluded for clock alignment; three admitted nominal producer conditions (1,066/704/594 frames) and two verified corrective continuations (618/508 frames), all in one training family. Exact replay verified; paired correction and integrated-servo adaptations still failed autonomously; exact absolute native command replay; real adaptation and resume, with autonomous outcomes retained. One complete cooperative seed is now explicitly admitted and converted (4,925 frames, tower-seed-0 training only). Varied full-task nominal/recovery/stop pilot, corpus and autonomous training iterations remain pending. [Diagnostic boundaries](foundations.md#loose-scene-and-causal-learning-diagnostic). |
+| 2 | GR00T native inference blocked by gated-backbone HTTP 403. SmolVLA CUDA adaptation/reload/resume and sensor-only autonomous execution demonstrated; all twelve bounded learned attempts failed across distinct diagnostic conditions. Provisional named joint interface follows three retained failed Cartesian replays. Successful learned task-conditioned pilot, final selection, Orin and physical WSG32 readiness remain open. |
+| 3–5 | Completed the bounded marker-free 50+10 data pilot, with native full towers, actual bimanual restraint, verified corrections, justified stops and a masked causal reader. All attempts and original family splits are preserved; no pilot fine-tuning, normalization or larger collection followed. Earlier single-block/seed diagnostics remain in [foundations](foundations.md#loose-scene-and-causal-learning-diagnostic). The broader model/collection/training handoff is not declared complete. |
 | 6 | Independent frozen nominal/generalization/recovery campaigns have not begun. |
 
 Native evidence is retained locally in `outputs/blackwell/foundation-001` through `foundation-005` and on Blackwell in `/home/pacquadr/projects/vla-lego/outputs`. Attempts 001–002 failed during bootstrap/configuration. Attempt 003 passed physical component checks but visual inspection found the table outside the image; 004 preserved the failed visibility check. Attempt 005 passed all nine component/visibility checks (5.04 simulated seconds; 16.29 s to report before app close), and its head image was inspected. This is component readiness only. Actual printed-block measurements, physical WSG32 command/feedback/stop and concurrent Orin timing remain open; the user's exception permits independent simulation work with declared assumptions.
@@ -18,12 +18,12 @@ Native evidence is retained locally in `outputs/blackwell/foundation-001` throug
 
 | Capability | Current state and limit |
 |---|---|
-| Robot simulation | MuJoCo fixed-base Alex V1 upper body and two EZGrippers; native control/stability evidence exists, hardware dynamics unqualified. |
-| Interfaces | Legacy 17-D actions, 52-D state, four synchronized views and 16-step chunks. These remain current code, not requirements for the new embodiment. |
+| Robot simulation | Native Isaac/Alex003 WSG32/UMI physical teacher and admitted simulated pilot; retained MuJoCo Alex V1 diagnostics. Hardware dynamics remain unqualified. |
+| Interfaces | Native pilot: 32 measured state features, 16 applied motor commands plus 2 decision outputs, head RGB at 20 Hz. Legacy 17-D/52-D/four-view/16-step consumers remain separate. |
 | Blocks and diagnostics | Configurable cuboids, seeded resets, tower/planar-triangle evaluation and scripted robot clips. Prearranged goals are not assembly demonstrations. |
 | Model components | Qwen3.5-4B plus custom untrained action head; real GPU forward and gradient-routing evidence, no learned task capability. |
-| Losses and tracking | Standalone components exist; no maintained production trainer, collector or learned rollout evaluator. |
-| Data and policy | No qualified assembly corpus or trained assembly checkpoint. |
+| Losses and tracking | Native physical pilot collector, audit and masked reader are available. No production assembly trainer or qualified learned rollout evaluator is claimed. |
+| Data and policy | Admitted marker-free 50+10 pilot available locally; no trained assembly checkpoint or final qualification. |
 | Packaging | Local installed-package and GPU Docker evidence. Apptainer, cluster training and onboard inference are unqualified. |
 
 ## Planned target
@@ -39,10 +39,9 @@ Native evidence is retained locally in `outputs/blackwell/foundation-001` throug
 
 ## Immediate priorities and unresolved facts
 
-1. Expand the verified single-block reference into the cooperative five-block task and calibrate coverage/contact assumptions. Retire legacy paths only as replacements become operational.
-2. Resolve the Orin software compatibility path and actual WSG32 command/feedback interface early. Simulated gripper readiness does not establish physical integration.
-3. Calibrate the initial printed set and physically executed cooperative teacher, then select the model using a bounded pilot. Large-scale collection waits for both Phase 2 and Phase 3.
-4. Iterate coverage, fine-tuning and corrections toward the [qualification targets](validation.md#assembly-qualification-targets).
+1. Await a new assignment after pilot delivery. No training, expansion, physical execution or roadmap progression is running.
+2. Future model selection/adaptation must use the admitted family splits and masked reader; the development set does not replace new final qualification episodes.
+3. Physical print properties, WSG32 command/feedback and Orin compatibility/timing remain unresolved measurements. They did not block the simulated pilot and are not newly authorized work.
 
 The [handoff order and decision ownership](implementation_phases/index.md#dependencies-and-handoffs) distinguish partial readiness from completed phases. The current project closes with the qualified five-block system and Phase 8 consolidation. Walls/bridges, insertion blocks, LEGO and a paper are optional subsequent scope.
 
