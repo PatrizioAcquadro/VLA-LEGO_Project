@@ -463,6 +463,8 @@ def main() -> None:
                             [block[0], block[1], block[2] + 0.10],
                             [block[0], block[1], block[2] + 0.06],
                             [block[0], block[1], block[2] + 0.16],
+                            # Screen the raised source pose with the 5 mm tracking guard.
+                            [block[0], block[1], max(block[2] + 0.16, release + 0.030)],
                             *(
                                 [[*build_xy, block[2] + 0.16]]
                                 if release + 0.025 < block[2] + 0.16
