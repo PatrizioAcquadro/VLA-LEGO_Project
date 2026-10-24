@@ -7,6 +7,15 @@ from typing import Any
 from vla_lego.isaac.environment import ARM_JOINTS, DT
 
 
+def _posture_step(jacobian, delta):
+    """Project a seven-joint posture correction into the tool's redundant direction."""
+    import torch
+
+    _, _, vectors = torch.linalg.svd(jacobian, full_matrices=True)
+    direction = vectors[:, -1]
+    return direction * (direction * delta).sum(dim=-1, keepdim=True)
+
+
 class ToolController:
     """Shared-asset TCP transforms and damped least-squares joint realization.
 
@@ -82,6 +91,8 @@ class ToolController:
         period_s: float = 0.05,
         integrate_target: bool = False,
         advance: bool = True,
+        postures: dict[str, Any] | None = None,
+        twists: dict[str, Any] | None = None,
     ) -> dict:
         """Absolute TCP poses in meters/XYZW; bounded joint speed at each tick."""
         import torch
@@ -116,6 +127,24 @@ class ToolController:
                 # joint target, retaining the load-bearing PD offset. Replacing
                 # it with measured q each tick creates a static payload error.
                 dq = dq * (2.0 * period_s)
+            if twists is not None and side in twists:
+                velocity = self.env.target.new_tensor(twists[side]).reshape(1, 6)
+                if not bool(torch.isfinite(velocity).all()):
+                    raise ValueError("Tool velocity must be finite.")
+                dq += (
+                    period_s
+                    * (jac.transpose(1, 2) @ torch.linalg.solve(matrix, velocity.unsqueeze(-1)))[
+                        :, :, 0
+                    ]
+                )
+            if postures is not None and side in postures:
+                posture = torch.as_tensor(
+                    postures[side], device=self.env.target.device, dtype=self.env.target.dtype
+                ).reshape(1, len(ids))
+                if not bool(torch.isfinite(posture).all()):
+                    raise ValueError("Posture target must be finite.")
+                delta = posture - self.env.robot.data.joint_pos.torch[:, ids]
+                dq += 0.5 * period_s * _posture_step(jac, delta)
             # 0.5 rad/s is a provisional pilot speed, below all asset motor limits.
             dq = dq.clamp(-0.5 * period_s, 0.5 * period_s)
             base = (
