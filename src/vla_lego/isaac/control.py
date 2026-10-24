@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from vla_lego.isaac.environment import ARM_JOINTS, DT
+from vla_lego.isaac.kinematics import _bounded_dls_step
 
 
 def _posture_step(jacobian, delta):
@@ -119,24 +120,26 @@ class ToolController:
             )
             error = torch.cat((position_error, rotation_error), dim=-1)
             jac = self.jacobian(side)
-            matrix = jac @ jac.transpose(1, 2) + 0.03**2 * torch.eye(6, device=jac.device)
-            dq = (jac.transpose(1, 2) @ torch.linalg.solve(matrix, error.unsqueeze(-1)))[:, :, 0]
             _, ids, _ = self.frames[side]
+            base = (
+                self.env.target[:, ids]
+                if integrate_target
+                else self.env.robot.data.joint_pos.torch[:, ids]
+            )
+            limits = self.env.robot.data.joint_pos_limits.torch[:, ids]
+            lower = (limits[:, :, 0] - base).clamp(min=-0.5 * period_s)
+            upper = (limits[:, :, 1] - base).clamp(max=0.5 * period_s)
             if integrate_target:
                 # Integrate a 2/s Cartesian velocity servo into the commanded
                 # joint target, retaining the load-bearing PD offset. Replacing
                 # it with measured q each tick creates a static payload error.
-                dq = dq * (2.0 * period_s)
+                error = error * (2.0 * period_s)
             if twists is not None and side in twists:
                 velocity = self.env.target.new_tensor(twists[side]).reshape(1, 6)
                 if not bool(torch.isfinite(velocity).all()):
                     raise ValueError("Tool velocity must be finite.")
-                dq += (
-                    period_s
-                    * (jac.transpose(1, 2) @ torch.linalg.solve(matrix, velocity.unsqueeze(-1)))[
-                        :, :, 0
-                    ]
-                )
+                error += period_s * velocity
+            dq = _bounded_dls_step(jac, error, 0.03, lower, upper)
             if postures is not None and side in postures:
                 posture = torch.as_tensor(
                     postures[side], device=self.env.target.device, dtype=self.env.target.dtype
@@ -144,16 +147,11 @@ class ToolController:
                 if not bool(torch.isfinite(posture).all()):
                     raise ValueError("Posture target must be finite.")
                 delta = posture - self.env.robot.data.joint_pos.torch[:, ids]
-                dq += 0.5 * period_s * _posture_step(jac, delta)
+                free = (dq > lower + 1e-7) & (dq < upper - 1e-7)
+                dq += 0.5 * period_s * _posture_step(jac * free[:, None, :], delta) * free
             # 0.5 rad/s is a provisional pilot speed, below all asset motor limits.
-            dq = dq.clamp(-0.5 * period_s, 0.5 * period_s)
-            base = (
-                self.env.target[:, ids]
-                if integrate_target
-                else self.env.robot.data.joint_pos.torch[:, ids]
-            )
+            dq = dq.clamp(lower, upper)
             q = base + dq
-            limits = self.env.robot.data.joint_pos_limits.torch[:, ids]
             q = torch.maximum(torch.minimum(q, limits[:, :, 1]), limits[:, :, 0])
             self.env.set_joint_targets(
                 dict(

@@ -9,6 +9,32 @@ from pathlib import Path
 from typing import Any
 
 
+def _bounded_dls_step(jacobian, error, damping, lower, upper):
+    """Redistribute Cartesian motion when a joint reaches its step bound."""
+    import torch
+
+    step = torch.zeros_like(lower).clamp(lower, upper)
+    free = torch.ones_like(step, dtype=torch.bool)
+    identity = torch.eye(jacobian.shape[1], device=jacobian.device, dtype=jacobian.dtype)
+    for _ in range(jacobian.shape[2] + 1):
+        available = jacobian * free[:, None, :]
+        residual = error - (jacobian @ step[..., None])[..., 0]
+        correction = (
+            available.transpose(1, 2)
+            @ torch.linalg.solve(
+                available @ available.transpose(1, 2) + damping**2 * identity,
+                residual[..., None],
+            )
+        )[..., 0]
+        candidate = step + correction
+        blocked = free & ((candidate < lower) | (candidate > upper))
+        if not bool(blocked.any()):
+            return candidate.clamp(lower, upper)
+        step = torch.where(blocked, candidate.clamp(lower, upper), step)
+        free &= ~blocked
+    return step.clamp(lower, upper)
+
+
 def _required(element: ET.Element, name: str) -> ET.Element:
     child = element.find(name)
     if child is None:
@@ -150,14 +176,14 @@ class ArmKinematics:
             error = torch.cat((pos, rot), dim=-1)
             if starts == 1 and bool((pos.norm(dim=-1) < 1e-6) & (rot.norm(dim=-1) < 1e-5)):
                 break
-            dq = (
-                jac.transpose(1, 2)
-                @ torch.linalg.solve(
-                    jac @ jac.transpose(1, 2) + 0.02**2 * torch.eye(6, device=q.device),
-                    error.unsqueeze(-1),
-                )
-            )[:, :, 0]
-            q = (q + dq.clamp(-0.12, 0.12)).clamp(lower, upper)
+            dq = _bounded_dls_step(
+                jac,
+                error,
+                0.02,
+                (lower - q).clamp(min=-0.12),
+                (upper - q).clamp(max=0.12),
+            )
+            q = (q + dq).clamp(lower, upper)
         tf, _ = self.forward(q)
         pos, rot = compute_pose_error(
             tf[:, :3, 3],
