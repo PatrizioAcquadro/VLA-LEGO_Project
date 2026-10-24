@@ -2,7 +2,7 @@
 
 The target is an **ordered five-block tower**, built autonomously by Alex003 from pieces of different colors and sizes among distractors, with genuine cooperation between the arms. Develop it in Isaac Sim/Lab, then transfer it to Purdue Alex with VLA inference entirely on the onboard Jetson AGX Orin.
 
-The repository retains MuJoCo/Alex V1 and untrained Qwen-based components. Native CUDA Isaac/Alex003 uses shared WSG32/UMI and head ZED assets and has completed a marker-free 50+10 physical-demonstration pilot for the full cooperative tower task. A separately authorized SmolVLA adaptation campaign is running; autonomous assembly, final qualification and real deployment remain open. See [foundation operations and migration](foundations.md) and [status](status.md).
+The repository retains MuJoCo/Alex V1 and untrained Qwen-based components. Native CUDA Isaac/Alex003 uses shared WSG32/UMI and head ZED assets and has completed a marker-free 50+10 physical-demonstration pilot for the full cooperative tower task. SmolVLA pilot training is complete and its paired simulation evaluation is running; autonomous assembly, final qualification and real deployment remain open. See [foundation operations and migration](foundations.md) and [status](status.md).
 
 ## Start here
 
