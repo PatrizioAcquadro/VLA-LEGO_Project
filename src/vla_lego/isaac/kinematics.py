@@ -148,6 +148,8 @@ class ArmKinematics:
                 pose[3:].expand(starts, -1),
             )
             error = torch.cat((pos, rot), dim=-1)
+            if starts == 1 and bool((pos.norm(dim=-1) < 1e-6) & (rot.norm(dim=-1) < 1e-5)):
+                break
             dq = (
                 jac.transpose(1, 2)
                 @ torch.linalg.solve(
