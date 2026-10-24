@@ -65,7 +65,7 @@ class PhysicalReference:
         *,
         object_index: int | None = None,
     ) -> float:
-        """Choose a reachable equivalent jaw approach for square-section blocks."""
+        """Choose an equivalent square-face grasp with a reachable carry route."""
         _, ids, _ = self.ctrl.frames[side]
         failures = []
         clear = None
@@ -93,11 +93,19 @@ class PhysicalReference:
             try:
                 if clearance_m <= 0:
                     raise RuntimeError("Open jaws intersect another source object")
-                for xyz in waypoints:
-                    seed = self.solvers[side].solve(
-                        self.env.target.new_tensor([*xyz, *self.orientation(side, yaw).tolist()]),
-                        seed,
+                for step, xyz in enumerate(waypoints):
+                    points = (
+                        [xyz]
+                        if step < 3
+                        else [point for point, _ in _linear_profile(waypoints[step - 1], xyz)]
                     )
+                    for point in points:
+                        seed = self.solvers[side].solve(
+                            self.env.target.new_tensor(
+                                [*point, *self.orientation(side, yaw).tolist()]
+                            ),
+                            seed,
+                        )
                 return yaw
             except RuntimeError as error:
                 failures.append(str(error))

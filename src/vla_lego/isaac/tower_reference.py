@@ -489,6 +489,7 @@ def main() -> None:
                 if pilot_case:
                     yaw += task.placements[index].yaw_deg
                     release = bottom + target.dimensions_m[2] / 2 + 0.06
+                    planned_carry_z = max(block[2] + 0.16, release + 0.030)
                     yaw = reference.grasp_yaw(
                         side,
                         yaw,
@@ -499,7 +500,19 @@ def main() -> None:
                             [block[0], block[1], block[2] + 0.06],
                             [block[0], block[1], block[2] + 0.16],
                             # Screen the raised source pose with the 5 mm tracking guard.
-                            [block[0], block[1], max(block[2] + 0.16, release + 0.030)],
+                            [block[0], block[1], planned_carry_z],
+                            *(
+                                [
+                                    [
+                                        build_xy[0],
+                                        build_xy[1] + (y if side == "left" else -y),
+                                        planned_carry_z,
+                                    ]
+                                    for y in (0.20, 0.10)
+                                ]
+                                if level >= cooperative_level
+                                else []
+                            ),
                             *(
                                 [[*build_xy, block[2] + 0.16]]
                                 if release + 0.025 < block[2] + 0.16
