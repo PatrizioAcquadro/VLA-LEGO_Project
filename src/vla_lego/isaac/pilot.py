@@ -39,6 +39,8 @@ def build_site(placements: tuple[BlockPlacement, ...], ordinal: int) -> tuple[fl
     coverage.shuffle(ranks_y)
     rng = random.Random(862313 + ordinal * 137)
     x0, x1, y0, y1 = BUILD_REGION
+    # Leave room for bounded Cartesian tracking at the workspace edge.
+    x0, x1, y0, y1 = x0 + 0.005, x1 - 0.005, y0 + 0.005, y1 - 0.005
     desired = ((ranks_x[ordinal] + rng.random()) / 60, (ranks_y[ordinal] + rng.random()) / 60)
     candidates = [(rng.uniform(x0, x1), rng.uniform(y0, y1)) for _ in range(512)]
     free = [

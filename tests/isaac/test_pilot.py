@@ -79,11 +79,13 @@ def test_recovery_cannot_be_admitted_without_a_physical_fault(tmp_path):
     recorder.finish(verified_success=False, reason="no fault")
 
 
-@pytest.mark.parametrize("ordinal", [0, 1, 2, 23, 45])
+@pytest.mark.parametrize("ordinal", [0, 1, 2, 23, 25, 45])
 def test_marker_free_instruction_and_site_are_free_of_destination_cues(ordinal):
     task = PilotCase(case_row(), ordinal).task()
     assert not any(word in task.instruction for word in ("square", "marked", "left", "right"))
     assert task.build_region_xy_m is not None
+    x, y = task.assembly_xy_m
+    assert 0.305 <= x <= 0.445 and -0.125 <= y <= 0.125
     assert all(
         np.linalg.norm(np.array(task.assembly_xy_m) - p.xy_m) > 0.09 for p in task.placements
     )
