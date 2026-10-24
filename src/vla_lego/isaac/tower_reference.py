@@ -221,6 +221,7 @@ def main() -> None:
                     ("above", [lower[0] - 0.01, lower[1], lower[2] + 0.06]),
                     ("grasp", stabilizer_pose),
                 )
+                withdraw = [*stabilizer_pose[:2], stabilizer_pose[2] + 0.06]
                 if pilot_case:
                     reference.admit_stabilizer_clearance(stabilizer_side)
                     _, joint_ids, _ = reference.ctrl.frames[stabilizer_side]
@@ -280,12 +281,34 @@ def main() -> None:
                                         env.target.new_tensor([*xyz, *rotation]), seed
                                     )
                                 phase = "retract"
-                                seed = reference.solvers[stabilizer_side].solve(
-                                    env.target.new_tensor(
-                                        [pose[0], pose[1], pose[2] + 0.06, *orientation]
-                                    ),
-                                    seed,
+                                upper = env.task_truth(indices[cooperative_level])
+                                upper_projection = [
+                                    sum(v * a for v, a in zip(corner, axis, strict=True))
+                                    for corner in _corners(
+                                        task.targets[cooperative_level].dimensions_m,
+                                        upper["block_pose_w"],
+                                    )
+                                ]
+                                # Do not lift open fingers around a wider upper piece.
+                                # Retain the controller's 3 mm tracking allowance per side.
+                                wide = max(upper_projection) - min(upper_projection) + 0.006 > 0.070
+                                retract = (
+                                    [
+                                        pose[0] - 0.08 * finger[0],
+                                        pose[1] - 0.08 * finger[1],
+                                        pose[2],
+                                    ]
+                                    if wide
+                                    else [pose[0], pose[1], pose[2] + 0.06]
                                 )
+                                for fraction in (0.25, 0.5, 0.75, 1.0):
+                                    xyz = [
+                                        a + (b - a) * fraction
+                                        for a, b in zip(pose, retract, strict=True)
+                                    ]
+                                    seed = reference.solvers[stabilizer_side].solve(
+                                        env.target.new_tensor([*xyz, *orientation]), seed
+                                    )
                                 clear_z = (
                                     TABLE_TOP
                                     + sum(
@@ -306,8 +329,8 @@ def main() -> None:
                                     branch = seed
                                     try:
                                         for xyz in (
-                                            [pose[0], pose[1], clear_z],
-                                            [pose[0], stabilizer_y, clear_z],
+                                            [retract[0], retract[1], clear_z],
+                                            [retract[0], stabilizer_y, clear_z],
                                         ):
                                             branch = reference.solvers[stabilizer_side].solve(
                                                 env.target.new_tensor([*xyz, *rotation]), branch
@@ -318,7 +341,7 @@ def main() -> None:
                                         continue
                                 if retreat is None:
                                     raise RuntimeError("No collision-free withdrawal orientation")
-                                selected = path, orientation, pose, gap, retreat, clear_z
+                                selected = path, orientation, pose, gap, retreat, clear_z, retract
                                 break
                             except RuntimeError as error:
                                 failures.append(
@@ -343,6 +366,7 @@ def main() -> None:
                         width,
                         stabilizer_clear_quaternion,
                         stabilizer_clear_z,
+                        withdraw,
                     ) = selected
                 for name, xyz in approach:
                     reference.move(
@@ -376,7 +400,7 @@ def main() -> None:
                     verify_support(cooperative_level - 1, "stabilizer acquisition")
                     if not pilot_case or width - closure * 0.002 <= nominal_width:
                         raise RuntimeError("No actual bilateral stabilizer contact")
-                return stabilizer_pose
+                return withdraw
 
             for side in ("left", "right"):
                 reference.park(side)
@@ -384,7 +408,7 @@ def main() -> None:
             Image.fromarray(env.observe()["head_rgb"]).save(args.output_dir / "initial.png")
             env.stage.Export(str(args.output_dir / "scene.usda"))
             bottom = TABLE_TOP
-            stabilizer_pose = None
+            stabilizer_withdraw = None
             build_xy = task.assembly_xy_m
             # Per-piece yaw is a teacher planning choice, never a policy observation.
             for level, (target, index, (side, base_yaw)) in enumerate(
@@ -405,7 +429,7 @@ def main() -> None:
                     report["fault"] = pick_fault(reference, pilot_case, task, index)
                     verify_support(level - 1, "pick fault correction")
                 if level == cooperative_level:
-                    stabilizer_pose = engage_stabilizer()
+                    stabilizer_withdraw = engage_stabilizer()
                 block = env.task_truth(index)["block_pose_w"][:3]
                 if pilot_case:
                     yaw += task.placements[index].yaw_deg
@@ -535,27 +559,28 @@ def main() -> None:
                         <= 1e-6
                     ):
                         raise RuntimeError("Lost physical support before stabilizer withdrawal")
-                    if stabilizer_pose is None:
+                    if stabilizer_withdraw is None:
                         raise RuntimeError("Missing physical stabilizer setup.")
                     reference.hold_targets.pop(stabilizer_side, None)
                     reference.grip("stabilizer_release", stabilizer_side, None)
                     reference.move(
                         "stabilizer_retract",
                         stabilizer_side,
-                        [*stabilizer_pose[:2], stabilizer_pose[2] + 0.06],
+                        stabilizer_withdraw,
                         quaternion_xyzw=stabilizer_quaternion,
+                        linear=pilot_case is not None,
                     )
                     reference.move(
                         "stabilizer_clear_tower",
                         stabilizer_side,
-                        [*stabilizer_pose[:2], stabilizer_clear_z],
+                        [*stabilizer_withdraw[:2], stabilizer_clear_z],
                         # Pitch up 20 degrees to keep the proximal wrist reachable.
                         quaternion_xyzw=stabilizer_clear_quaternion,
                     )
                     reference.move(
                         "stabilizer_exit",
                         stabilizer_side,
-                        [stabilizer_pose[0], stabilizer_y, stabilizer_clear_z],
+                        [stabilizer_withdraw[0], stabilizer_y, stabilizer_clear_z],
                         quaternion_xyzw=stabilizer_clear_quaternion,
                     )
                     reference.park(stabilizer_side)
