@@ -1,6 +1,12 @@
 # Data strategy and pilot
 
-The marker-free Alex003 pilot is complete: 50 training and 10 development episodes, physically executed in Isaac Sim/Lab with causal sensor/action recording. The [bounded collection milestone](#approved-5010-collection-milestone) owns its evidence and limits. Collection ended without model training. A subsequent explicit assignment now authorizes [bounded SmolVLA adaptation and a before/after development panel](models.md#active-marker-free-pilot-adaptation--october-24-2026); larger collection and final qualification remain separate decisions.
+The marker-free Alex003 pilot is complete: 50 training and 10 development episodes, physically executed in Isaac Sim/Lab with causal sensor/action recording. The [bounded collection milestone](#approved-5010-collection-milestone) owns its evidence and limits. A subsequent bounded SmolVLA training/evaluation assignment is also complete, with a [negative learned-task result](validation.md#smolvla-pilot-before-and-after--october-25-2026). Larger collection and final qualification remain separate decisions.
+
+## Next data decision after the first learned baseline
+
+Do not automatically collect 500 full towers or extend the stopped training. The measured bottleneck is autonomous acquisition and decision generalization: first establish repeatable pick–lift–place with the same model/interface on familiar and separate development starts. The current experiment did not measure autonomous train-start behavior, so it cannot yet distinguish a general learnability/control problem from held-out coverage failure.
+
+Use the existing corpus and a focused set of policy-error corrections around approach, jaw opening/closure, contact, lift and release, with meaningful geometric/physical variation. Examine whether sampling selects useful motion transitions rather than prolonged near-stationary targets. Add decision coverage for completed, incomplete, feasible-difficult and missing-piece states; erroneous motor actions remain context, not positive targets. If familiar starts fail, resolve learning/control representation and sampling before scaling; if familiar starts work and held-out starts fail, broaden coverage around those gaps. Broader tower collection follows repeatable autonomous acquisition/placement and credible decisions. This is the proposed next assignment, not an executed or automatically authorized collection.
 
 ## Public sources and admission
 

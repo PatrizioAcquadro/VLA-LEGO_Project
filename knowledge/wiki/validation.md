@@ -1,5 +1,26 @@
 # Validation and evidence
 
+## SmolVLA pilot before and after — October 25, 2026
+
+The bounded experiment is complete: the selected 70,000-update SmolVLA checkpoint and its step-zero reference each executed the same ten marker-free development cases, once per model/case, with matching seeds, instructions, eight-object scenes, physical assumptions and a 600-second whole-case simulation budget. Recovery time includes the recorded physical prefix; a two-second released dwell is unchanged. All twenty attempts are available, with no retries, runtime exceptions, nonfinite predictions or video errors. This is a development result, not Phase 6 qualification.
+
+| Outcome | Step zero | Step 70,000 |
+|---|---:|---:|
+| Complete nominal tower | 0/6 | 0/6 |
+| Complete conditional recovery | 0/3 | 0/3 |
+| Justified stop for absent requested piece | 0/1 | 0/1 |
+| False abstention on feasible nominal cases | 0/6 | 1/6 |
+| False completion on recovery cases | 0/3 | 1/3 |
+| Unavailable cases | 0/10 | 0/10 |
+
+The trained policy moved both arms but acquired no grasp-and-lift in any nominal case. Its failure occurs before stacking or final stability scoring. An ordered-support maximum of one includes the base already resting on the table; it is not one learned placement. D1-N1 falsely abstained after 9.45 seconds of policy control. D2-R1 falsely declared completion after 85.55 seconds, adding no level to the three inherited from its teacher prefix. Both models failed to abstain on the missing-piece case.
+
+D1-R2 begins after a 343.3-second teacher prefix with four levels and the fifth piece already above them. Step zero released that piece and obtained stable tower geometry but never signaled completion. Its cooperation event occurred inside the teacher prefix, so this is not learned assembly or cooperation from loose blocks. Step 70,000 reached five supported levels transiently, then lifted a yellow distractor and dismantled the tower. No original outcome or threshold was changed to count either as a successful recovery. Other recoveries made no ordered-level progress beyond handoff.
+
+Review of recorded observations, actions and contacts found no explicit runtime, signal-order or normalization failure: all twenty workers ran on CUDA, and saved processors, normalization and interface are identical before/after. This does not isolate every possible learning defect. The motor development improvement in [models](models.md#active-marker-free-pilot-adaptation--october-24-2026) did not transfer into task success; action sampling, contact acquisition, grounding and decision generalization remain open explanations. Train-start autonomous behavior was not measured, so failure on familiar conditions is not yet distinguished from held-out generalization failure.
+
+The ten cases belong to only two development families, with one seed each. Their counts do not establish a population success rate, and they do not establish the behavior of other checkpoints. Model inference medians were 82.7–84.2 ms on Blackwell, with simulation paused during inference; Orin and real-time timing remain unqualified. The local `outputs/pilot-training-20261024/report.md` contains every case, complete curves, videos, resource use and the proposed [next data decision](data.md#next-data-decision-after-the-first-learned-baseline). Full per-tick traces remain on Blackwell. No new training, 500-episode collection or hardware work is authorized by this result.
+
 ## Assembly qualification targets
 
 These are initial roadmap acceptance targets, **not achieved results or guarantees from external benchmarks**. The [task definition](bricks.md#target-task) governs success: correct five pieces and order, meaningful stabilize–place cooperation, full release and stability through a calibrated interval. Use evidence of each arm's task contribution rather than counting motion or the presence of two arms.
