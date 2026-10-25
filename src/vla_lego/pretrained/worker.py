@@ -54,7 +54,8 @@ def main() -> None:
                 "Checkpoint lacks its Alex action interface; legacy absolute requires an explicit flag."
             )
         if (
-            interface["action_representation"] not in ("absolute", "measured_arm_offset")
+            interface["action_representation"]
+            not in ("absolute", "measured_arm_offset", "observation_arm_offset")
             or interface["action_joint_names"] != [*ARM_JOINTS, *JAW_JOINTS]
             or interface["control_hz"] != 20
             or interface.get("task_decision_names", []) not in ([], list(DECISION_NAMES))
@@ -89,6 +90,11 @@ def main() -> None:
             device=torch.cuda.get_device_name(),
             execution_horizon=horizon,
             alex_interface=interface,
+            served_action_representation=(
+                "absolute"
+                if interface["action_representation"] == "observation_arm_offset"
+                else interface["action_representation"]
+            ),
             seed=args.seed,
             input_keys=["observation.state", "observation.images.head", "task"],
             inference_seconds=[],
@@ -129,6 +135,7 @@ def main() -> None:
                     send_message(connection, {"ready": True})
                     continue
                 state = np.asarray(request["state"], dtype=np.float32)
+                arm_anchor = state[:14].copy()
                 if request["state_names"] != interface.get(
                     "position_names", interface["state_names"]
                 ):
@@ -170,6 +177,8 @@ def main() -> None:
                 with torch.inference_mode():
                     actions = policy.predict_action_chunk(batch)[:, :horizon]
                     actions = postprocessor(actions)
+                    if interface["action_representation"] == "observation_arm_offset":
+                        actions[:, :, :14] += torch.as_tensor(arm_anchor, device=actions.device)
                 torch.cuda.synchronize()
                 elapsed = time.monotonic() - started
                 if actions.shape != (1, horizon, action_width):
@@ -182,7 +191,11 @@ def main() -> None:
                     {
                         "actions": actions.cpu().tolist()[0],
                         "inference_seconds": elapsed,
-                        "action_representation": interface["action_representation"],
+                        "action_representation": (
+                            "absolute"
+                            if interface["action_representation"] == "observation_arm_offset"
+                            else interface["action_representation"]
+                        ),
                         "task_decision_names": decision_names,
                     },
                 )

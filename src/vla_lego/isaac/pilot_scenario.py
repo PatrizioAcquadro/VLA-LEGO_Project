@@ -86,6 +86,65 @@ def recovered_fault_is_present(task: TowerTask, report: dict, truth: list[dict])
     )
 
 
+def replay_demonstration_handoff(
+    env: Any, directory: Path, stage: str, on_tick: Callable[[int], None]
+) -> dict:
+    """Initialize a conditional diagnostic through actual recorded robot commands."""
+    from vla_lego.isaac.environment import ARM_JOINTS, JAW_JOINTS
+
+    metadata = json.loads((directory / "episode.json").read_text())
+    if not metadata.get("verified_success"):
+        raise ValueError("A diagnostic handoff requires an admitted physical demonstration")
+    frames = [json.loads(line) for line in (directory / "frames.jsonl").open()]
+    annotations = [json.loads(line) for line in (directory / "annotations.jsonl").open()]
+    boundary = next(
+        i
+        for i, row in enumerate(annotations)
+        if row["positive_imitation"] and row["stage"].startswith(stage)
+    )
+    if boundary < 1:
+        raise ValueError("A handoff must follow at least one recorded robot command")
+    for tick, row in enumerate(frames[:boundary]):
+        env.capture()
+        env.set_joint_targets(dict(zip((*ARM_JOINTS, *JAW_JOINTS), row["action"], strict=True)))
+        env.step(10)
+        on_tick(tick)
+    with (directory / "privileged.jsonl").open() as stream:
+        expected = next(
+            json.loads(line)["blocks"] for i, line in enumerate(stream) if i == boundary
+        )
+    position_error = max(
+        sum(
+            (a - b) ** 2
+            for a, b in zip(actual["block_pose_w"][:3], prior["block_pose_w"][:3], strict=True)
+        )
+        ** 0.5
+        for actual, prior in zip(
+            [env.task_truth(i) for i in range(len(env.blocks))], expected, strict=True
+        )
+    )
+    env.capture()
+    joint_error = float(
+        max(
+            abs(a - b)
+            for a, b in zip(
+                env.observe()["joint_position"], frames[boundary]["joint_position"], strict=True
+            )
+        )
+    )
+    if position_error > 0.01 or joint_error > 0.005:
+        raise RuntimeError("Demonstration handoff does not reproduce its recorded physical state")
+    return {
+        "teacher_prefix_ticks": boundary,
+        "teacher_handoff_stage": stage,
+        "teacher_commands_in_prefix": True,
+        "conditional_diagnostic": True,
+        "autonomous_from_start": False,
+        "prefix_object_position_error_m": position_error,
+        "prefix_joint_error_rad": joint_error,
+    }
+
+
 def replay_recovery(
     env: Any, task: TowerTask, report: dict, directory: Path, on_tick: Callable[[int], None]
 ) -> dict:

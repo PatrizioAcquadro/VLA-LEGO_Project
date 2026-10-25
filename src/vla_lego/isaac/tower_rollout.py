@@ -25,6 +25,7 @@ def main() -> None:
     parser.add_argument("--pilot-corpus", type=Path)
     parser.add_argument("--pilot-case")
     parser.add_argument("--pilot-split", choices=("train", "development"), default="development")
+    parser.add_argument("--teacher-start-stage")
     args = parser.parse_args()
     if args.ticks < 1:
         parser.error("--ticks must be positive")
@@ -32,6 +33,8 @@ def main() -> None:
         parser.error("Pilot corpus and case must be supplied together")
     if args.pilot_case and (args.mirror or args.missing_target is not None):
         parser.error("Recorded pilot cases cannot be combined with legacy scene variants")
+    if args.teacher_start_stage and not args.pilot_case:
+        parser.error("A conditional demonstration handoff requires a recorded pilot case")
     args.output_dir.mkdir(parents=True, exist_ok=False)
     report = {
         "kind": "autonomous_tower_diagnostic",
@@ -113,7 +116,22 @@ def main() -> None:
             pilot_split=args.pilot_split if args.pilot_case else None,
             teacher_prefix_ticks=0,
         )
-        if source_report and source_report["pilot_case"]["category"] == "recovery":
+        if args.teacher_start_stage:
+            from vla_lego.isaac.pilot_scenario import replay_demonstration_handoff
+
+            assert directory is not None
+
+            def handoff_tick(prefix_tick):
+                if prefix_tick % 100 == 0:
+                    send_message(connection, {"prepare": True})
+                    receive_message(connection)
+                update_evaluation()
+
+            report.update(
+                replay_demonstration_handoff(env, directory, args.teacher_start_stage, handoff_tick)
+            )
+            report["ordered_levels_at_handoff"] = evaluator.max_ordered_levels
+        elif source_report and source_report["pilot_case"]["category"] == "recovery":
             from vla_lego.isaac.pilot_scenario import replay_recovery
 
             assert directory is not None

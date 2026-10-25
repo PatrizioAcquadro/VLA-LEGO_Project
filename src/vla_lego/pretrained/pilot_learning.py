@@ -102,6 +102,8 @@ def diagnostics(
                 target = raw["action"].float().clone()
                 valid = ~raw["action_is_pad"].clone()
                 hold_targets = raw["observation.state"][:, [*range(14), 16, 17]].float().clone()
+                if dataset.action_representation == "observation_arm_offset":
+                    hold_targets[:, :14] = 0.0
                 batch = prepare_batch(raw, processor)
                 with torch.autocast("cuda", dtype=torch.bfloat16):
                     _, flow = masked_loss(policy, batch)

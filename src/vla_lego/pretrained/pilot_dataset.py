@@ -15,7 +15,14 @@ class PilotEpisode:
     never changes its generation family or creates independent demonstrations.
     """
 
-    def __init__(self, directory: Path, *, horizon: int = 50, include_arm_velocity: bool = True):
+    def __init__(
+        self,
+        directory: Path,
+        *,
+        horizon: int = 50,
+        include_arm_velocity: bool = True,
+        action_representation: str = "absolute",
+    ):
         if horizon < 1:
             raise ValueError("Action horizon must be positive.")
         self.directory = directory
@@ -36,6 +43,9 @@ class PilotEpisode:
         ]
         self.horizon = horizon
         self.include_arm_velocity = include_arm_velocity
+        if action_representation not in ("absolute", "observation_arm_offset"):
+            raise ValueError("Unknown pilot action representation")
+        self.action_representation = action_representation
 
     def __len__(self) -> int:
         return len(self.eligible_frames)
@@ -58,6 +68,10 @@ class PilotEpisode:
                 break
             actions[offset] = [*future["action"], *DECISION_TARGETS[future["task_decision"]]]
             action_is_pad[offset] = False
+        if self.action_representation == "observation_arm_offset":
+            # Every future target uses this observation's measured anchor,
+            # never an unobserved future state or a moving runtime anchor.
+            actions[~action_is_pad, :14] -= np.asarray(row["joint_position"][:14], np.float32)
         image_path = (self.directory / row["head_rgb"]).resolve()
         if not image_path.is_relative_to(self.directory.resolve()):
             raise ValueError("Image path escapes its recording.")

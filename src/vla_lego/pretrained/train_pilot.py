@@ -48,6 +48,11 @@ def main() -> None:
     parser.add_argument("--model", default="lerobot/smolvla_base")
     parser.add_argument("--seed", type=int, default=20261024)
     parser.add_argument("--resume", type=Path)
+    parser.add_argument(
+        "--action-representation",
+        choices=("absolute", "observation_arm_offset"),
+        default="absolute",
+    )
     args = parser.parse_args()
     if args.microbatch < 1 or 64 % args.microbatch or not 0 < args.until_step <= args.maximum_step:
         parser.error("Microbatch must divide 64; allocation endpoint must fit the global schedule")
@@ -79,14 +84,30 @@ def main() -> None:
         random.seed(args.seed)
         np.random.seed(args.seed)
         torch.manual_seed(args.seed)
-        training = PilotTrainingData(args.corpus, "train", seed=args.seed)
-        development = PilotTrainingData(args.corpus, "development", seed=args.seed + 1)
+        training = PilotTrainingData(
+            args.corpus, "train", seed=args.seed, action_representation=args.action_representation
+        )
+        development = PilotTrainingData(
+            args.corpus,
+            "development",
+            seed=args.seed + 1,
+            action_representation=args.action_representation,
+        )
         if len(training.episodes) != 50 or len(development.episodes) != 10:
             raise ValueError("This campaign requires all admitted 50+10 episodes")
         if training.families & development.families:
             raise ValueError("Training and development families overlap")
         statistics = json.loads(args.statistics.read_text())
+        if "statistics" in statistics:
+            if statistics["action_representation"] != args.action_representation:
+                raise ValueError("Normalization and action representation disagree")
+            statistics = statistics["statistics"]
+        elif args.action_representation != "absolute":
+            raise ValueError(
+                "Offset normalization must explicitly declare its action representation"
+            )
         interface = json.loads((args.corpus / "alex_interface.json").read_text())
+        interface["action_representation"] = args.action_representation
         model_path = str(args.resume / "pretrained_model") if args.resume else args.model
         policy, pre, post = load_policy(model_path, statistics, resume=bool(args.resume))
         trainable = [p for p in policy.parameters() if p.requires_grad]
@@ -107,6 +128,8 @@ def main() -> None:
             state = restore_training(args.resume, optimizer, scheduler)
             if state["maximum_step"] != args.maximum_step or state["seed"] != args.seed:
                 raise ValueError("Resume would change the declared campaign")
+            if state["interface"] != interface or state["statistics"] != statistics:
+                raise ValueError("Resume would change action semantics or normalization")
             if any(
                 row["development"].get("diagnostic_protocol") != "startup-first-block-and-phase-v2"
                 for row in state["history"]

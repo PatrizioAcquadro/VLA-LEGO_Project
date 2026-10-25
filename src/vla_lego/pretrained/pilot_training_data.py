@@ -32,10 +32,19 @@ def phase(stage: str) -> str:
 class PilotTrainingData(Dataset[dict]):
     """Draw ids, rather than worker RNG state, determine the exact training stream."""
 
-    def __init__(self, root: Path, split: str, *, seed: int, draws: int = 6_400_000):
+    def __init__(
+        self,
+        root: Path,
+        split: str,
+        *,
+        seed: int,
+        draws: int = 6_400_000,
+        action_representation: str = "absolute",
+    ):
         if split not in ("train", "development"):
             raise ValueError("Unknown pilot split")
         self.root, self.split, self.seed, self.draws = root, split, seed, draws
+        self.action_representation = action_representation
         entries = json.loads((root / f"{split}-episodes.json").read_text())
         self.episodes: list[PilotEpisode] = []
         self.cases: list[str] = []
@@ -44,7 +53,7 @@ class PilotTrainingData(Dataset[dict]):
         self.families: set[str] = set()
         for entry in entries:
             directory = root / "attempts" / Path(entry["path"]).parent.name / "recording"
-            episode = PilotEpisode(directory)
+            episode = PilotEpisode(directory, action_representation=action_representation)
             metadata = episode.metadata
             if metadata["split"] != split:
                 raise ValueError("Indexed episode belongs to another split")
@@ -157,7 +166,32 @@ class PilotTrainingData(Dataset[dict]):
                 # must not turn their z-scores into enormous motor-like values.
                 mean[16:], std[16:] = 0.0, 1.0
             result[name] = {"mean": mean.tolist(), "std": std.tolist()}
+        if self.action_representation == "observation_arm_offset":
+            result["action"] = self._offset_statistics()
         return result
+
+    def _offset_statistics(self) -> dict:
+        """Fit the actual anchored future targets, over valid training windows."""
+        total, squares, count = np.zeros(16), np.zeros(16), 0
+        for episode in self.episodes:
+            positions = np.asarray(
+                [r["joint_position"][:14] for r in episode.frames], dtype=np.float64
+            )
+            actions = np.asarray([r["action"] for r in episode.frames], dtype=np.float64)
+            invalid = np.r_[
+                0, np.cumsum([not a["positive_imitation"] for a in episode.annotations])
+            ]
+            for offset in range(min(episode.horizon, len(actions))):
+                valid = invalid[offset + 1 :] == invalid[: len(actions) - offset]
+                values = actions[offset:][valid].copy()
+                values[:, :14] -= positions[: len(actions) - offset][valid]
+                total += values.sum(0)
+                squares += (values * values).sum(0)
+                count += len(values)
+        mean = total / count
+        std = np.sqrt(np.maximum(squares / count - mean * mean, 0))
+        std[std < 1e-4] = 1.0
+        return {"mean": [*mean.tolist(), 0.0, 0.0], "std": [*std.tolist(), 1.0, 1.0]}
 
 
 SAMPLING_DESCRIPTION = {

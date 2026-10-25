@@ -46,6 +46,7 @@ def main() -> int:
     parser.add_argument("--pilot-corpus", type=Path)
     parser.add_argument("--pilot-case")
     parser.add_argument("--pilot-split", choices=("train", "development"), default="development")
+    parser.add_argument("--teacher-start-stage")
     parser.add_argument("--wall-seconds", type=int, default=3600)
     args = parser.parse_args()
     if args.task != "tower" and (args.mirror or args.missing_target is not None):
@@ -138,6 +139,11 @@ def main() -> int:
                         str(args.ticks),
                     ]
                     + (["--mirror"] if args.mirror else [])
+                    + (
+                        ["--teacher-start-stage", args.teacher_start_stage]
+                        if args.teacher_start_stage
+                        else []
+                    )
                     + (
                         ["--missing-target", str(args.missing_target)]
                         if args.missing_target is not None

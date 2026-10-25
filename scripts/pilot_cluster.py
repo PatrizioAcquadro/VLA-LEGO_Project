@@ -11,10 +11,10 @@ from pathlib import Path
 
 REMOTE_STATUS = """import getpass,json,sys,time,subprocess
 from pathlib import Path
-root=Path(sys.argv[1]);job=sys.argv[2]
+root=Path(sys.argv[1]);job=sys.argv[2];name=sys.argv[3]
 path=root/'run/status.json'
 state=json.loads(path.read_text()) if path.exists() else {}
-active=subprocess.run(['squeue','-h','-u',getpass.getuser(),'-n','vla-pilot-20261024','-o','%i %T'],stdout=subprocess.PIPE,stderr=subprocess.PIPE,universal_newlines=True).stdout.strip()
+active=subprocess.run(['squeue','-h','-u',getpass.getuser(),'-n',name,'-o','%i %T'],stdout=subprocess.PIPE,stderr=subprocess.PIPE,universal_newlines=True).stdout.strip()
 latest=root/'run/checkpoints/latest'
 out={k:state.get(k) for k in ('status','step','device','best_step','stopping_reason','error','allocation_until','last_progress')}
 out.update(active_jobs=active,checkpoint=str(latest.resolve()) if latest.exists() else None,source_age_s=round(time.time()-state.get('epoch_s',time.time()),1),data_ready=(root/'corpus-ready.json').exists())
@@ -40,6 +40,7 @@ def summary(state: dict) -> dict:
     root = state["remote_root"]
     command = f"{shlex.quote(root + '/lerobot/.venv/bin/python')} - {shlex.quote(root)} "
     command += shlex.quote(str(state.get("job_id", "")))
+    command += " " + shlex.quote(state.get("job_name", "vla-pilot-20261024"))
     return dict(json.loads(remote(state, command, data=REMOTE_STATUS)))
 
 
@@ -61,14 +62,16 @@ def batch_script(state: dict, endpoint: int, *, resume: bool) -> str:
         "--microbatch",
         "64",
         "--maximum-step",
-        "100000",
+        str(state.get("maximum_step", 100_000)),
         "--seed",
         str(state["seed"]),
+        "--action-representation",
+        state.get("action_representation", "absolute"),
     ]
     if resume:
         command += ["--resume", root + "/run/checkpoints/latest"]
     return f"""#!/bin/bash
-#SBATCH --job-name=vla-pilot-20261024
+#SBATCH --job-name={state.get('job_name', 'vla-pilot-20261024')}
 #SBATCH --account={state['account']}
 #SBATCH --partition={state['partition']}
 #SBATCH --qos={state['qos']}
@@ -113,7 +116,12 @@ def main() -> None:
             status["action"] = "inspect_terminated_allocation_before_resume"
         else:
             step = int(status.get("step") or 0)
-            endpoint = 30_000 if step < 30_000 else min(100_000, (step // 10_000 + 1) * 10_000)
+            reviews = [n for n in state.get("review_steps", [30_000]) if n > step]
+            endpoint = (
+                min(reviews)
+                if reviews
+                else min(state.get("maximum_step", 100_000), (step // 10_000 + 1) * 10_000)
+            )
             script = batch_script(state, endpoint, resume=bool(status["checkpoint"]))
             job = remote(state, "sbatch --parsable", data=script).split(";")[0]
             if not job.isdigit():
