@@ -67,6 +67,8 @@ def batch_script(state: dict, endpoint: int, *, resume: bool) -> str:
         str(state["seed"]),
         "--action-representation",
         state.get("action_representation", "absolute"),
+        "--model",
+        state.get("model", "lerobot/smolvla_base"),
     ]
     if resume:
         command += ["--resume", root + "/run/checkpoints/latest"]

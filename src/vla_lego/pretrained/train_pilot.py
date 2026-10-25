@@ -28,7 +28,7 @@ from vla_lego.pretrained.pilot_learning import (
     masked_loss,
     prepare_batch,
 )
-from vla_lego.pretrained.pilot_training_data import SAMPLING_DESCRIPTION, PilotTrainingData
+from vla_lego.pretrained.pilot_training_data import PilotTrainingData
 
 
 def data_worker_init(_worker: int) -> None:
@@ -96,10 +96,9 @@ def main() -> None:
             seed=args.seed + 1,
             action_representation=args.action_representation,
         )
-        if len(training.episodes) != 50 or len(development.episodes) != 10:
-            raise ValueError("This campaign requires all admitted 50+10 episodes")
         if training.families & development.families:
             raise ValueError("Training and development families overlap")
+        data_protocol = {"train": training.protocol, "development": development.protocol}
         statistics = json.loads(args.statistics.read_text())
         if "statistics" in statistics:
             if statistics["action_representation"] != args.action_representation:
@@ -133,6 +132,10 @@ def main() -> None:
                 raise ValueError("Resume would change the declared campaign")
             if state["interface"] != interface or state["statistics"] != statistics:
                 raise ValueError("Resume would change action semantics or normalization")
+            if state.get("data_protocol", data_protocol) != data_protocol or (
+                training.cohort is not None and "data_protocol" not in state
+            ):
+                raise ValueError("Resume would change declared cohort membership or sampling")
             if any(
                 row["development"].get("diagnostic_protocol") != "startup-first-block-and-phase-v2"
                 for row in state["history"]
@@ -151,7 +154,9 @@ def main() -> None:
                 device=torch.cuda.get_device_name(),
                 history=[],
                 best_step=None,
-                sampling=SAMPLING_DESCRIPTION,
+                sampling=training.sampling_description,
+                data_protocol=data_protocol,
+                initialization=args.model,
                 decision_loss_weight=0.25,
                 batch_size=64,
                 microbatch=args.microbatch,

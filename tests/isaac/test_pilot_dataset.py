@@ -152,3 +152,142 @@ def test_conditional_handoff_report_serializes_numpy_measurements(tmp_path):
     assert report["teacher_prefix_ticks"] == 2
     assert not report["autonomous_from_start"]
     assert json.loads(json.dumps(report))["prefix_joint_error_rad"] == 0.0
+
+
+def correction_cohort(root):
+    entries = []
+    for index, category in enumerate(("nominal", "recovery", "stop", "policy", "policy")):
+        directory = root / "attempts" / f"episode-{index}" / "recording"
+        directory.mkdir(parents=True)
+        recording(directory)
+        stages = ["left_park"] * 39 + ["level0_approach"] * 229
+        stages += ["level0_grip"] * 4 + ["level0_lift"] * 140 + ["verified_complete"]
+        metadata = json.loads((directory / "episode.json").read_text())
+        metadata.update(
+            frames=len(stages),
+            split="train",
+            generation_family=f"T{index % 2 + 1}",
+            collection_condition="marker_free_continuous_site_v1",
+            collection_case={"category": "nominal" if category == "policy" else category},
+            verified_success=category != "stop",
+            verified_stop=category == "stop",
+            supervision_role=(
+                "verified_correction"
+                if category in ("policy", "recovery")
+                else "verified_stop" if category == "stop" else "verified_nominal"
+            ),
+        )
+        if category == "policy":
+            metadata["correction_source"] = {"exact_native_parity": True, "source_run": "parent"}
+        (directory / "episode.json").write_text(json.dumps(metadata))
+        rows = []
+        annotations = []
+        for frame, stage in enumerate(stages):
+            rows.append(
+                {
+                    "head_rgb": "head.png",
+                    "joint_position": [0] * 18,
+                    "joint_velocity": [0] * 18,
+                    "action": [0] * 16,
+                    "task_decision": (
+                        ("abstain" if category == "stop" else "complete")
+                        if frame == len(stages) - 1
+                        else "continue"
+                    ),
+                }
+            )
+            annotations.append(
+                {"stage": stage, "positive_imitation": not (category == "recovery" and frame == 1)}
+            )
+        (directory / "frames.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
+        (directory / "annotations.jsonl").write_text(
+            "".join(json.dumps(row) + "\n" for row in annotations)
+        )
+        entries.append({"case": f"case-{index}", "path": f"attempts/episode-{index}/report.json"})
+    (root / "train-episodes.json").write_text(json.dumps(entries))
+    cohort = {
+        "name": "correction-cohort",
+        "episode_counts": {"train": 5, "development": 3},
+        "policy_correction_probability": 0.2,
+        "policy_acquisition_probability": 0.5,
+    }
+    (root / "cohort.json").write_text(json.dumps(cohort))
+
+
+def test_declared_corrections_sample_real_acquisition_beyond_the_initial_five_seconds(tmp_path):
+    from collections import Counter
+
+    from vla_lego.pretrained.pilot_training_data import PilotTrainingData
+
+    correction_cohort(tmp_path)
+    data = PilotTrainingData(tmp_path, "train", seed=20261024)
+    counts = Counter()
+    buckets = Counter()
+    for draw in range(10000):
+        number, sample, bucket = data.select(draw)
+        counts[data.membership[number]["sampling_category"]] += 1
+        if bucket.startswith("policy_"):
+            buckets[bucket] += 1
+            if bucket in ("policy_grasp", "policy_lift"):
+                assert data.episodes[number].eligible_frames[sample] >= 268
+        assert data.select(draw) == (number, sample, bucket)
+    assert 1800 < counts["policy_correction"] < 2200
+    assert set(buckets) == {"policy_start", "policy_approach", "policy_grasp", "policy_lift"}
+    assert all(value > 100 for value in buckets.values())
+    assert set(counts) == {"nominal", "recovery", "stop", "policy_correction"}
+    assert data.episodes[3].metadata["collection_case"]["category"] == "nominal"
+    assert data.protocol["cohort"]["name"] == "correction-cohort"
+    assert data.sampling_description["base_probability"] == 0.8
+    assert not {"stage", "sampling_category", "correction_source"} & data[0].keys()
+
+
+def test_new_episode_membership_requires_an_explicit_cohort_and_rejects_aliases(tmp_path):
+    from vla_lego.pretrained.pilot_training_data import PilotTrainingData
+
+    correction_cohort(tmp_path)
+    path = tmp_path / "train-episodes.json"
+    entries = json.loads(path.read_text())
+    entries[-1]["path"] = entries[-2]["path"]
+    path.write_text(json.dumps(entries))
+    with pytest.raises(ValueError, match="membership"):
+        PilotTrainingData(tmp_path, "train", seed=1)
+    (tmp_path / "cohort.json").unlink()
+    with pytest.raises(ValueError, match="membership"):
+        PilotTrainingData(tmp_path, "train", seed=1)
+
+
+def test_resume_protocol_records_changes_to_declared_sampling(tmp_path):
+    from vla_lego.pretrained.pilot_training_data import PilotTrainingData
+
+    correction_cohort(tmp_path)
+    saved = PilotTrainingData(tmp_path, "train", seed=1).protocol
+    path = tmp_path / "cohort.json"
+    cohort = json.loads(path.read_text())
+    cohort["policy_correction_probability"] = 0.3
+    path.write_text(json.dumps(cohort))
+    assert PilotTrainingData(tmp_path, "train", seed=1).protocol != saved
+
+
+def test_extra_descendants_do_not_overweight_one_correction_family(tmp_path):
+    import shutil
+    from collections import Counter
+
+    from vla_lego.pretrained.pilot_training_data import PilotTrainingData
+
+    correction_cohort(tmp_path)
+    shutil.copytree(tmp_path / "attempts/episode-4", tmp_path / "attempts/episode-5")
+    path = tmp_path / "train-episodes.json"
+    entries = json.loads(path.read_text())
+    entries.append({"case": "case-5", "path": "attempts/episode-5/report.json"})
+    path.write_text(json.dumps(entries))
+    path = tmp_path / "cohort.json"
+    cohort = json.loads(path.read_text())
+    cohort["episode_counts"]["train"] = 6
+    path.write_text(json.dumps(cohort))
+    data = PilotTrainingData(tmp_path, "train", seed=20261024)
+    counts = Counter()
+    for draw in range(10000):
+        number, _, _ = data.select(draw)
+        if data.membership[number]["sampling_category"] == "policy_correction":
+            counts[data.episodes[number].metadata["generation_family"]] += 1
+    assert 0.45 < counts["T1"] / sum(counts.values()) < 0.55

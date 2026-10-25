@@ -29,6 +29,21 @@ def phase(stage: str) -> str:
     return "move"
 
 
+def policy_acquisition_phase(stage: str) -> str | None:
+    """Stratify the first physical acquisition of a policy-error continuation."""
+    if "park" in stage:
+        return "policy_start"
+    if stage.startswith("level0_grip"):
+        return "policy_grasp"
+    if stage.startswith("level0_lift"):
+        return "policy_lift"
+    if stage.startswith("level0_") and any(
+        word in stage for word in ("edge", "source_high", "approach", "descend")
+    ):
+        return "policy_approach"
+    return None
+
+
 class PilotTrainingData(Dataset[dict]):
     """Draw ids, rather than worker RNG state, determine the exact training stream."""
 
@@ -45,12 +60,36 @@ class PilotTrainingData(Dataset[dict]):
             raise ValueError("Unknown pilot split")
         self.root, self.split, self.seed, self.draws = root, split, seed, draws
         self.action_representation = action_representation
+        cohort_path = root / "cohort.json"
+        self.cohort = json.loads(cohort_path.read_text()) if cohort_path.exists() else None
+        if self.cohort is not None and not self.cohort.get("name"):
+            raise ValueError("A new cohort requires an explicit name")
         entries = json.loads((root / f"{split}-episodes.json").read_text())
+        counts = self.cohort["episode_counts"] if self.cohort else {"train": 50, "development": 10}
+        if (
+            len(entries) != counts[split]
+            or len({entry["case"] for entry in entries}) != len(entries)
+            or len({Path(entry["path"]).parent.name for entry in entries}) != len(entries)
+        ):
+            raise ValueError("Episode membership differs from the declared cohort")
+        self.policy_correction_probability = (
+            float(self.cohort.get("policy_correction_probability", 0.0))
+            if self.cohort and split == "train"
+            else 0.0
+        )
+        self.policy_acquisition_probability = (
+            float(self.cohort["policy_acquisition_probability"]) if self.cohort else 0.0
+        )
+        if not 0 <= self.policy_correction_probability < 1 or not (
+            0 <= self.policy_acquisition_probability <= 1
+        ):
+            raise ValueError("Invalid declared policy-correction sampling mixture")
         self.episodes: list[PilotEpisode] = []
         self.cases: list[str] = []
         self.pools: list[dict[str, list[int]]] = []
         self.categories: dict[str, list[int]] = defaultdict(list)
         self.families: set[str] = set()
+        self.membership: list[dict] = []
         for entry in entries:
             directory = root / "attempts" / Path(entry["path"]).parent.name / "recording"
             episode = PilotEpisode(directory, action_representation=action_representation)
@@ -60,11 +99,27 @@ class PilotTrainingData(Dataset[dict]):
             if metadata.get("collection_condition") != "marker_free_continuous_site_v1":
                 raise ValueError("Only the admitted marker-free corpus is accepted")
             category = metadata["collection_case"]["category"]
+            if metadata.get("correction_source"):
+                if (
+                    split != "train"
+                    or not self.cohort
+                    or not self.policy_correction_probability
+                    or metadata["supervision_role"] != "verified_correction"
+                    or not metadata["correction_source"].get("exact_native_parity")
+                ):
+                    raise ValueError(
+                        "Policy-error data require a declared training correction cohort"
+                    )
+                category = "policy_correction"
             pools: dict[str, list[int]] = defaultdict(list)
             corrective_until = -1
             for sample, raw in enumerate(episode.eligible_frames):
                 row, annotation = episode.frames[raw], episode.annotations[raw]
                 pools[phase(annotation["stage"])].append(sample)
+                if category == "policy_correction":
+                    acquisition = policy_acquisition_phase(annotation["stage"])
+                    if acquisition:
+                        pools[acquisition].append(sample)
                 if row["task_decision"] != "continue":
                     pools["terminal"].append(sample)
                 if raw and not episode.annotations[raw - 1]["positive_imitation"]:
@@ -73,22 +128,76 @@ class PilotTrainingData(Dataset[dict]):
                     pools["correction"].append(sample)
             if not pools["terminal"] or (category == "recovery" and not pools["correction"]):
                 raise ValueError("Missing terminal/corrective supervision in an admitted episode")
+            if category == "policy_correction" and not all(
+                pools[name]
+                for name in ("policy_start", "policy_approach", "policy_grasp", "policy_lift")
+            ):
+                raise ValueError(
+                    "Policy correction must cover initial state through actual first lift"
+                )
             self.categories[category].append(len(self.episodes))
             self.episodes.append(episode)
             self.cases.append(entry["case"])
             self.pools.append(dict(pools))
             self.families.add(metadata["generation_family"])
-        if set(self.categories) != {"nominal", "recovery", "stop"}:
+            self.membership.append(
+                dict(
+                    entry,
+                    family=metadata["generation_family"],
+                    sampling_category=category,
+                    correction_source=metadata.get("correction_source"),
+                )
+            )
+        required = {"nominal", "recovery", "stop"}
+        if self.policy_correction_probability:
+            required.add("policy_correction")
+        if set(self.categories) != required:
             raise ValueError("The pilot requires nominal, recovery and stop coverage")
+
+    @property
+    def protocol(self) -> dict:
+        """Freeze declared membership and sampling across allocation resumes."""
+        return {"cohort": self.cohort, "episodes": self.membership}
+
+    @property
+    def sampling_description(self) -> dict:
+        result = dict(SAMPLING_DESCRIPTION)
+        if self.policy_correction_probability:
+            result.update(
+                base_probability=1 - self.policy_correction_probability,
+                policy_correction_probability=self.policy_correction_probability,
+                policy_acquisition_probability=self.policy_acquisition_probability,
+                policy_episode_sampling="uniform source families, then uniform continuations",
+                policy_acquisition_sampling="equal start/approach/grasp/lift, then uniform frame",
+            )
+        return result
 
     def __len__(self) -> int:
         return self.draws
 
     def select(self, draw: int) -> tuple[int, int, str]:
         rng = random.Random(self.seed + draw * 1_000_003)
-        category = rng.choices(("nominal", "recovery", "stop"), weights=(60, 30, 10))[0]
-        number = rng.choice(self.categories[category])
+        correction = self.policy_correction_probability > 0 and (
+            rng.random() < self.policy_correction_probability
+        )
+        category = (
+            "policy_correction"
+            if correction
+            else rng.choices(("nominal", "recovery", "stop"), weights=(60, 30, 10))[0]
+        )
+        eligible = self.categories[category]
+        if correction:
+            family = rng.choice(
+                sorted({self.episodes[i].metadata["generation_family"] for i in eligible})
+            )
+            eligible = [
+                i for i in eligible if self.episodes[i].metadata["generation_family"] == family
+            ]
+        number = rng.choice(eligible)
         pools = self.pools[number]
+        if correction and rng.random() < self.policy_acquisition_probability:
+            bucket = rng.choice(["policy_start", "policy_approach", "policy_grasp", "policy_lift"])
+            return number, rng.choice(pools[bucket]), bucket
         value = rng.random()
         if category == "stop":
             bucket = (
@@ -104,7 +213,12 @@ class PilotTrainingData(Dataset[dict]):
             bucket = "correction"
         else:
             bucket = rng.choice(
-                [name for name in pools if name not in ("park", "terminal", "correction")]
+                [
+                    name
+                    for name in pools
+                    if name not in ("park", "terminal", "correction")
+                    and not name.startswith("policy_")
+                ]
             )
         return number, rng.choice(pools[bucket]), bucket
 
