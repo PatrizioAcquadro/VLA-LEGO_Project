@@ -588,6 +588,9 @@ def main() -> None:
                         yaw,
                         linear=pilot_case is not None and stage == "descend",
                     )
+                    if stage == "source_high":
+                        # A policy prefix may leave the jaws closed before the next pick.
+                        reference.grip(f"{prefix}_open", side, None)
                 reference.grip(f"{prefix}_grip", side, target.dimensions_m[1])
                 release_z = bottom + target.dimensions_m[2] / 2 + 0.06
                 lift_z = block[2] + 0.16
