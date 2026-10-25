@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import math
 import random
 from collections import Counter
@@ -251,3 +252,74 @@ def load_cases(path: Path) -> tuple[PilotCase, ...]:
         if len({p.spec for p in task.placements}) != 8:
             raise ValueError(f"Inventory contains indistinguishable duplicates: {case.name}")
     return cases
+
+
+def load_paired_cases(path: Path) -> tuple[tuple[PilotCase, TowerTask], ...]:
+    """Load a separate training cohort with identical scenes and changed first goals."""
+    data = json.loads(path.read_text())
+    if data.get("collection_condition") != "marker_free_paired_instruction_v1":
+        raise ValueError("Expected an explicitly declared paired-instruction cohort.")
+    cases = []
+    families: dict[str, list[tuple[PilotCase, TowerTask]]] = {}
+    names: set[str] = set()
+    for ordinal, item in enumerate(data["cases"]):
+        case = PilotCase(item["row"], ordinal)
+        row = case.row
+        if (
+            row["split"] != "train"
+            or not row["family"].startswith("T")
+            or case.category != "nominal"
+            or case.name in names
+            or not 1 <= case.cooperative_level < 5
+        ):
+            raise ValueError("Paired collection needs unique nominal training cases.")
+        names.add(case.name)
+        task = TowerTask(
+            placements=tuple(
+                BlockPlacement(piece(p["piece"]), tuple(p["xy_m"]), p.get("yaw_deg", 0.0))
+                for p in item["placements"]
+            ),
+            targets=tuple(piece(v) for v in row["order"].split(" > ")),
+            assembly_xy_m=tuple(item["assembly_xy_m"]),
+            build_region_xy_m=BUILD_REGION,
+        )
+        inventory = {p.spec for p in task.placements}
+        if (
+            len(task.placements) != 8
+            or len(inventory) != 8
+            or len(task.targets) != 5
+            or len(set(task.targets)) != 5
+            or not task.requested_pieces_available
+            or inventory - set(task.targets) != {piece(v) for v in row["distractors"].split("; ")}
+        ):
+            raise ValueError("Each paired task needs five targets among eight distinct pieces.")
+        task = replace(
+            task,
+            instruction_text=FORMS[0].format(
+                ", then ".join(
+                    t.description.replace("prism", "rectangular prism") for t in task.targets
+                )
+            ),
+        )
+        families.setdefault(row["family"], []).append((case, task))
+        cases.append((case, task))
+    if not families:
+        raise ValueError("Paired collection is empty.")
+    for pair in families.values():
+        if len(pair) != 2:
+            raise ValueError("Each scene family needs exactly two instruction variants.")
+        (first, a), (second, b) = pair
+        if (
+            a.placements != b.placements
+            or a.assembly_xy_m != b.assembly_xy_m
+            or a.targets[1:] != b.targets[1:]
+            or a.targets[0] == b.targets[0]
+            or first.mass_scale != second.mass_scale
+            or first.friction != second.friction
+            or first.appearance != second.appearance
+            or first.cooperative_level != second.cooperative_level
+        ):
+            raise ValueError(
+                "Instruction pairs must share their scene and change only the first goal."
+            )
+    return tuple(cases)

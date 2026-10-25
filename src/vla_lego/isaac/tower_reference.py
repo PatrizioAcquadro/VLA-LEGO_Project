@@ -21,6 +21,7 @@ def main() -> None:
     parser.add_argument("--event-settling", action="store_true")
     parser.add_argument("--mirror", action="store_true")
     parser.add_argument("--cases", type=Path)
+    parser.add_argument("--paired-cases", type=Path)
     parser.add_argument("--case")
     parser.add_argument("--policy-source-run", type=Path)
     parser.add_argument("--policy-prefix-ticks", type=int)
@@ -30,8 +31,10 @@ def main() -> None:
         default="pose_dwell",
     )
     args = parser.parse_args()
-    if bool(args.cases) != bool(args.case):
-        parser.error("--cases and --case must be provided together")
+    if (args.cases and args.paired_cases) or bool(args.cases or args.paired_cases) != bool(
+        args.case
+    ):
+        parser.error("Provide one case file with --case")
     if args.record and (not args.family or not args.split):
         parser.error("--record requires --family and --split before collection")
     if bool(args.policy_source_run) != bool(args.policy_prefix_ticks):
@@ -66,13 +69,26 @@ def main() -> None:
         from vla_lego.isaac.task import initial_tower_task
 
         pilot_case = None
+        paired_task = None
+        collection_condition = "marker_free_continuous_site_v1"
+        if args.paired_cases:
+            from vla_lego.isaac.pilot import load_paired_cases
+
+            pilot_case, paired_task = next(
+                (c, t) for c, t in load_paired_cases(args.paired_cases) if c.name == args.case
+            )
+            collection_condition = "marker_free_paired_instruction_v1"
         if args.cases:
             from vla_lego.isaac.pilot import load_cases
 
             pilot_case = next(c for c in load_cases(args.cases) if c.name == args.case)
             if pilot_case.category == "stop":
                 raise ValueError("Stop cases use the stop collector.")
-        task = pilot_case.task() if pilot_case else initial_tower_task(mirror=args.mirror)
+        task = (
+            paired_task
+            if paired_task is not None
+            else pilot_case.task() if pilot_case else initial_tower_task(mirror=args.mirror)
+        )
         if args.policy_source_run:
             source = json.loads((args.policy_source_run / "report.json").read_text())
             if source.get("pilot_case") != args.case or source.get("pilot_split") != "train":
@@ -164,14 +180,14 @@ def main() -> None:
                 split=args.split,
                 task_decisions=True,
                 collection_case=pilot_case.row if pilot_case else None,
-                collection_condition="marker_free_continuous_site_v1" if pilot_case else None,
+                collection_condition=collection_condition if pilot_case else None,
                 correction_source=correction_source,
             )
             env.recorder = recorder
         report["task"] = asdict(task)
         if pilot_case:
             report["pilot_case"] = pilot_case.row
-            report["collection_condition"] = "marker_free_continuous_site_v1"
+            report["collection_condition"] = collection_condition
             report["simulation_assumptions"] = {
                 "mass_scale": pilot_case.mass_scale,
                 "effective_friction": pilot_case.friction,
