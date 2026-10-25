@@ -77,8 +77,18 @@ def persistent_deterioration(history: list[dict]) -> bool:
 
 
 def better_candidate(current: dict, previous: dict | None) -> bool:
+    """Screen offline candidates without trading away task-decision reliability.
+
+    This shortlist does not select a physically qualified policy. Autonomous
+    development outcomes own the final candidate decision.
+    """
     if previous is None:
         return True
+    if current["decision_correct"] < previous["decision_correct"] - 0.02:
+        return False
+    for name, accuracy in previous.get("decision_accuracy_by_class", {}).items():
+        if current.get("decision_accuracy_by_class", {}).get(name, 0.0) < accuracy - 0.02:
+            return False
     motor, old = current["motor_mae_normalized"], previous["motor_mae_normalized"]
     return bool(
         motor < old * 0.98

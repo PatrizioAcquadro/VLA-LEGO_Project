@@ -54,6 +54,23 @@ def test_candidate_uses_motor_progress_and_decisions_within_a_narrow_motor_band(
     assert not better_candidate({"motor_mae_normalized": 1.2, "decision_correct": 1.0}, previous)
 
 
+def test_motor_improvement_cannot_hide_decision_or_rare_class_collapse():
+    previous = {
+        "motor_mae_normalized": 1.0,
+        "decision_correct": 0.8,
+        "decision_accuracy_by_class": {"continue": 0.8, "complete": 0.8, "abstain": 0.8},
+    }
+    assert not better_candidate({"motor_mae_normalized": 0.1, "decision_correct": 0.5}, previous)
+    assert not better_candidate(
+        {
+            "motor_mae_normalized": 0.1,
+            "decision_correct": 0.8,
+            "decision_accuracy_by_class": {"continue": 1.0, "complete": 1.0, "abstain": 0.4},
+        },
+        previous,
+    )
+
+
 def test_large_persistent_held_out_regression_is_distinct_from_a_short_plateau():
     rows = history(train_slope=0.7)
     for row in rows[-6:]:

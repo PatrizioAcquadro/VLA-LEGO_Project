@@ -1,5 +1,13 @@
 # Models
 
+## Repair after the negative pilot — October 25, 2026
+
+The completed 70k pilot remains a negative historical result. The new authorized repair campaign starts by isolating acquisition on familiar versus development scenes and the effect of feedback cadence. It does not resume the old run or change its checkpoint selection retrospectively.
+
+New campaigns use fixed startup, first-block transition and later-phase diagnostics, including error over the action prefix actually executed and a measured-position hold reference. These offline diagnostics expose weak motion learning; they do not establish physical success. Offline screening no longer accepts motor improvement at the expense of balanced decisions or any represented decision class. The retained physical candidate must instead be selected from autonomous development behavior, including wrong pieces and false termination. Old phase-only histories cannot be mixed into the new diagnostic protocol during resume.
+
+Implementation corrections, targeted policy-error demonstrations and substantial retraining are authorized. Each intervention follows the observed control, grounding, coverage or capacity limitation. More updates alone are not evidence of progress, and a new completed training run is not the campaign completion condition. Functional simulation targets remain unchanged; measured Orin timing is a separate unresolved qualification requirement.
+
 ## Planned pretrained VLA selection
 
 Use a model with existing robotic pretraining, then adapt it to Alex003. The decision is conditional on task behavior and onboard execution, not a mandatory comparison of every architecture. SmolVLA pilot fine-tuning and its paired simulation panel are complete. Offline motor prediction improved, but [the physical comparison](validation.md#smolvla-pilot-before-and-after--october-25-2026) did not establish autonomous assembly or recovery. Task/onboard selection remains open.

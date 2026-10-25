@@ -104,13 +104,28 @@ class PilotTrainingData(Dataset[dict]):
         return self.episodes[episode][sample]
 
     def diagnostic_samples(self) -> list[tuple[int, int, str]]:
-        """One fixed example of each available operational/terminal/corrective phase."""
-        result = []
+        """Cover startup, first-block transitions and later operational phases.
+
+        Teacher stages stratify offline evaluation only; they never enter inputs.
+        Keep these samples fixed across checkpoints within a new campaign.
+        """
+        result: list[tuple[int, int, str]] = []
         for number, pools in enumerate(self.pools):
+            episode = self.episodes[number]
+            selected: dict[int, str] = {0: "startup"}
+            first_block: dict[str, list[int]] = defaultdict(list)
+            for sample, raw in enumerate(episode.eligible_frames):
+                stage = episode.annotations[raw]["stage"]
+                if stage.startswith("level0_"):
+                    first_block[stage].append(sample)
+            for stage, values in first_block.items():
+                selected.setdefault(values[0], stage + "/start")
+                selected.setdefault(values[len(values) // 2], stage + "/middle")
             for name in sorted(pools):
                 if name != "park":
                     values = pools[name]
-                    result.append((number, values[len(values) // 2], name))
+                    selected.setdefault(values[len(values) // 2], name)
+            result.extend((number, sample, label) for sample, label in sorted(selected.items()))
         return result
 
     def statistics(self) -> dict:

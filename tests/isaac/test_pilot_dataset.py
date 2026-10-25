@@ -55,3 +55,24 @@ def test_failed_attempt_cannot_be_loaded_as_positive_data(tmp_path):
     recording(tmp_path, admitted=False)
     with pytest.raises(ValueError, match="Only admitted"):
         PilotEpisode(tmp_path)
+
+
+def test_diagnostics_cover_startup_and_first_acquisition_not_only_later_blocks():
+    from types import SimpleNamespace
+
+    from vla_lego.pretrained.pilot_training_data import PilotTrainingData
+
+    stages = ["left_park", "level0_approach", "level0_grip", "level0_lift"]
+    stages += ["level2_grip"] * 6 + ["complete"]
+    data = PilotTrainingData.__new__(PilotTrainingData)
+    data.episodes = [
+        SimpleNamespace(
+            eligible_frames=list(range(len(stages))),
+            annotations=[{"stage": stage} for stage in stages],
+        )
+    ]
+    data.pools = [{"park": [0], "move": [1, 3], "grasp": [2, *range(4, 10)], "terminal": [10]}]
+    samples = data.diagnostic_samples()
+    indices = [sample for _, sample, _ in samples]
+    assert {0, 1, 2, 3, 10} <= set(indices)
+    assert len(indices) == len(set(indices))

@@ -109,3 +109,29 @@ def test_free_region_default_instruction_does_not_reference_a_marker():
     task = replace(initial_tower_task(), build_region_xy_m=(0.30, 0.45, -0.13, 0.13))
     assert "clear, suitable place" in task.instruction
     assert "square" not in task.instruction
+
+
+@pytest.mark.parametrize("split", ["train", "development"])
+def test_recorded_case_retains_its_split_when_used_for_diagnosis(tmp_path, split):
+    from dataclasses import asdict
+
+    from vla_lego.isaac.pilot_scenario import recorded_scenario
+
+    task = PilotCase(case_row(), 0).task()
+    directory = tmp_path / "attempts" / "case-001" / "recording"
+    directory.mkdir(parents=True)
+    (tmp_path / f"{split}-episodes.json").write_text(
+        json.dumps([{"case": "case", "path": "attempts/case-001/report.json"}])
+    )
+    metadata = {
+        "split": split,
+        "collection_condition": "marker_free_continuous_site_v1",
+        "instruction": task.instruction,
+    }
+    (directory / "episode.json").write_text(json.dumps(metadata))
+    (directory.parent / "report.json").write_text(json.dumps({"task": asdict(task)}))
+    restored, _, _ = recorded_scenario(tmp_path, "case", split=split)
+    assert restored.instruction == task.instruction
+    (directory / "episode.json").write_text(json.dumps(dict(metadata, split="other")))
+    with pytest.raises(ValueError, match="requested split"):
+        recorded_scenario(tmp_path, "case", split=split)

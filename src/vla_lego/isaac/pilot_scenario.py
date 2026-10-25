@@ -11,15 +11,21 @@ from vla_lego.isaac.catalog import BlockPlacement, BlockSpec
 from vla_lego.isaac.task import TowerTask
 
 
-def recorded_scenario(root: Path, name: str) -> tuple[TowerTask, dict, Path]:
-    entries = json.loads((root / "development-episodes.json").read_text())
+def recorded_scenario(
+    root: Path, name: str, *, split: str = "development"
+) -> tuple[TowerTask, dict, Path]:
+    if split not in ("train", "development"):
+        raise ValueError("Unknown recorded pilot split")
+    entries = json.loads((root / f"{split}-episodes.json").read_text())
     entry = next(row for row in entries if row["case"] == name)
     directory = root / "attempts" / Path(entry["path"]).parent.name / "recording"
     metadata = json.loads((directory / "episode.json").read_text())
-    if metadata["split"] != "development" or metadata.get("collection_condition") != (
+    if metadata["split"] != split or metadata.get("collection_condition") != (
         "marker_free_continuous_site_v1"
     ):
-        raise ValueError("Evaluation requires the admitted marker-free development case")
+        raise ValueError(
+            "Evaluation requires an admitted marker-free case from the requested split"
+        )
     report = json.loads((directory.parent / "report.json").read_text())
     source = report["task"]
     task = TowerTask(

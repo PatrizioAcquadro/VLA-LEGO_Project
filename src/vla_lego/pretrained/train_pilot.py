@@ -107,6 +107,14 @@ def main() -> None:
             state = restore_training(args.resume, optimizer, scheduler)
             if state["maximum_step"] != args.maximum_step or state["seed"] != args.seed:
                 raise ValueError("Resume would change the declared campaign")
+            if any(
+                row["development"].get("diagnostic_protocol") != "startup-first-block-and-phase-v2"
+                for row in state["history"]
+            ):
+                raise ValueError(
+                    "Historical phase-only diagnostics cannot select a new-protocol candidate. "
+                    "Preserve that campaign and start a separate adaptation."
+                )
         else:
             state.update(
                 interface=interface,
@@ -122,6 +130,7 @@ def main() -> None:
                 batch_size=64,
                 microbatch=args.microbatch,
                 statistics=statistics,
+                selection_scope="offline_shortlist_pending_physical_evaluation",
             )
         state.update(status="running", pid=os.getpid(), allocation_until=args.until_step)
 

@@ -24,6 +24,7 @@ def main() -> None:
     parser.add_argument("--missing-target", type=int, choices=range(5))
     parser.add_argument("--pilot-corpus", type=Path)
     parser.add_argument("--pilot-case")
+    parser.add_argument("--pilot-split", choices=("train", "development"), default="development")
     args = parser.parse_args()
     if args.ticks < 1:
         parser.error("--ticks must be positive")
@@ -63,7 +64,9 @@ def main() -> None:
         if args.pilot_case:
             from vla_lego.isaac.pilot_scenario import recorded_scenario
 
-            task, source_report, directory = recorded_scenario(args.pilot_corpus, args.pilot_case)
+            task, source_report, directory = recorded_scenario(
+                args.pilot_corpus, args.pilot_case, split=args.pilot_split
+            )
         else:
             task = initial_tower_task(mirror=args.mirror)
             if args.missing_target is not None:
@@ -105,7 +108,11 @@ def main() -> None:
             return truth
 
         update_evaluation()
-        report.update(pilot_case=args.pilot_case, teacher_prefix_ticks=0)
+        report.update(
+            pilot_case=args.pilot_case,
+            pilot_split=args.pilot_split if args.pilot_case else None,
+            teacher_prefix_ticks=0,
+        )
         if source_report and source_report["pilot_case"]["category"] == "recovery":
             from vla_lego.isaac.pilot_scenario import replay_recovery
 

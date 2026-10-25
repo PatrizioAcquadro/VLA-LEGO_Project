@@ -1,5 +1,7 @@
 # Status
 
+An authorized policy-repair campaign is now active (October 25, 2026). Startup/first-block diagnostics and decision-preserving offline screening have been corrected; 27 focused tests and `make check` pass. A short native comparison on two familiar training starts and two development starts is running, isolating ten-action versus one-action replanning with the retained 70k policy. The campaign may correct implementation, collect targeted data and retrain iteratively. No improved physical result has yet been established. [Models](models.md#repair-after-the-negative-pilot--october-25-2026) owns the revised screening boundary.
+
 Reviewed October 25, 2026. The **marker-free 50 training + 10 development episode pilot and its bounded SmolVLA learning experiment are complete**. Training stopped at **70,000 updates** under the declared development-stagnation rule. The paired physical comparison found **no completed nominal tower, recovery or justified stop in either model**, despite improved offline motor prediction. [Validation](validation.md#smolvla-pilot-before-and-after--october-25-2026) owns all twenty outcomes and their limits; [models](models.md#active-marker-free-pilot-adaptation--october-24-2026) owns the learning recipe/results. The previous marked corpus contributes zero to this run. No 500-episode expansion, hardware/Orin run or Phase 6 qualification follows automatically.
 
 ## Implementation progress
@@ -39,8 +41,8 @@ Native evidence is retained locally in `outputs/blackwell/foundation-001` throug
 
 ## Immediate priorities and unresolved facts
 
-1. The bounded experiment is delivered in `outputs/pilot-training-20261024/report.md`; training and the paired panel are finished. No further allocation or model-case retry is needed.
-2. Agree the [next targeted learning/data iteration](data.md#next-data-decision-after-the-first-learned-baseline): establish closed-loop acquisition on familiar versus development starts before scaling full towers. Preserve splits/masks; development data do not replace final qualification episodes.
+1. Preserve the completed negative experiment in `outputs/pilot-training-20261024/report.md`, including its selected checkpoint and every physical outcome.
+2. Complete the authorized [targeted learning/data iteration](data.md#next-data-decision-after-the-first-learned-baseline): isolate closed-loop acquisition on familiar versus development starts, correct the demonstrated bottleneck, then collect/train/evaluate toward autonomous towers. Preserve splits/masks; development data do not replace final qualification episodes.
 3. Physical print properties, WSG32 command/feedback and Orin compatibility/timing remain unresolved measurements. They did not block the simulated pilot and are not newly authorized work.
 
 The [handoff order and decision ownership](implementation_phases/index.md#dependencies-and-handoffs) distinguish partial readiness from completed phases. The current project closes with the qualified five-block system and Phase 8 consolidation. Walls/bridges, insertion blocks, LEGO and a paper are optional subsequent scope.

@@ -101,6 +101,7 @@ def diagnostics(
                 raw = collate_samples(dataset, selected)
                 target = raw["action"].float().clone()
                 valid = ~raw["action_is_pad"].clone()
+                hold_targets = raw["observation.state"][:, [*range(14), 16, 17]].float().clone()
                 batch = prepare_batch(raw, processor)
                 with torch.autocast("cuda", dtype=torch.bfloat16):
                     _, flow = masked_loss(policy, batch)
@@ -116,17 +117,30 @@ def diagnostics(
                     raise FloatingPointError("Non-finite decoded diagnostic actions")
                 scales = torch.tensor(statistics["action"]["std"][:16])
                 error = (prediction[:, :, :16] - target[:, :, :16]).abs()
-                for j, (episode, _, bucket) in enumerate(selected):
+                for j, (episode, sample, bucket) in enumerate(selected):
                     mask = valid[j]
+                    source = dataset.episodes[episode]
+                    raw_frame = source.eligible_frames[sample]
+                    prefix = mask.clone()
+                    prefix[policy.config.n_action_steps :] = False
+                    hold_error = (hold_targets[j] - target[j, :, :16]).abs()
                     first_decision = prediction[j, 0, 16:18] >= 0.5
                     expected = target[j, 0, 16:18] >= 0.5
                     values.append(
                         {
                             "episode": dataset.cases[episode],
                             "phase": bucket,
+                            "frame": raw_frame,
+                            "stage": source.annotations[raw_frame]["stage"],
                             "motor_mae_normalized": float((error[j, mask] / scales).mean()),
                             "arm_mae_rad": float(error[j, mask, :14].mean()),
                             "jaw_mae_m": float(error[j, mask, 14:16].mean()),
+                            "executed_motor_mae_normalized": float(
+                                (error[j, prefix] / scales).mean()
+                            ),
+                            "hold_executed_motor_mae_normalized": float(
+                                (hold_error[prefix] / scales).mean()
+                            ),
                             "decision_correct": bool(torch.equal(first_decision, expected)),
                             "expected_decision": expected.int().tolist(),
                             "predicted_decision": first_decision.int().tolist(),
@@ -139,6 +153,8 @@ def diagnostics(
         "motor_mae_normalized",
         "arm_mae_rad",
         "jaw_mae_m",
+        "executed_motor_mae_normalized",
+        "hold_executed_motor_mae_normalized",
         "decision_correct",
         "motor_flow",
         "decision_flow",
@@ -159,6 +175,8 @@ def diagnostics(
     metrics["decision_accuracy_by_class"] = by_class
     metrics["decision_correct"] = sum(by_class.values()) / len(by_class)
     metrics["details"] = values
+    metrics["diagnostic_protocol"] = "startup-first-block-and-phase-v2"
+    metrics["execution_horizon"] = policy.config.n_action_steps
     policy.train()
     return metrics
 
