@@ -39,6 +39,7 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--ticks", type=int, default=1200)
     parser.add_argument("--execution-horizon", type=int)
+    parser.add_argument("--jaw-overlap", action="store_true")
     parser.add_argument("--seed", type=int, default=20261023)
     parser.add_argument("--task", choices=("single_block", "tower"), default="single_block")
     parser.add_argument("--mirror", action="store_true")
@@ -70,6 +71,7 @@ def main() -> int:
         "ticks": args.ticks,
         "model_seed": args.seed,
         "task": args.task,
+        "jaw_overlap": args.jaw_overlap,
     }
     code = 1
     try:
@@ -94,6 +96,8 @@ def main() -> int:
             ]
             if args.execution_horizon is not None:
                 worker_command += ["--execution-horizon", str(args.execution_horizon)]
+            if args.jaw_overlap:
+                worker_command += ["--jaw-overlap"]
             if args.pilot_case:
                 worker_command += ["--record-video"]
             with (

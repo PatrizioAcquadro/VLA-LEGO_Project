@@ -9,8 +9,28 @@ import time
 import traceback
 from fractions import Fraction
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from vla_lego.pretrained.transport import receive_message, send_message
+
+if TYPE_CHECKING:
+    from torch import Tensor
+
+
+def blend_jaw_overlap(actions: Tensor, previous: Tensor | None, horizon: int) -> Tensor:
+    """Average jaw targets predicted for the same times by adjacent chunks."""
+    if actions.ndim != 3 or actions.shape[-1] < 16 or not 1 <= horizon <= actions.shape[1]:
+        raise ValueError("Expected a motor chunk containing the executed horizon.")
+    served = actions[:, :horizon].clone()
+    if previous is not None:
+        if previous.ndim != 3 or previous.shape[::2] != actions.shape[::2]:
+            raise ValueError("Overlapping chunks must have matching batches and action widths.")
+        overlap = min(horizon, previous.shape[1] - horizon)
+        if overlap > 0:
+            served[:, :overlap, 14:16] = (
+                actions[:, :overlap, 14:16] + previous[:, horizon : horizon + overlap, 14:16]
+            ) / 2
+    return served
 
 
 def main() -> None:
@@ -20,6 +40,7 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=20261023)
     parser.add_argument("--execution-horizon", type=int)
+    parser.add_argument("--jaw-overlap", action="store_true")
     parser.add_argument("--legacy-absolute-interface", action="store_true")
     parser.add_argument("--record-video", action="store_true")
     args = parser.parse_args()
@@ -96,6 +117,7 @@ def main() -> None:
                 else interface["action_representation"]
             ),
             seed=args.seed,
+            jaw_overlap=args.jaw_overlap,
             input_keys=["observation.state", "observation.images.head", "task"],
             inference_seconds=[],
         )
@@ -123,6 +145,7 @@ def main() -> None:
         listener.settimeout(180)
         print(json.dumps({"ready": True, "socket": str(args.socket)}), flush=True)
         connection, _ = listener.accept()
+        previous_actions = None
         with connection:
             connection.settimeout(120)
             while True:
@@ -175,10 +198,15 @@ def main() -> None:
                 torch.cuda.synchronize()
                 started = time.monotonic()
                 with torch.inference_mode():
-                    actions = policy.predict_action_chunk(batch)[:, :horizon]
+                    predictions = policy.predict_action_chunk(batch)
+                    actions = predictions if args.jaw_overlap else predictions[:, :horizon]
                     actions = postprocessor(actions)
                     if interface["action_representation"] == "observation_arm_offset":
                         actions[:, :, :14] += torch.as_tensor(arm_anchor, device=actions.device)
+                    if args.jaw_overlap:
+                        served = blend_jaw_overlap(actions, previous_actions, horizon)
+                        previous_actions = actions.detach()
+                        actions = served
                 torch.cuda.synchronize()
                 elapsed = time.monotonic() - started
                 if actions.shape != (1, horizon, action_width):
