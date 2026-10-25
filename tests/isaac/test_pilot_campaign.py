@@ -6,6 +6,7 @@ from vla_lego.pretrained.pilot_campaign import (
     better_candidate,
     learning_rate_factor,
     persistent_deterioration,
+    prune_checkpoints,
     stopping_reason,
 )
 
@@ -78,3 +79,23 @@ def test_large_persistent_held_out_regression_is_distinct_from_a_short_plateau()
     assert persistent_deterioration(rows)
     assert not persistent_deterioration(rows[:-1])
     assert not persistent_deterioration(history())
+
+
+def test_pruning_retains_the_loaded_resume_source_after_latest_moves(tmp_path):
+    for step in (0, 3000, 4000, 5000, 6000, 7000):
+        checkpoint = tmp_path / f"{step:06d}"
+        checkpoint.mkdir()
+        (checkpoint / "state.json").write_text("{}")
+    latest = tmp_path / "latest"
+    latest.symlink_to("005000")
+    loaded = latest.resolve()
+    latest.unlink()
+    latest.symlink_to("007000")
+    prune_checkpoints(tmp_path, 6000, resume_checkpoint=loaded)
+    assert {p.name for p in tmp_path.iterdir()} == {
+        "000000",
+        "005000",
+        "006000",
+        "007000",
+        "latest",
+    }

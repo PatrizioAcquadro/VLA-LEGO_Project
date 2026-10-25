@@ -134,13 +134,15 @@ def save_checkpoint(policy, preprocessor, postprocessor, optimizer, scheduler, d
     temporary.replace(pointer)
 
 
-def prune_checkpoints(root: Path, best_step: int) -> None:
-    """Retain zero/best, every 10k milestone and the latest two complete states."""
+def prune_checkpoints(root: Path, best_step: int, *, resume_checkpoint: Path | None = None) -> None:
+    """Retain milestones, recent states and the source still mapped by this process."""
     complete = sorted(
         path for path in root.iterdir() if path.name.isdigit() and (path / "state.json").exists()
     )
     keep = {path.name for path in complete[-2:]}
     for path in complete:
+        if resume_checkpoint is not None and path.resolve() == resume_checkpoint.resolve():
+            continue
         step = int(path.name)
         if step in (0, best_step) or step % 10_000 == 0 or path.name in keep:
             continue

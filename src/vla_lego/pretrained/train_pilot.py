@@ -56,6 +56,9 @@ def main() -> None:
     args = parser.parse_args()
     if args.microbatch < 1 or 64 % args.microbatch or not 0 < args.until_step <= args.maximum_step:
         parser.error("Microbatch must divide 64; allocation endpoint must fit the global schedule")
+    if args.resume:
+        # Pin the loaded source before checkpoint saves move the latest symlink.
+        args.resume = args.resume.resolve(strict=True)
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "checkpoints").mkdir(exist_ok=True)
     (args.output / "diagnostics").mkdir(exist_ok=True)
@@ -184,7 +187,9 @@ def main() -> None:
                 state["best_step"] = state["step"]
             checkpoint = args.output / "checkpoints" / f"{state['step']:06d}"
             save_checkpoint(policy, pre, post, optimizer, scheduler, checkpoint, state)
-            prune_checkpoints(args.output / "checkpoints", state["best_step"])
+            prune_checkpoints(
+                args.output / "checkpoints", state["best_step"], resume_checkpoint=args.resume
+            )
             write_json(args.output / "history.json", state["history"])
             print(json.dumps({"evaluation": report, "best_step": state["best_step"]}), flush=True)
 
