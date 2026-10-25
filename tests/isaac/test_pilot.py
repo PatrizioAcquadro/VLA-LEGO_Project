@@ -135,3 +135,77 @@ def test_recorded_case_retains_its_split_when_used_for_diagnosis(tmp_path, split
     (directory / "episode.json").write_text(json.dumps(dict(metadata, split="other")))
     with pytest.raises(ValueError, match="requested split"):
         recorded_scenario(tmp_path, "case", split=split)
+
+
+def test_tower_policy_replay_uses_applied_commands_and_rejects_teacher_initialization(tmp_path):
+    from dataclasses import asdict
+    from types import SimpleNamespace
+
+    import torch
+
+    from vla_lego.isaac.environment import ARM_JOINTS, JAW_JOINTS
+    from vla_lego.isaac.policy_replay import replay_prefix
+
+    task = PilotCase(case_row(), 0).task()
+    names = [*ARM_JOINTS, *JAW_JOINTS]
+    data = SimpleNamespace(
+        joint_names=names,
+        joint_pos=SimpleNamespace(torch=torch.zeros(1, 16)),
+        joint_pos_limits=SimpleNamespace(torch=torch.tensor([[[-3.0, 3.0]] * 16])),
+    )
+    truth = {"block_pose_w": [0.4, 0.0, 0.82, 0.0, 0.0, 0.0, 1.0]}
+
+    class Environment:
+        robot = SimpleNamespace(data=data)
+        placements = task.placements
+        blocks = list(range(len(task.placements)))
+        time = 2.0
+
+        def capture(self):
+            pass
+
+        def set_joint_targets(self, targets):
+            self.targets = [targets[name] for name in names]
+
+        def step(self, count):
+            assert count == 10
+            self.robot.data.joint_pos.torch[:] = torch.tensor(self.targets)
+            self.time += 0.05
+
+        def task_truth(self, index):
+            return truth
+
+    metadata = {
+        "kind": "autonomous_tower_diagnostic",
+        "learned": True,
+        "teacher_commands": False,
+        "autonomy_started": True,
+        "robot_joint_names": names,
+        "executed_ticks": 2,
+        "head_capture_hz": 20,
+        "teacher_prefix_ticks": 0,
+        "task": asdict(task),
+    }
+    (tmp_path / "report.json").write_text(json.dumps(metadata))
+    rows = []
+    for tick in range(2):
+        command = np.asarray([0.1 * (tick + 1)] * 14 + [0.03, 0.03], dtype=np.float32).tolist()
+        rows.append(
+            {
+                "tick": tick,
+                "time_s": 2.05 + tick * 0.05,
+                "decision": "continue",
+                "learned_action": [999] * 18,
+                "applied_joint_target": command,
+                "robot": {"joint_position": command},
+                "blocks": [truth] * len(task.placements),
+            }
+        )
+    (tmp_path / "trace.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
+    result = replay_prefix(Environment(), tmp_path, 2)
+    assert result["exact_native_parity"] and not result["object_state_writes"]
+    assert result["prefix_ticks"] == 2
+    metadata["teacher_prefix_ticks"] = 1
+    (tmp_path / "report.json").write_text(json.dumps(metadata))
+    with pytest.raises(ValueError, match="autonomous-from-start"):
+        replay_prefix(Environment(), tmp_path, 1)

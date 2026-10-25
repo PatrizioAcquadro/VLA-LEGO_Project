@@ -22,6 +22,8 @@ def main() -> None:
     parser.add_argument("--mirror", action="store_true")
     parser.add_argument("--cases", type=Path)
     parser.add_argument("--case")
+    parser.add_argument("--policy-source-run", type=Path)
+    parser.add_argument("--policy-prefix-ticks", type=int)
     parser.add_argument(
         "--motion-measurement",
         choices=("pose_dwell", "solver_velocity", "pose_step_peaks"),
@@ -32,6 +34,10 @@ def main() -> None:
         parser.error("--cases and --case must be provided together")
     if args.record and (not args.family or not args.split):
         parser.error("--record requires --family and --split before collection")
+    if bool(args.policy_source_run) != bool(args.policy_prefix_ticks):
+        parser.error("Policy correction requires both source run and applied prefix length")
+    if args.policy_source_run and (not args.record or not args.cases or args.split != "train"):
+        parser.error("Own-policy corrections require a recorded training case")
     args.output_dir.mkdir(parents=True, exist_ok=False)
     report: dict = {
         "kind": "physical_tower_reference",
@@ -67,6 +73,18 @@ def main() -> None:
             if pilot_case.category == "stop":
                 raise ValueError("Stop cases use the stop collector.")
         task = pilot_case.task() if pilot_case else initial_tower_task(mirror=args.mirror)
+        if args.policy_source_run:
+            source = json.loads((args.policy_source_run / "report.json").read_text())
+            if source.get("pilot_case") != args.case or source.get("pilot_split") != "train":
+                raise ValueError("Correction source does not belong to the requested training case")
+            if task.build_region_xy_m is not None:
+                # Restore the recorded teacher choice; the site is unmarked and
+                # is neither a policy input nor a new physical scene object.
+                task = replace(task, assembly_xy_m=tuple(source["task"]["assembly_xy_m"]))
+            if json.loads(json.dumps(asdict(task))) != source["task"]:
+                raise ValueError("Generated correction scene differs from the actual policy scene")
+            if not task.requested_pieces_available:
+                raise ValueError("A continuation demonstration requires a completable inventory")
         cooperative_level = pilot_case.cooperative_level if pilot_case else 3
         stabilizer_quaternion = [0.0, 0.0, 0.0, 1.0]
         stabilizer_clear_quaternion = [
@@ -123,6 +141,21 @@ def main() -> None:
             appearance=pilot_case.appearance if pilot_case else "legacy",
         )
         env.step(400)
+        correction_source = None
+        reference_orientations = None
+        if args.policy_source_run:
+            from vla_lego.isaac.control import ToolController
+            from vla_lego.isaac.policy_replay import replay_prefix
+
+            controller = ToolController(env)
+            reference_orientations = {
+                side: controller.pose(side)[0, 3:].clone() for side in ("left", "right")
+            }
+            correction_source = replay_prefix(env, args.policy_source_run, args.policy_prefix_ticks)
+            if not correction_source["exact_native_parity"]:
+                raise RuntimeError("Policy-error replay does not reproduce its recorded state")
+            correction_source["source_terminal_decision"] = source["terminal_decision"]
+            report["correction_source"] = correction_source
         if args.record:
             recorder = EpisodeRecorder(
                 args.output_dir / "recording",
@@ -132,6 +165,7 @@ def main() -> None:
                 task_decisions=True,
                 collection_case=pilot_case.row if pilot_case else None,
                 collection_condition="marker_free_continuous_site_v1" if pilot_case else None,
+                correction_source=correction_source,
             )
             env.recorder = recorder
         report["task"] = asdict(task)
@@ -216,6 +250,9 @@ def main() -> None:
                 sample_cooperation,
                 event_settling=args.event_settling,
             )
+            if reference_orientations is not None:
+                # Preserve the shared initial grasp convention, not the failed policy's wrist pose.
+                reference.initial_orientations = reference_orientations
 
             def verify_support(
                 last_level: int, stage: str, *, held_side: str | None = None

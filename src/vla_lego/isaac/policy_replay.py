@@ -6,6 +6,7 @@ import argparse
 import json
 import time
 import traceback
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,15 @@ def replay_prefix(env: Any, source: Path, ticks: int) -> dict:
         raise ValueError("Replay needs a named, autonomous native source with no teacher.")
     if ticks < 1 or ticks > metadata["executed_ticks"]:
         raise ValueError("Prefix must fit the actually executed source attempt.")
+    tower = metadata.get("kind") == "autonomous_tower_diagnostic"
+    if tower:
+        if metadata.get("teacher_prefix_ticks") or metadata.get("conditional_diagnostic"):
+            raise ValueError("A policy-error continuation requires an autonomous-from-start source")
+        if (
+            json.loads(json.dumps([asdict(p) for p in env.placements]))
+            != metadata["task"]["placements"]
+        ):
+            raise ValueError("Replay environment differs from the source inventory and placement")
     capture_hz = metadata.get("head_capture_hz", 2)
     if capture_hz not in (2, 20):
         raise ValueError("Unknown source capture cadence.")
@@ -39,20 +49,29 @@ def replay_prefix(env: Any, source: Path, ticks: int) -> dict:
     with (source / "trace.jsonl").open() as stream:
         for line in stream:
             row = json.loads(line)
-            if "learned_action" in row:
+            if tower:
+                if row.get("tick") != count or row.get("decision") != "continue":
+                    raise ValueError(
+                        "Tower prefix must contain contiguous actually applied commands"
+                    )
+                action = np.asarray(row["applied_joint_target"], dtype=np.float32)[ids]
+                expected_time = row["time_s"] - 0.05
+            elif "learned_action" in row:
                 if pending is not None or row["tick"] != count:
                     raise ValueError("Autonomous source command/state ordering is invalid.")
                 pending = row
                 continue
-            if "applied_target" not in row:
+            elif "applied_target" not in row:
                 raise ValueError("Unrecognized autonomous source row.")
-            if pending is None or row["tick"] != pending["tick"]:
-                raise ValueError("Autonomous state has no matching source command.")
-            if abs(pending["time_s"] - env.time) > 1e-8:
+            else:
+                if pending is None or row["tick"] != pending["tick"]:
+                    raise ValueError("Autonomous state has no matching source command.")
+                action = np.asarray(row["applied_target"], dtype=np.float32)
+                expected_time = pending["time_s"]
+            if abs(expected_time - env.time) > 1e-8:
                 raise ValueError("Replay clock differs from the autonomous source.")
             if count % capture_every == 0:
                 env.capture()
-            action = np.asarray(row["applied_target"], dtype=np.float32)
             if action.shape != (16,) or not np.isfinite(action).all():
                 raise ValueError("Invalid recorded robot command.")
             # Numerical limit projection matches the actual native source interface.
@@ -71,8 +90,16 @@ def replay_prefix(env: Any, source: Path, ticks: int) -> dict:
                 float(
                     np.max(
                         np.abs(
-                            np.asarray(env.task_truth()["block_pose_w"])
-                            - np.asarray(row["truth"]["block_pose_w"])
+                            np.asarray(
+                                [env.task_truth(i)["block_pose_w"] for i in range(len(env.blocks))]
+                                if tower
+                                else env.task_truth()["block_pose_w"]
+                            )
+                            - np.asarray(
+                                [block["block_pose_w"] for block in row["blocks"]]
+                                if tower
+                                else row["truth"]["block_pose_w"]
+                            )
                         )
                     )
                 ),
