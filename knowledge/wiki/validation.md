@@ -21,6 +21,14 @@ Review of recorded observations, actions and contacts found no explicit runtime,
 
 The ten cases belong to only two development families, with one seed each. Their counts do not establish a population success rate, and they do not establish the behavior of other checkpoints. Model inference medians were 82.7–84.2 ms on Blackwell, with simulation paused during inference; Orin and real-time timing remain unqualified. The local `outputs/pilot-training-20261024/report.md` contains every case, complete curves, videos, resource use and the proposed [next data decision](data.md#next-data-decision-after-the-first-learned-baseline). Full per-tick traces remain on Blackwell. No new training, 500-episode collection or hardware work is authorized by this result.
 
+## Correction-cohort autonomous review
+
+The first 5,000-update checkpoint trained on the separate 57/10 correction cohort executed four matched loose-start diagnostics: T1-N1, T2-N1, D1-N1 and D2-N1, each once with the full instruction, horizon 10 and a 90-second budget. All four native runs were available and healthy. T1/T2/D1 exhausted the budget; D2 falsely abstained. **No case contacted or acquired its first requested piece, made an ordered placement or completed a cooperative tower.**
+
+D1 provides a narrower positive result: the left jaws autonomously grasped and raised the large red prism by **6.69 cm**, with bilateral grasp-and-lift sustained for **1.95 seconds** near the end of the control budget. That prism is the **fourth requested target**, picked before the first orange cube. Images and actual policy-observation video confirm the held piece. No teacher prefix or hidden assistance was present. This is motor-component progress with incorrect task selection/order; it is neither a successful first acquisition nor candidate promotion.
+
+Every outcome, trace, image and video is retained in `outputs/policy-repair-20261025/iteration-02/panel-005000`; `physical-review-005000.md` owns the detailed interpretation. The unchanged A100 adaptation continues toward its substantial 30k base, with the next physical review at 15k. Later interventions must address observed errors using training families; development scenes remain excluded. These diagnostics do not qualify Phase 6, recovery, generalization or Orin timing.
+
 ## Assembly qualification targets
 
 These are initial roadmap acceptance targets, **not achieved results or guarantees from external benchmarks**. The [task definition](bricks.md#target-task) governs success: correct five pieces and order, meaningful stabilize–place cooperation, full release and stability through a calibrated interval. Use evidence of each arm's task contribution rather than counting motion or the presence of two arms.
