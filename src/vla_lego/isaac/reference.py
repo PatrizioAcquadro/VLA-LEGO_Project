@@ -47,6 +47,7 @@ class PhysicalReference:
         self.max_limit_projection = 0.0
         self.event_settling = event_settling
         self.hold_targets: dict[str, list[float]] = {}
+        self.hold_postures: dict[str, list[float]] = {}
         for side in self.solvers:
             self.admit_stabilizer_clearance(side)
 
@@ -143,7 +144,12 @@ class PhysicalReference:
             self.env.recorder.stage = stage
         for _ in range(ticks):
             if self.hold_targets:
-                self.ctrl.command(self.hold_targets, integrate_target=True, advance=False)
+                self.ctrl.command(
+                    self.hold_targets,
+                    integrate_target=True,
+                    advance=False,
+                    postures=self.hold_postures,
+                )
             self.env.step(10)
             self.sample(stage)
 
@@ -175,7 +181,12 @@ class PhysicalReference:
             self.env.set_joint_targets(dict(zip(self.solvers[side].names, q.tolist(), strict=True)))
             holding = {s: p for s, p in self.hold_targets.items() if s != side}
             if holding:
-                self.ctrl.command(holding, integrate_target=True, advance=False)
+                self.ctrl.command(
+                    holding,
+                    integrate_target=True,
+                    advance=False,
+                    postures=self.hold_postures,
+                )
             self.env.step(10)
             self.sample(stage)
         if not settle_at_end:
@@ -200,7 +211,7 @@ class PhysicalReference:
             feedback = self.ctrl.command(
                 {**self.hold_targets, side: desired},
                 integrate_target=True,
-                postures={side: posture} if posture is not None else None,
+                postures={**self.hold_postures, **({side: posture} if posture is not None else {})},
             )[side]
             self.sample(stage + "_refine")
             if feedback["position_error_m"] < 0.003 and feedback["rotation_error_rad"] < 0.04:
@@ -241,7 +252,7 @@ class PhysicalReference:
                 feedback = self.ctrl.command(
                     {**self.hold_targets, side: [*intermediate, *orientation]},
                     integrate_target=True,
-                    postures={side: solution},
+                    postures={**self.hold_postures, side: solution},
                     twists={side: [*velocity, 0.0, 0.0, 0.0]},
                 )[side]
                 self.sample(stage + "_tracking")

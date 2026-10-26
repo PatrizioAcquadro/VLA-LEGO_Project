@@ -432,6 +432,7 @@ def main() -> None:
                     reference.admit_stabilizer_clearance(stabilizer_side)
                     _, joint_ids, _ = reference.ctrl.frames[stabilizer_side]
                     selected = None
+                    selected_cost = math.inf
                     failures = []
                     preferred_sign = -1 if stabilizer_side == "left" else 1
                     angles = (
@@ -484,7 +485,9 @@ def main() -> None:
                                 candidate, env.target.new_tensor([0.0, 1, 0])
                             ).tolist()
                             gap = projected_gap(yaw_deg)
-                            if gap > 0.070:
+                            # Preserve the existing 3 mm TCP tracking allowance
+                            # on either side of the open 70 mm jaw aperture.
+                            if gap + 0.006 > 0.070:
                                 continue
                             pose = [v - reach * d for v, d in zip(lower, finger, strict=True)]
                             # The 40 mm distal pads need clearance below the next piece.
@@ -504,6 +507,12 @@ def main() -> None:
                                     seed = reference.solvers[stabilizer_side].solve(
                                         env.target.new_tensor([*xyz, *rotation]), seed
                                     )
+                                # A pose admitted exactly at several stops can drift under
+                                # load. Rank feasible grasps by available joint travel;
+                                # this changes teacher choice, never physical acceptance.
+                                bounds = reference.solvers[stabilizer_side].bounds
+                                travel = (seed - bounds[:, 0]) / (bounds[:, 1] - bounds[:, 0])
+                                grasp_cost = float(-(travel * (1 - travel) + 1e-6).log().sum())
                                 phase = "retract"
                                 upper = env.task_truth(indices[cooperative_level])
                                 upper_projection = [
@@ -565,8 +574,17 @@ def main() -> None:
                                         continue
                                 if retreat is None:
                                     raise RuntimeError("No collision-free withdrawal orientation")
-                                selected = path, orientation, pose, gap, retreat, clear_z, retract
-                                break
+                                if grasp_cost < selected_cost:
+                                    selected_cost = grasp_cost
+                                    selected = (
+                                        path,
+                                        orientation,
+                                        pose,
+                                        gap,
+                                        retreat,
+                                        clear_z,
+                                        retract,
+                                    )
                             except RuntimeError as error:
                                 failures.append(
                                     {
@@ -576,8 +594,6 @@ def main() -> None:
                                         "reason": str(error),
                                     }
                                 )
-                        if selected is not None:
-                            break
                     report["stabilizer_planning_failures"] = failures
                     if selected is None:
                         raise RuntimeError(
@@ -592,6 +608,7 @@ def main() -> None:
                         stabilizer_clear_z,
                         withdraw,
                     ) = selected
+                    report["stabilizer_grasp_joint_travel_cost"] = selected_cost
                 for name, xyz in approach:
                     reference.move(
                         f"stabilizer_{name}",
@@ -608,6 +625,10 @@ def main() -> None:
                 if pilot_case:
                     reference.hold_targets[stabilizer_side] = reference.ctrl.pose(stabilizer_side)[
                         0
+                    ].tolist()
+                    _, holding_ids, _ = reference.ctrl.frames[stabilizer_side]
+                    reference.hold_postures[stabilizer_side] = env.robot.data.joint_pos.torch[
+                        0, holding_ids
                     ].tolist()
                 for closure in range(18):
                     reference.grip(
@@ -628,6 +649,9 @@ def main() -> None:
                     # Freeze the acquired physical grasp instead of creeping toward a nominal pose.
                     reference.hold_targets[stabilizer_side] = reference.ctrl.pose(stabilizer_side)[
                         0
+                    ].tolist()
+                    reference.hold_postures[stabilizer_side] = env.robot.data.joint_pos.torch[
+                        0, holding_ids
                     ].tolist()
                     jaw = env.robot.data.joint_names.index(f"{stabilizer_side}_WSG32_JAW_OPENING")
                     stabilizer_grip_floor = float(env.robot.data.joint_pos_limits.torch[0, jaw, 0])
@@ -923,6 +947,7 @@ def main() -> None:
                     if stabilizer_withdraw is None:
                         raise RuntimeError("Missing physical stabilizer setup.")
                     reference.hold_targets.pop(stabilizer_side, None)
+                    reference.hold_postures.pop(stabilizer_side, None)
                     reference.grip("stabilizer_release", stabilizer_side, None)
                     reference.move(
                         "stabilizer_retract",
