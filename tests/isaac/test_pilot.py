@@ -63,7 +63,12 @@ def test_stage_and_error_mask_are_separate_from_policy_signals(tmp_path):
     annotation = json.loads((tmp_path / "episode/annotations.jsonl").read_text())
     assert not {"stage", "positive_imitation", "hidden"} & frame.keys()
     assert frame["action"] == [0.1]
-    assert annotation == {"frame": 0, "stage": "level3_wrong_pick", "positive_imitation": False}
+    assert annotation == {
+        "frame": 0,
+        "stage": "level3_wrong_pick",
+        "positive_imitation": False,
+        "action_source": "teacher",
+    }
 
 
 def test_recovery_cannot_be_admitted_without_a_physical_fault(tmp_path):

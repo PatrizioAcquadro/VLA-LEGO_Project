@@ -9,6 +9,49 @@ from pathlib import Path
 from vla_lego.pretrained.rgb_video import RGBVideoWriter
 
 
+def verify_policy_correction(directory: Path, metadata: dict) -> None:
+    """Actual recorded command/mask boundaries, not a policy-origin declaration."""
+    source = metadata.get("correction_source", {})
+    if (
+        metadata.get("fault_origin") != "policy"
+        or metadata.get("teacher_induced_fault") is not False
+        or metadata["split"] != "train"
+        or source.get("mode") != "in_place_policy_window_v1"
+        or not source.get("physically_verified")
+        or source.get("object_state_writes", True)
+        or source.get("teacher_commands_during_policy_window", True)
+        or source.get("autonomous_from_start", True)
+        or not source.get("conditional_start")
+    ):
+        raise ValueError("Policy-origin metadata lacks a real in-place conditional intervention")
+    start, end = source["start_frame"], source["end_frame"]
+    if not 0 < start < end < metadata["frames"]:
+        raise ValueError(
+            "A policy correction needs preceding context and subsequent teacher actions"
+        )
+    rows = [json.loads(line) for line in (directory / "annotations.jsonl").open()]
+    window = rows[start:end]
+    if (
+        len(rows) != metadata["frames"]
+        or source["executed_motor_commands"] != len(window)
+        or [row["frame"] for row in window] != list(range(start, end))
+        or any(row.get("action_source") != "policy" or row["positive_imitation"] for row in window)
+        or any(row.get("action_source") == "policy" for row in rows[:start] + rows[end:])
+        or not any(row["positive_imitation"] for row in rows[end:])
+    ):
+        raise ValueError("Policy correction command origins and imitation masks differ")
+    commands = [
+        json.loads(line)
+        for line in (directory.parent / "policy-window.jsonl").open()
+        if line.strip()
+    ]
+    applied = [row for row in commands if row["applied"]]
+    if [row["frame"] for row in applied] != list(range(start, end)) or any(
+        row["decision"] != "continue" for row in applied
+    ):
+        raise ValueError("Policy correction lacks the actual applied prediction stream")
+
+
 class EpisodeRecorder:
     """Stream images and rows; accept positive labels only after verified completion."""
 
@@ -47,6 +90,8 @@ class EpisodeRecorder:
         self.annotations = (directory / "annotations.jsonl").open("w")
         self.stage = "initial_context"
         self.positive_imitation = True
+        self.action_source = "teacher"
+        self.policy_frames = 0
         self.instruction = instruction
         self.family, self.split = family, split
         self.correction_source = correction_source
@@ -58,6 +103,7 @@ class EpisodeRecorder:
         self.png_compress_level = png_compress_level
         self.min_free_bytes = min_free_bytes
         self.fault_verified = False
+        self.fault_origin = "teacher"
         self.task_decision = "continue"
         self.count = 0
         self.closed = False
@@ -80,6 +126,10 @@ class EpisodeRecorder:
 
         if self.closed:
             raise RuntimeError("Cannot append to a closed episode.")
+        if self.action_source not in ("teacher", "policy") or (
+            self.action_source == "policy" and self.positive_imitation
+        ):
+            raise ValueError("Unverified policy-window actions cannot be positive teacher targets")
         if self.count % 20 == 0 and shutil.disk_usage(self.directory).free < self.min_free_bytes:
             raise OSError("Insufficient free space for the campaign's bounded recording staging")
         state_names = tuple(observation["joint_names"])
@@ -143,15 +193,44 @@ class EpisodeRecorder:
                     "frame": self.count,
                     "stage": self.stage,
                     "positive_imitation": self.positive_imitation,
+                    "action_source": self.action_source,
                 }
             )
             + "\n"
         )
+        if self.action_source == "policy":
+            self.policy_frames += 1
         self.count += 1
         if self.count % 20 == 0:
             self.frames.flush()
             self.evidence.flush()
             self.annotations.flush()
+
+    def admit_policy_intervention(self, source: dict) -> None:
+        """Admit an in-place observed error; it is not an exact replay or teacher fault."""
+        start, end = source["start_frame"], source["end_frame"]
+        if (
+            source.get("mode") != "in_place_policy_window_v1"
+            or self.split != "train"
+            or self.collection_case is None
+            or self.collection_case.get("correction_origin") != "policy"
+            or start < 1
+            or end != self.count
+            or end - start != self.policy_frames
+            or self.policy_frames != source["executed_motor_commands"]
+            or self.policy_frames < 1
+            or source["teacher_prefix_frames"] != start
+            or not source["physically_verified"]
+            or source["policy"]["execution_horizon"] != 10
+            or not source["policy"]["jaw_overlap"]
+            or not source["policy"]["checkpoint"]
+        ):
+            raise ValueError(
+                "Policy correction lacks actual masked in-place commands and error evidence"
+            )
+        self.correction_source = source
+        self.fault_verified = True
+        self.fault_origin = "policy"
 
     def finish(self, *, verified_success: bool, reason: str, verified_stop: bool = False) -> None:
         if self.closed:
@@ -165,6 +244,19 @@ class EpisodeRecorder:
             and not self.fault_verified
         ):
             raise ValueError("A corrective case requires a physically verified fault.")
+        if (
+            verified_success
+            and self.collection_case is not None
+            and self.collection_case.get("correction_origin") == "policy"
+            and (
+                self.fault_origin != "policy"
+                or self.correction_source is None
+                or self.policy_frames < 1
+            )
+        ):
+            raise ValueError(
+                "A policy-origin case cannot be completed with an induced teacher fault"
+            )
         self.frames.close()
         self.evidence.close()
         self.annotations.close()
@@ -206,7 +298,10 @@ class EpisodeRecorder:
             metadata["correction_source"] = self.correction_source
         if self.collection_case is not None:
             metadata["collection_case"] = self.collection_case
-            metadata["teacher_induced_fault"] = self.fault_verified
+            metadata["teacher_induced_fault"] = (
+                self.fault_verified and self.fault_origin == "teacher"
+            )
+            metadata["fault_origin"] = self.fault_origin if self.fault_verified else None
         if self.video is not None:
             metadata.update(
                 image_storage="ffv1_bgr0_lossless",

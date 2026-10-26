@@ -33,6 +33,14 @@ def blend_jaw_overlap(actions: Tensor, previous: Tensor | None, horizon: int) ->
     return served
 
 
+def instruction_token_count(policy, instruction):
+    tokenizer = policy.model.vlm_with_expert.processor.tokenizer
+    count = len(tokenizer(instruction + "\n", truncation=False)["input_ids"])
+    if count > policy.config.tokenizer_max_length:
+        raise ValueError("The complete instruction would be truncated by this checkpoint")
+    return count
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", type=Path, required=True)
@@ -181,11 +189,28 @@ def main() -> None:
                 if request.get("prepare"):
                     # Long physical recovery prefixes keep the transport alive;
                     # this message never enters model observations or inference.
-                    send_message(connection, {"ready": True})
+                    tokens = (
+                        instruction_token_count(policy, request["instruction"])
+                        if "instruction" in request
+                        else None
+                    )
+                    send_message(
+                        connection,
+                        {
+                            "ready": True,
+                            "checkpoint": str(args.checkpoint),
+                            "execution_horizon": horizon,
+                            "jaw_overlap": args.jaw_overlap,
+                            "seed": args.seed,
+                            "tokenizer_max_length": policy.config.tokenizer_max_length,
+                            "full_instruction_tokens": tokens,
+                        },
+                    )
                     continue
                 state = np.asarray(request["state"], dtype=np.float32)
                 if instruction is None:
                     instruction = request["instruction"]
+                    instruction_token_count(policy, instruction)
                 elif request["instruction"] != instruction:
                     raise ValueError("A new instruction requires a fresh temporal episode")
                 arm_anchor = state[:14].copy()

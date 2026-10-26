@@ -41,6 +41,21 @@ def admitted_entries(root: Path) -> list[dict]:
     for entry in entries:
         if family_partitions.setdefault(entry["family"], entry["partition"]) != entry["partition"]:
             raise ValueError("A generation family crosses learning partitions")
+    from vla_lego.isaac.recording import verify_policy_correction
+
+    policy_corrections = 0
+    for entry in entries:
+        if (entry["partition"], entry["category"]) != ("train", "recovery"):
+            continue
+        directory = (root / entry["recording"]).resolve()
+        if not directory.is_relative_to(root.resolve()):
+            raise ValueError("Correction source escapes the admitted corpus")
+        metadata = json.loads((directory / "episode.json").read_text())
+        if metadata["collection_case"].get("correction_origin") == "policy":
+            verify_policy_correction(directory, metadata)
+            policy_corrections += 1
+    if policy_corrections < 30:
+        raise ValueError("Learning requires30 actual new TRAIN policy-state corrections")
     return list(entries)
 
 

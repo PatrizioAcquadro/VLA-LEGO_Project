@@ -48,3 +48,29 @@ def test_full_task_training_requires_actual_unassisted_control_evidence(tmp_path
         require_control_gate(tmp_path, checkpoint)
     with pytest.raises(ValueError, match="resume"):
         require_control_gate(tmp_path, None)
+
+
+def test_complete_episode_counts_cannot_replace_actual_policy_state_corrections(tmp_path):
+    from vla_lego.isaac.campaign import EXPECTED
+    from vla_lego.pretrained.campaign_data import admitted_entries
+
+    recording = tmp_path / "recording"
+    recording.mkdir()
+    (recording / "episode.json").write_text(
+        json.dumps({"collection_case": {"correction_origin": "teacher"}})
+    )
+    entries = [
+        {
+            "case": f"{partition}-{category}-{i}",
+            "family": f"{partition}-{category}-{i}",
+            "partition": partition,
+            "category": category,
+            "admitted": True,
+            "recording": "recording",
+        }
+        for (partition, category), count in EXPECTED.items()
+        for i in range(count)
+    ]
+    (tmp_path / "admitted-episodes.json").write_text(json.dumps({"episodes": entries}))
+    with pytest.raises(ValueError, match="30 actual"):
+        admitted_entries(tmp_path)

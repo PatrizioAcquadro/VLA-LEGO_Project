@@ -29,6 +29,9 @@ def main() -> None:
     parser.add_argument("--policy-source-run", type=Path)
     parser.add_argument("--policy-prefix-ticks", type=int)
     parser.add_argument("--preserve-first-placement", action="store_true")
+    parser.add_argument("--policy-socket", type=Path)
+    parser.add_argument("--policy-reference", type=Path)
+    parser.add_argument("--policy-window-ticks", type=int, default=1800)
     parser.add_argument(
         "--motion-measurement",
         choices=("pose_dwell", "solver_velocity", "pose_step_peaks"),
@@ -48,6 +51,15 @@ def main() -> None:
         parser.error("Own-policy corrections require a recorded training case")
     if args.preserve_first_placement and not args.policy_source_run:
         parser.error("Preserving a placement requires an actual training-policy prefix")
+    if bool(args.policy_socket) != bool(args.policy_reference) or args.policy_window_ticks < 1:
+        parser.error("An in-place policy window requires socket/reference and a positive budget")
+    if args.policy_socket and (
+        not args.campaign_cases
+        or not args.record
+        or args.split != "train"
+        or args.policy_source_run
+    ):
+        parser.error("In-place corrections require a separate recorded TRAIN campaign attempt")
     args.output_dir.mkdir(parents=True, exist_ok=False)
     report: dict = {
         "kind": "physical_tower_reference",
@@ -61,6 +73,7 @@ def main() -> None:
     app = None
     reference = None
     recorder = None
+    policy_intervention = None
     cooperation: list[dict] = []
     started = time.monotonic()
     try:
@@ -91,10 +104,14 @@ def main() -> None:
             pilot_case = next(c for c in load_campaign(args.campaign_cases) if c.name == args.case)
             paired_task = pilot_case.task()
             collection_condition = CONDITION
-            if pilot_case.row.get("correction_origin") == "policy":
+            if pilot_case.row.get("correction_origin") == "policy" and (
+                not args.policy_socket or pilot_case.row["mechanism"] != "interrupted_progress"
+            ):
                 raise ValueError(
-                    "Policy-origin campaign recovery requires a verified rollout handoff"
+                    "Policy-origin recovery needs its actual supported in-place mechanism"
                 )
+            if args.policy_socket and pilot_case.row.get("correction_origin") != "policy":
+                raise ValueError("In-place policy collection cannot relabel a teacher-origin case")
         if args.cases:
             from vla_lego.isaac.pilot import load_cases
 
@@ -194,6 +211,12 @@ def main() -> None:
             parked_start=bool(args.campaign_cases),
         )
         env.step(400)
+        if args.policy_socket:
+            from vla_lego.isaac.policy_continuation import PolicyIntervention
+
+            policy_intervention = PolicyIntervention(
+                args.policy_socket, args.policy_reference, task.instruction
+            )
         correction_source = None
         reference_orientations = None
         if args.policy_source_run:
@@ -270,6 +293,8 @@ def main() -> None:
 
         def sample_cooperation(stage: str, truth: list[dict]) -> None:
             assert reference is not None
+            if policy_intervention is not None:
+                policy_intervention.keepalive(env.time)
             evaluator.update(
                 env.time,
                 truth,
@@ -281,6 +306,7 @@ def main() -> None:
                 recorder.task_decision = "complete" if evaluator.result()["passed"] else "continue"
             if (
                 stabilizer_grip_floor is not None
+                and not (policy_intervention is not None and policy_intervention.active)
                 and stabilizer_side in reference.hold_targets
                 and not any(
                     evaluator._gripping(truth[i], stabilizer_side)
@@ -621,6 +647,26 @@ def main() -> None:
                     break
                 if level < start_level:
                     continue
+                if (
+                    policy_intervention is not None
+                    and pilot_case is not None
+                    and level == pilot_case.error_level + 1
+                    and "fault" not in report
+                ):
+                    assert recorder is not None
+                    report["fault"] = policy_intervention.interrupted_progress(
+                        reference,
+                        pilot_case,
+                        task,
+                        completed_levels=level,
+                        ticks=args.policy_window_ticks,
+                    )
+                    report["correction_source"] = recorder.correction_source
+                    start_level = report["fault"]["completed_levels"]
+                    bottom = TABLE_TOP + sum(t.dimensions_m[2] for t in task.targets[:start_level])
+                    verify_support(start_level - 1, "actual policy interruption")
+                    if level < start_level:
+                        continue
                 if level and pilot_case:
                     build_xy = tuple(env.task_truth(indices[0])["block_pose_w"][:2])
                 prefix = f"level{level}"
@@ -891,6 +937,7 @@ def main() -> None:
                     and pilot_case.category == "recovery"
                     and level == min(pilot_case.error_level, 3)
                     and pilot_case.row["mechanism"] == "interrupted_progress"
+                    and pilot_case.row.get("correction_origin") != "policy"
                 ):
                     from vla_lego.isaac.campaign_faults import interrupt_progress
 
@@ -933,6 +980,19 @@ def main() -> None:
         report.update(error=traceback.format_exc())
         raise
     finally:
+        if args.policy_socket:
+            window = args.output_dir / "policy-window.jsonl"
+            report["policy_window_predictions"] = (
+                sum(1 for _ in window.open()) if window.exists() else 0
+            )
+            report["policy_window_started"] = report["policy_window_predictions"] > 0
+            report["policy_executed_commands"] = 0 if recorder is None else recorder.policy_frames
+            report["autonomous_full_task_success"] = False
+        if policy_intervention is not None:
+            try:
+                policy_intervention.close()
+            except OSError:
+                pass
         if recorder is not None:
             recorder.finish(
                 verified_success=bool(report.get("passed"))

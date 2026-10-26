@@ -48,6 +48,12 @@ def main() -> int:
     parser.add_argument("--pilot-case")
     parser.add_argument("--pilot-split", choices=("train", "development"), default="development")
     parser.add_argument("--teacher-start-stage")
+    parser.add_argument("--campaign-cases", type=Path)
+    parser.add_argument("--campaign-case")
+    parser.add_argument("--campaign-partition", choices=("train", "calibration", "confirmation"))
+    parser.add_argument("--campaign-corpus", type=Path)
+    parser.add_argument("--decision-checkpoint", type=Path)
+    parser.add_argument("--collect-campaign-correction", action="store_true")
     parser.add_argument("--wall-seconds", type=int, default=3600)
     args = parser.parse_args()
     if args.task != "tower" and (args.mirror or args.missing_target is not None):
@@ -56,10 +62,37 @@ def main() -> int:
         args.pilot_case and args.task != "tower"
     ):
         parser.error("Recorded pilot evaluation requires --task tower, corpus and case")
+    if bool(args.campaign_cases) != bool(args.campaign_case) or bool(args.campaign_case) != bool(
+        args.campaign_partition
+    ):
+        parser.error("Campaign declaration, case and partition are required together")
+    if args.campaign_case and (
+        args.task != "tower" or args.pilot_case or args.mirror or args.missing_target is not None
+    ):
+        parser.error("Campaign evaluation uses the declared task with the tower scenario runner")
+    if args.campaign_corpus and not args.campaign_case:
+        parser.error("Campaign corpus requires a declared case")
+    if args.decision_checkpoint and not args.campaign_case:
+        parser.error("The separate learned head requires the campaign scenario runner")
+    if args.collect_campaign_correction and (
+        not args.campaign_case
+        or args.campaign_partition != "train"
+        or args.decision_checkpoint
+        or args.teacher_start_stage
+        or not args.jaw_overlap
+        or args.execution_horizon != 10
+    ):
+        parser.error(
+            "Correction collection requires the fixed TRAIN component and its ten-step jaw kernel"
+        )
     root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(root / "src"))
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=False)
     worker = client = None
+    weights = args.checkpoint.resolve()
+    if (weights / "pretrained_model").is_dir():
+        weights /= "pretrained_model"
     started = time.monotonic()
     report: dict = {
         "kind": "single_policy_probe",
@@ -68,6 +101,13 @@ def main() -> int:
         "availability": "setup_unavailable",
         "autonomy_started": False,
         "checkpoint": str(args.checkpoint.resolve()),
+        "weights": str(weights),
+        "decision_checkpoint": (
+            None if args.decision_checkpoint is None else str(args.decision_checkpoint.resolve())
+        ),
+        "campaign_case": args.campaign_case,
+        "campaign_partition": args.campaign_partition,
+        "collection_only": args.collect_campaign_correction,
         "ticks": args.ticks,
         "model_seed": args.seed,
         "task": args.task,
@@ -86,7 +126,7 @@ def main() -> int:
                 "-m",
                 "vla_lego.pretrained.worker",
                 "--checkpoint",
-                str(args.checkpoint.resolve()),
+                str(weights),
                 "--socket",
                 str(socket_path),
                 "--output-dir",
@@ -98,7 +138,9 @@ def main() -> int:
                 worker_command += ["--execution-horizon", str(args.execution_horizon)]
             if args.jaw_overlap:
                 worker_command += ["--jaw-overlap"]
-            if args.pilot_case:
+            if args.decision_checkpoint:
+                worker_command += ["--decision-checkpoint", str(args.decision_checkpoint.resolve())]
+            if args.pilot_case or args.campaign_case:
                 worker_command += ["--record-video"]
             with (
                 (output / "worker.log").open("w") as worker_log,
@@ -123,48 +165,105 @@ def main() -> int:
                     report["availability"] = "setup_unavailable"
                     raise RuntimeError("Policy did not become ready; inspect worker.log.")
                 print(json.dumps({"policy_ready": True, "output": str(output)}), flush=True)
-                client = subprocess.Popen(
-                    [
+                if args.collect_campaign_correction:
+                    from vla_lego.isaac.campaign import load_campaign
+
+                    case = next(
+                        case
+                        for case in load_campaign(args.campaign_cases)
+                        if case.name == args.campaign_case
+                    )
+                    client_command = [
                         "bash",
-                        str(root / "scripts" / "isaac-run.sh"),
+                        str(root / "scripts/isaac-run.sh"),
                         "-m",
-                        (
-                            "vla_lego.isaac.tower_rollout"
-                            if args.task == "tower"
-                            else "vla_lego.isaac.rollout"
-                        ),
-                        "--socket",
-                        str(socket_path),
+                        "vla_lego.isaac.tower_reference",
                         "--output-dir",
                         str(output / "rollout"),
                         "--cache-dir",
                         str(args.cache_dir.resolve()),
-                        "--ticks",
+                        "--campaign-cases",
+                        str(args.campaign_cases.resolve()),
+                        "--case",
+                        case.name,
+                        "--family",
+                        case.row["family"],
+                        "--split",
+                        "train",
+                        "--record",
+                        "--rgb-storage",
+                        "ffv1",
+                        "--event-settling",
+                        "--policy-socket",
+                        str(socket_path),
+                        "--policy-reference",
+                        str(weights),
+                        "--policy-window-ticks",
                         str(args.ticks),
                     ]
-                    + (["--mirror"] if args.mirror else [])
-                    + (
-                        ["--teacher-start-stage", args.teacher_start_stage]
-                        if args.teacher_start_stage
-                        else []
-                    )
-                    + (
-                        ["--missing-target", str(args.missing_target)]
-                        if args.missing_target is not None
-                        else []
-                    )
-                    + (
+                else:
+                    client_command = (
                         [
-                            "--pilot-corpus",
-                            str(args.pilot_corpus.resolve()),
-                            "--pilot-case",
-                            args.pilot_case,
-                            "--pilot-split",
-                            args.pilot_split,
+                            "bash",
+                            str(root / "scripts/isaac-run.sh"),
+                            "-m",
+                            (
+                                "vla_lego.isaac.tower_rollout"
+                                if args.task == "tower"
+                                else "vla_lego.isaac.rollout"
+                            ),
+                            "--socket",
+                            str(socket_path),
+                            "--output-dir",
+                            str(output / "rollout"),
+                            "--cache-dir",
+                            str(args.cache_dir.resolve()),
+                            "--ticks",
+                            str(args.ticks),
                         ]
-                        if args.pilot_case
-                        else []
-                    ),
+                        + (["--mirror"] if args.mirror else [])
+                        + (
+                            ["--teacher-start-stage", args.teacher_start_stage]
+                            if args.teacher_start_stage
+                            else []
+                        )
+                        + (
+                            ["--missing-target", str(args.missing_target)]
+                            if args.missing_target is not None
+                            else []
+                        )
+                        + (
+                            [
+                                "--pilot-corpus",
+                                str(args.pilot_corpus.resolve()),
+                                "--pilot-case",
+                                args.pilot_case,
+                                "--pilot-split",
+                                args.pilot_split,
+                            ]
+                            if args.pilot_case
+                            else []
+                        )
+                        + (
+                            [
+                                "--campaign-cases",
+                                str(args.campaign_cases.resolve()),
+                                "--campaign-case",
+                                args.campaign_case,
+                                "--campaign-partition",
+                                args.campaign_partition,
+                            ]
+                            if args.campaign_case
+                            else []
+                        )
+                        + (
+                            ["--campaign-corpus", str(args.campaign_corpus.resolve())]
+                            if args.campaign_corpus
+                            else []
+                        )
+                    )
+                client = subprocess.Popen(
+                    client_command,
                     cwd=root,
                     stdout=client_log,
                     stderr=subprocess.STDOUT,
@@ -176,9 +275,15 @@ def main() -> int:
                     result = json.loads(result_path.read_text())
                     report.update(
                         passed=result["passed"],
-                        autonomy_started=result.get("autonomy_started"),
+                        autonomy_started=(
+                            False
+                            if args.collect_campaign_correction
+                            else result.get("autonomy_started")
+                        ),
                         availability=(
-                            "started" if result.get("autonomy_started") else "setup_unavailable"
+                            "started"
+                            if result.get("autonomy_started") or result.get("policy_window_started")
+                            else "setup_unavailable"
                         ),
                         rollout_report=str(result_path),
                         case_passed=result.get("case_passed", result["passed"]),
