@@ -8,7 +8,19 @@ import pytest
 from vla_lego.isaac.assembly_planning import choose_build_site, pick_route
 from vla_lego.isaac.campaign import load_campaign
 from vla_lego.isaac.campaign_design import build_declaration
+from vla_lego.isaac.catalog import BlockSpec
 from vla_lego.isaac.environment import TABLE_TOP
+from vla_lego.isaac.stabilizer_planning import stabilized_level
+
+
+def test_stabilizer_braces_wider_support_beneath_a_tall_narrow_prism():
+    small = BlockSpec("cube", "small", "red")
+    large = BlockSpec("cube", "large", "yellow")
+    prism = BlockSpec("prism", "small", "yellow")
+    # The 54.4 mm prism can tip when gripped above its wider supporting cube.
+    task = SimpleNamespace(targets=(small, large, prism))
+    assert stabilized_level(task, 3) == 1
+    assert stabilized_level(SimpleNamespace(targets=(small, small, small)), 3) == 2
 
 
 def test_site_selection_checks_the_last_level_without_changing_scene_or_goal(tmp_path, monkeypatch):

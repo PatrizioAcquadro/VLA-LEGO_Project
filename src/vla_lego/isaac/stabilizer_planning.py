@@ -9,12 +9,10 @@ from vla_lego.isaac.evaluation import _corners
 
 
 def stabilized_level(task, cooperative_level):
-    """Keep short-layer pads away from a wider supporting piece."""
+    """Brace a broader supporting layer instead of tipping a narrower upper piece."""
     level = cooperative_level - 1
     while (
-        level > 0
-        and task.targets[level].dimensions_m[2] < 0.05
-        and task.targets[level - 1].dimensions_m[1] > task.targets[level].dimensions_m[1]
+        level > 0 and task.targets[level - 1].dimensions_m[1] > task.targets[level].dimensions_m[1]
     ):
         level -= 1
     return level
