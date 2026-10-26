@@ -6,6 +6,8 @@ After the new [500/120 corpus](data.md#expanded-alex003-campaign--october-26-202
 
 The total campaign ceiling is 100k motor updates including control and corrective reruns. Preserve optimizer/scheduler across allocation resumes, inspect behavior and development evidence, and stop extensions on stagnation or regression. A smaller current-versus-best physical panel governs intermediate decisions; the final comparison has 20 fixed confirmation cases. Training has not begun. Historical 15k remains only a component reference and the negative 30k outcome remains preserved.
 
+The new motor-only and decision computations passed one native A100 interface check with **zero optimizer updates**: 99,880,992 trainable motor parameters, finite 50-by-16 predictions, and a separate 962,755-parameter temporal head. Frozen RGB/language features remain exactly unchanged when the trainable motor state projector changes. All 1,195 declared original/counterfactual instructions fit the 96-token window (maximum 51). These are integration results, not a trained classifier or physical policy success. Feature preparation and balanced head sampling retain natural complete sequences for calibration; extraction and learning wait for the full admitted corpus.
+
 ## Repair after the negative pilot — October 25, 2026
 
 The completed 70k pilot remains a negative historical result. The new authorized repair campaign starts by isolating acquisition on familiar versus development scenes and the effect of feedback cadence. It does not resume the old run or change its checkpoint selection retrospectively.
