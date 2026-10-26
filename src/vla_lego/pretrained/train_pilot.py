@@ -132,8 +132,10 @@ def main() -> None:
         if args.campaign:
             interface.update(
                 motor_width=16,
-                task_decision_names=["continue", "complete", "abstain"],
+                task_decision_names=[],
+                task_decision_classes=["continue", "complete", "abstain"],
                 task_decision_module="separate_causal_temporal_classifier",
+                observation_normalization=statistics["observation.state"],
                 tokenizer_max_length=96,
             )
         model_path = str(args.resume / "pretrained_model") if args.resume else args.model

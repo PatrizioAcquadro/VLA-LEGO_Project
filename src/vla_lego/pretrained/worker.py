@@ -43,6 +43,7 @@ def main() -> None:
     parser.add_argument("--jaw-overlap", action="store_true")
     parser.add_argument("--legacy-absolute-interface", action="store_true")
     parser.add_argument("--record-video", action="store_true")
+    parser.add_argument("--decision-checkpoint", type=Path)
     args = parser.parse_args()
     if args.socket.exists():
         raise FileExistsError(args.socket)
@@ -90,6 +91,27 @@ def main() -> None:
         started = time.monotonic()
         policy = SmolVLAPolicy.from_pretrained(args.checkpoint).to("cuda").eval()
         decision_names = interface.get("task_decision_names", [])
+        separate_decisions = interface.get("task_decision_module") == (
+            "separate_causal_temporal_classifier"
+        )
+        decision_runtime = None
+        if separate_decisions:
+            from vla_lego.pretrained.decision_runtime import TemporalDecisionRuntime
+            from vla_lego.pretrained.task_decisions import CLASSES
+
+            if (
+                decision_names
+                or interface.get("task_decision_classes") != list(CLASSES)
+                or args.decision_checkpoint is None
+            ):
+                raise ValueError(
+                    "Motor-only campaign checkpoints require their separate learned head"
+                )
+            decision_runtime = TemporalDecisionRuntime(
+                args.decision_checkpoint, interface["observation_normalization"]
+            )
+        elif args.decision_checkpoint is not None:
+            raise ValueError("A separate head requires the declared motor-only campaign interface")
         action_width = 16 + len(decision_names)
         if tuple(policy.config.output_features["action"].shape) != (action_width,):
             raise ValueError("Checkpoint action width differs from its declared interface.")
@@ -106,6 +128,8 @@ def main() -> None:
         )
         if not 1 <= horizon <= policy.config.chunk_size:
             raise ValueError("Execution horizon must fit the learned prediction chunk.")
+        if separate_decisions and horizon != 10:
+            raise ValueError("This calibrated temporal head observes the policy at2Hz")
         report.update(
             load_seconds=time.monotonic() - started,
             device=torch.cuda.get_device_name(),
@@ -120,6 +144,7 @@ def main() -> None:
             jaw_overlap=args.jaw_overlap,
             input_keys=["observation.state", "observation.images.head", "task"],
             inference_seconds=[],
+            decision_evidence=None if decision_runtime is None else decision_runtime.evidence,
         )
         if args.record_video:
             import av
@@ -146,6 +171,7 @@ def main() -> None:
         print(json.dumps({"ready": True, "socket": str(args.socket)}), flush=True)
         connection, _ = listener.accept()
         previous_actions = None
+        instruction = None
         with connection:
             connection.settimeout(120)
             while True:
@@ -158,6 +184,10 @@ def main() -> None:
                     send_message(connection, {"ready": True})
                     continue
                 state = np.asarray(request["state"], dtype=np.float32)
+                if instruction is None:
+                    instruction = request["instruction"]
+                elif request["instruction"] != instruction:
+                    raise ValueError("A new instruction requires a fresh temporal episode")
                 arm_anchor = state[:14].copy()
                 if request["state_names"] != interface.get(
                     "position_names", interface["state_names"]
@@ -198,6 +228,14 @@ def main() -> None:
                 torch.cuda.synchronize()
                 started = time.monotonic()
                 with torch.inference_mode():
+                    learned_decision = None
+                    if decision_runtime is not None:
+                        from vla_lego.pretrained.task_decisions import frozen_observation_features
+
+                        learned_decision = decision_runtime.update(
+                            request["observation_time_s"],
+                            frozen_observation_features(policy, batch),
+                        )
                     predictions = policy.predict_action_chunk(batch)
                     actions = predictions if args.jaw_overlap else predictions[:, :horizon]
                     actions = postprocessor(actions)
@@ -225,6 +263,7 @@ def main() -> None:
                             else interface["action_representation"]
                         ),
                         "task_decision_names": decision_names,
+                        "task_decision": learned_decision,
                     },
                 )
         report.update(passed=True, peak_allocated_gib=torch.cuda.max_memory_allocated() / 1024**3)

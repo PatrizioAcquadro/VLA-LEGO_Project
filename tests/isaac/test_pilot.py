@@ -209,3 +209,35 @@ def test_tower_policy_replay_uses_applied_commands_and_rejects_teacher_initializ
     (tmp_path / "report.json").write_text(json.dumps(metadata))
     with pytest.raises(ValueError, match="autonomous-from-start"):
         replay_prefix(Environment(), tmp_path, 1)
+
+
+def test_new_recovery_handoff_requires_the_actual_drop_or_supported_partial_tower():
+    from copy import deepcopy
+
+    from vla_lego.isaac.environment import TABLE_TOP
+    from vla_lego.isaac.pilot_scenario import recovered_fault_is_present
+
+    task = PilotCase(case_row(), 0).task()
+    states = [
+        {
+            "block_pose_w": [*p.xy_m, TABLE_TOP + p.spec.dimensions_m[2] / 2, 0, 0, 0, 1],
+            "robot_contact_force_n": 0.0,
+            "nonrobot_contact_force_n": 0.3,
+            "block_contact_forces_n": [[0.0] * 3 for _ in task.placements],
+        }
+        for p in task.placements
+    ]
+    drop = {"fault": {"type": "slip_drop", "target_level": 1, "fall_m": 0.1}}
+    assert recovered_fault_is_present(task, drop, states)
+    held = deepcopy(states)
+    held[0]["robot_contact_force_n"] = 0.5
+    assert not recovered_fault_is_present(task, drop, held)
+    interrupted = {"fault": {"type": "interrupted_progress", "completed_levels": 2}}
+    assert not recovered_fault_is_present(task, interrupted, states)
+    first = next(i for i, p in enumerate(task.placements) if p.spec == task.targets[0])
+    second = next(i for i, p in enumerate(task.placements) if p.spec == task.targets[1])
+    states[second]["block_pose_w"][2] += task.targets[0].dimensions_m[2]
+    states[second]["block_contact_forces_n"][first][2] = 0.3
+    assert recovered_fault_is_present(task, interrupted, states)
+    states[second]["block_contact_forces_n"][first][2] = 0
+    assert not recovered_fault_is_present(task, interrupted, states)

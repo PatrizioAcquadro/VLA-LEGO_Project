@@ -63,6 +63,54 @@ def recovered_fault_is_present(task: TowerTask, report: dict, truth: list[dict])
 
     fault = report["fault"]
     kind = fault["type"]
+    if kind == "slip_drop":
+        level = fault["target_level"] - 1
+        index = next(i for i, p in enumerate(task.placements) if p.spec == task.targets[level])
+        state = truth[index]
+        return bool(
+            fault["fall_m"] >= 0.07
+            and abs(
+                state["block_pose_w"][2]
+                - TABLE_TOP
+                - task.placements[index].spec.dimensions_m[2] / 2
+            )
+            < 0.01
+            and state["robot_contact_force_n"] < 1e-6
+            and state["nonrobot_contact_force_n"] > 1e-6
+        )
+    if kind == "interrupted_progress":
+        completed = fault["completed_levels"]
+        if not 1 <= completed < len(task.targets):
+            return False
+        bottom = TABLE_TOP
+        previous = None
+        for target in task.targets[:completed]:
+            index = next(i for i, p in enumerate(task.placements) if p.spec == target)
+            state = truth[index]
+            support = (
+                state["nonrobot_contact_force_n"]
+                if previous is None
+                else state["block_contact_forces_n"][previous][2]
+            )
+            if (
+                abs(state["block_pose_w"][2] - bottom - target.dimensions_m[2] / 2) >= 0.003
+                or state["robot_contact_force_n"] >= 1e-6
+                or support <= 1e-6
+            ):
+                return False
+            bottom += target.dimensions_m[2]
+            previous = index
+        next_index = next(
+            i for i, p in enumerate(task.placements) if p.spec == task.targets[completed]
+        )
+        return bool(
+            abs(
+                truth[next_index]["block_pose_w"][2]
+                - TABLE_TOP
+                - task.targets[completed].dimensions_m[2] / 2
+            )
+            < 0.01
+        )
     if kind in ("missed grasp", "wrong distractor picked"):
         index = fault["object_index"]
         state = truth[index]
@@ -180,4 +228,7 @@ def replay_recovery(
             )
         ),
         "recovery_fault_present": fault_present,
+        "teacher_commands_in_prefix": True,
+        "conditional_diagnostic": True,
+        "autonomous_from_start": False,
     }
