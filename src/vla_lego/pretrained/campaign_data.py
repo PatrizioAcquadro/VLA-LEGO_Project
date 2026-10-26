@@ -50,6 +50,7 @@ class CampaignData(Dataset[dict]):
             ):
                 raise ValueError("A generation family crosses learning partitions")
         self.seed, self.draws, self.partition = seed, draws, partition
+        self.action_representation = "observation_arm_offset"
         self.episodes: list[PilotEpisode] = []
         self.entries: list[dict] = []
         self.pools: list[dict[str, list[int]]] = []
@@ -88,6 +89,14 @@ class CampaignData(Dataset[dict]):
             self.episodes.append(episode)
             self.entries.append(entry)
             self.pools.append(dict(pools))
+
+    @property
+    def families(self):
+        return {entry["family"] for entry in self.entries}
+
+    @property
+    def sampling_description(self):
+        return self.protocol["sampling"]
 
     @property
     def protocol(self):

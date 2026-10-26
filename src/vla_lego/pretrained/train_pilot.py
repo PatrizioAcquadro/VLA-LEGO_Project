@@ -48,12 +48,15 @@ def main() -> None:
     parser.add_argument("--model", default="lerobot/smolvla_base")
     parser.add_argument("--seed", type=int, default=20261024)
     parser.add_argument("--resume", type=Path)
+    parser.add_argument("--campaign", action="store_true")
     parser.add_argument(
         "--action-representation",
         choices=("absolute", "observation_arm_offset"),
         default="absolute",
     )
     args = parser.parse_args()
+    if args.campaign:
+        args.action_representation = "observation_arm_offset"
     if args.microbatch < 1 or 64 % args.microbatch or not 0 < args.until_step <= args.maximum_step:
         parser.error("Microbatch must divide 64; allocation endpoint must fit the global schedule")
     if args.resume:
@@ -87,15 +90,31 @@ def main() -> None:
         random.seed(args.seed)
         np.random.seed(args.seed)
         torch.manual_seed(args.seed)
-        training = PilotTrainingData(
-            args.corpus, "train", seed=args.seed, action_representation=args.action_representation
-        )
-        development = PilotTrainingData(
-            args.corpus,
-            "development",
-            seed=args.seed + 1,
-            action_representation=args.action_representation,
-        )
+        training: Any
+        development: Any
+        if args.campaign:
+            from vla_lego.pretrained.campaign_data import CampaignData
+            from vla_lego.pretrained.campaign_learning import require_control_gate
+
+            training = CampaignData(args.corpus, "train", seed=args.seed)
+            development = CampaignData(args.corpus, "calibration", seed=args.seed + 1)
+            if args.maximum_step > 100_000:
+                raise ValueError("The expanded campaign has a100k total motor ceiling")
+            if args.until_step > 20_000:
+                require_control_gate(args.output, args.resume)
+        else:
+            training = PilotTrainingData(
+                args.corpus,
+                "train",
+                seed=args.seed,
+                action_representation=args.action_representation,
+            )
+            development = PilotTrainingData(
+                args.corpus,
+                "development",
+                seed=args.seed + 1,
+                action_representation=args.action_representation,
+            )
         if training.families & development.families:
             raise ValueError("Training and development families overlap")
         data_protocol = {"train": training.protocol, "development": development.protocol}
@@ -110,8 +129,17 @@ def main() -> None:
             )
         interface = json.loads((args.corpus / "alex_interface.json").read_text())
         interface["action_representation"] = args.action_representation
+        if args.campaign:
+            interface.update(
+                motor_width=16,
+                task_decision_names=["continue", "complete", "abstain"],
+                task_decision_module="separate_causal_temporal_classifier",
+                tokenizer_max_length=96,
+            )
         model_path = str(args.resume / "pretrained_model") if args.resume else args.model
-        policy, pre, post = load_policy(model_path, statistics, resume=bool(args.resume))
+        policy, pre, post = load_policy(
+            model_path, statistics, resume=bool(args.resume), motor_only=args.campaign
+        )
         trainable = [p for p in policy.parameters() if p.requires_grad]
         count = sum(p.numel() for p in trainable)
         if not 80_000_000 < count < 130_000_000:
@@ -133,11 +161,14 @@ def main() -> None:
             if state["interface"] != interface or state["statistics"] != statistics:
                 raise ValueError("Resume would change action semantics or normalization")
             if state.get("data_protocol", data_protocol) != data_protocol or (
-                training.cohort is not None and "data_protocol" not in state
+                getattr(training, "cohort", None) is not None and "data_protocol" not in state
             ):
                 raise ValueError("Resume would change declared cohort membership or sampling")
+            protocol = (
+                "campaign-motor-only-v1" if args.campaign else "startup-first-block-and-phase-v2"
+            )
             if any(
-                row["development"].get("diagnostic_protocol") != "startup-first-block-and-phase-v2"
+                row["development"].get("diagnostic_protocol") != protocol
                 for row in state["history"]
             ):
                 raise ValueError(
@@ -157,7 +188,7 @@ def main() -> None:
                 sampling=training.sampling_description,
                 data_protocol=data_protocol,
                 initialization=args.model,
-                decision_loss_weight=0.25,
+                decision_loss_weight=0 if args.campaign else 0.25,
                 batch_size=64,
                 microbatch=args.microbatch,
                 statistics=statistics,
@@ -168,7 +199,16 @@ def main() -> None:
         def evaluate_and_save():
             report = {"step": state["step"]}
             for name, dataset in (("train", training), ("development", development)):
-                result = diagnostics(
+                diagnose = diagnostics
+                options = {}
+                if args.campaign:
+                    from vla_lego.pretrained.campaign_learning import (
+                        diagnostics as motor_diagnostics,
+                    )
+
+                    diagnose = motor_diagnostics
+                    options["single_only"] = state["step"] <= 20_000
+                result = diagnose(
                     policy,
                     pre,
                     post,
@@ -176,6 +216,7 @@ def main() -> None:
                     statistics,
                     batch_size=args.microbatch,
                     seed=args.seed + 100,
+                    **options,
                 )
                 write_json(args.output / "diagnostics" / f"{state['step']:06d}-{name}.json", result)
                 report[name] = {k: v for k, v in result.items() if k != "details"}
@@ -188,7 +229,14 @@ def main() -> None:
                 ),
                 None,
             )
-            if better_candidate(report["development"], previous):
+            select_candidate = better_candidate
+            if args.campaign:
+                from vla_lego.pretrained.campaign_learning import better_motor_candidate
+
+                select_candidate = better_motor_candidate
+                if previous and previous["single_only"] != report["development"]["single_only"]:
+                    previous = None
+            if select_candidate(report["development"], previous):
                 state["best_step"] = state["step"]
             checkpoint = args.output / "checkpoints" / f"{state['step']:06d}"
             save_checkpoint(policy, pre, post, optimizer, scheduler, checkpoint, state)
@@ -254,15 +302,15 @@ def main() -> None:
                     progress.write(json.dumps(record) + "\n")
                     progress.flush()
                     write_json(args.output / "status.json", {**state, "last_progress": record})
-                due = state["step"] % 1_000 == 0
+                due = state["step"] % (5_000 if args.campaign else 1_000) == 0
                 if due or stop_requested or state["step"] == args.until_step:
                     evaluate_and_save()
                 reason = None
                 if state["step"] == args.maximum_step:
                     reason = "maximum_updates"
-                elif due and persistent_deterioration(state["history"]):
+                elif not args.campaign and due and persistent_deterioration(state["history"]):
                     reason = "persistent_development_deterioration"
-                elif state["step"] % 10_000 == 0:
+                elif not args.campaign and state["step"] % 10_000 == 0:
                     reason = stopping_reason(state["history"])
                 if reason:
                     state.update(status="training_complete", stopping_reason=reason)

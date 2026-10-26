@@ -5,7 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 
-def load_policy(model_path: str, statistics: dict, *, resume: bool = False):
+def load_policy(
+    model_path: str,
+    statistics: dict,
+    *,
+    resume: bool = False,
+    motor_only: bool = False,
+):
     import torch
     from lerobot.configs import FeatureType, PolicyFeature
     from lerobot.policies.factory import make_pre_post_processors
@@ -21,7 +27,11 @@ def load_policy(model_path: str, statistics: dict, *, resume: bool = False):
         "observation.state": PolicyFeature(FeatureType.STATE, (32,)),
         "observation.images.head": PolicyFeature(FeatureType.VISUAL, (3, 600, 960)),
     }
-    config.output_features = {"action": PolicyFeature(FeatureType.ACTION, (18,))}
+    config.output_features = {
+        "action": PolicyFeature(FeatureType.ACTION, (16 if motor_only else 18,))
+    }
+    if motor_only:
+        config.tokenizer_max_length = 96
     config.n_action_steps = 10
     config.freeze_vision_encoder = True
     config.train_expert_only = True
@@ -48,6 +58,9 @@ def masked_loss(policy, batch, *, noise=None, time=None):
     from lerobot.utils.constants import OBS_LANGUAGE_ATTENTION_MASK, OBS_LANGUAGE_TOKENS
 
     images, image_masks = policy.prepare_images(batch)
+    width = batch["action"].shape[-1]
+    if width not in (16, 18):
+        raise ValueError("Expected16 motors, optionally followed by two legacy decisions")
     losses = policy.model.forward(
         images,
         image_masks,
@@ -57,11 +70,15 @@ def masked_loss(policy, batch, *, noise=None, time=None):
         policy.prepare_action(batch),
         noise=noise,
         time=time,
-    )[:, :, :18]
+    )[:, :, :width]
     valid = (~batch["action_is_pad"]).to(losses.dtype)
     denominator = valid.sum(1).clamp_min(1)
     motor = (losses[:, :, :16].mean(-1) * valid).sum(1) / denominator
-    decision = (losses[:, :, 16:18].mean(-1) * valid).sum(1) / denominator
+    decision = (
+        (losses[:, :, 16:18].mean(-1) * valid).sum(1) / denominator
+        if width == 18
+        else torch.zeros_like(motor)
+    )
     loss = motor.mean() + 0.25 * decision.mean()
     if not torch.isfinite(loss):
         raise FloatingPointError("Non-finite masked pilot loss")
