@@ -216,7 +216,19 @@ class TowerEvaluator:
                         key = (assignment, lower_level, upper_level, stabilizer)
                         active = self._gripping(lower, stabilizer) and self._gripping(upper, placer)
                         if not active:
-                            self.coordination.pop(key, None)
+                            # An unloaded jaw can lose contact while its partner keeps control.
+                            retained = all(
+                                sum(
+                                    _norm(state["robot_contact_forces_n"][i])
+                                    for i in self.jaws[hand]
+                                )
+                                > 0.5
+                                for state, hand in ((lower, stabilizer), (upper, placer))
+                            )
+                            if retained and key in self.coordination:
+                                self.coordination[key]["contact_start"] = None
+                            else:
+                                self.coordination.pop(key, None)
                             continue
                         progress = self.coordination.setdefault(
                             key, {"approach": False, "contact_start": None}

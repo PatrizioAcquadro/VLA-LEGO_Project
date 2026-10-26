@@ -160,6 +160,35 @@ def test_grabbing_an_already_supported_upper_piece_is_not_a_placement():
     assert not result["passed"]
 
 
+@pytest.mark.parametrize("retained_force,expected", [(1.6, True), (0.0, False), (0.4, False)])
+def test_unilateral_load_retains_approach_but_never_counts_as_bilateral_dwell(
+    retained_force, expected
+):
+    task = initial_tower_task()
+    scorer = TowerEvaluator(task, PATHS)
+    scorer.update(0, states(task))
+    approach = states(task, levels=3)
+    approach[3]["block_pose_w"][:3] = [*task.assembly_xy_m, scorer.expected_z[3] + 0.025]
+    approach[3]["nonrobot_contact_force_n"] = 0
+    grip(approach, 2, "left")
+    grip(approach, 3, "right")
+    scorer.update(0.05, approach)
+    contact = states(task, levels=4)
+    grip(contact, 2, "left")
+    grip(contact, 3, "right")
+    contact[2]["robot_contact_forces_n"][0] = [0, 0, 0]
+    contact[2]["robot_contact_forces_n"][1] = [retained_force, 0, 0]
+    scorer.update(0.1, contact)
+    scorer.update(0.15, contact)
+    assert not scorer.result()["cooperation_events"]
+    grip(contact, 2, "left")
+    for tick in range(5):
+        scorer.update(0.2 + tick * 0.05, contact)
+        if tick < 4:
+            assert not scorer.result()["cooperation_events"]
+    assert bool(scorer.result()["cooperation_events"]) == expected
+
+
 @pytest.mark.parametrize("held_gap,expected", [(0.0007, True), (0.02, False)])
 def test_aligned_hand_supported_lower_piece_requires_full_load_transfer_later(held_gap, expected):
     task = initial_tower_task()
