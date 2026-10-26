@@ -111,12 +111,31 @@ def episode_sequences(root: Path, entry: dict, case: CollectionCase) -> list[Dec
     )
     if sequence.labels[-1] != (2 if metadata.get("verified_stop") else 1):
         raise ValueError("Verified decision sequence lacks its actual terminal label")
+    if metadata.get("verified_stop"):
+        from vla_lego.isaac.campaign_faults import stop_evidence
+
+        # The known impossible instruction may be stopped as soon as the current
+        # state is safely released. Waiting for a scripted timestamp is not a skill.
+        selected = set(indices)
+        labels = []
+        with (directory / "privileged.jsonl").open() as stream:
+            for i, line in enumerate(stream):
+                if i in selected:
+                    evidence = json.loads(line)
+                    if evidence["frame"] != i:
+                        raise ValueError("Stop label evidence is not aligned with observations")
+                    labels.append(
+                        2 if stop_evidence(case.task(), case, evidence["blocks"])["passed"] else 0
+                    )
+        if len(labels) != len(indices) or labels[-1] != 2:
+            raise ValueError("Stop labels lack aligned current physical support")
+        sequence = replace(sequence, labels=labels)
     result = [sequence]
     if metadata["verified_success"]:
         # This is decision-only supervision on existing images, never new actions,
-        # a new episode, or an independent family. Retain the three-second history.
+        # a new episode, or an independent family. Context precedes the terminal window.
         negative_indices = [
-            i for i in indices if frames[i]["observation_time_s"] >= sequence.times[-1] - 3.5
+            i for i in indices if frames[i]["observation_time_s"] >= sequence.times[-1] - 4.0
         ]
         result.append(
             replace(

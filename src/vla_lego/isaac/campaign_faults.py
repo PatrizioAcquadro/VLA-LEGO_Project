@@ -78,15 +78,19 @@ def interrupt_progress(reference, case, level: int) -> dict:
 
 def verify_stop(task, case, env) -> dict:
     """Offline justification; this information is never a deployed decision input."""
+    return stop_evidence(task, case, [env.task_truth(i) for i in range(len(env.blocks))])
+
+
+def stop_evidence(task, case, states: list[dict]) -> dict:
+    """Current physical justification, independent of the teacher's stopping time."""
     reason = case.row["stop_reason"]
     if reason == "unreachable":
         target = task.targets[case.error_level]
         index = next(i for i, p in enumerate(task.placements) if p.spec == target)
-        xyz = env.task_truth(index)["block_pose_w"][:3]
+        xyz = states[index]["block_pose_w"][:3]
         justified = xyz[0] >= 0.80 and abs(xyz[1]) >= 0.35
     else:
         justified = not task.requested_pieces_available
-    states = [env.task_truth(i) for i in range(len(env.blocks))]
     safe = all(
         s["robot_contact_force_n"] < 1e-6
         and (

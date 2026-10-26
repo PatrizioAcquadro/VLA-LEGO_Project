@@ -7,11 +7,13 @@ from PIL import Image
 
 from vla_lego.isaac.campaign import load_campaign
 from vla_lego.isaac.campaign_design import build_declaration
+from vla_lego.isaac.campaign_faults import stop_evidence
 from vla_lego.pretrained.decision_data import (
     counterfactual_instruction,
     episode_sequences,
     observation_grid,
 )
+from vla_lego.pretrained.decision_features import history_samples
 from vla_lego.pretrained.pilot_dataset import load_observation
 
 
@@ -99,3 +101,29 @@ def test_decision_observation_constructor_excludes_labels_actions_and_hidden_fie
     assert set(observed) == {"observation.state", "observation.images.head"}
     assert observed["observation.state"].shape == (32,)
     assert observed["observation.images.head"].shape == (3, 2, 2)
+
+
+def test_counterfactual_context_is_not_padded_as_an_artificial_episode_start():
+    times = [100 + i / 2 for i in range(9)]
+    samples = history_samples(times, "counterfactual_instruction")
+    assert [i for i, _ in samples] == [6, 7, 8]
+    assert samples[0][1] == list(range(7))
+    assert history_samples(times, "recorded_instruction")[0] == (0, [0] * 7)
+
+
+def test_safe_impossibility_depends_on_present_support_not_teacher_clock(tmp_path):
+    path = tmp_path / "cases.json"
+    path.write_text(json.dumps(build_declaration()))
+    case = next(c for c in load_campaign(path) if c.name == "TR-S01-00-0")
+    states = [
+        {
+            "block_pose_w": [0.4, 0.1, 0.82, 0, 0, 0, 1],
+            "robot_contact_force_n": 0.0,
+            "nonrobot_contact_force_n": 0.2,
+            "block_contact_forces_n": [[0, 0, 0]] * 8,
+        }
+        for _ in range(8)
+    ]
+    assert stop_evidence(case.task(), case, states)["passed"]
+    states[0]["robot_contact_force_n"] = 1.0
+    assert not stop_evidence(case.task(), case, states)["passed"]
