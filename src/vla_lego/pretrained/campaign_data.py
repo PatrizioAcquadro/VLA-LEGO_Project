@@ -29,26 +29,28 @@ def motor_phase(stage: str) -> str:
     return base
 
 
+def admitted_entries(root: Path) -> list[dict]:
+    entries = json.loads((root / "admitted-episodes.json").read_text())["episodes"]
+    if any(not entry.get("admitted") for entry in entries):
+        raise ValueError("Only reviewed, admitted episodes satisfy the learning gate")
+    if Counter((e["partition"], e["category"]) for e in entries) != EXPECTED:
+        raise ValueError("Learning waits for the complete admitted500/60/60 corpus")
+    if len({e["case"] for e in entries}) != 620:
+        raise ValueError("Repeated case identities cannot satisfy the new corpus quota")
+    family_partitions: dict[str, str] = {}
+    for entry in entries:
+        if family_partitions.setdefault(entry["family"], entry["partition"]) != entry["partition"]:
+            raise ValueError("A generation family crosses learning partitions")
+    return list(entries)
+
+
 class CampaignData(Dataset[dict]):
     """One deterministic sample stream changes curriculum after20k completed updates."""
 
     def __init__(self, root: Path, partition: str, *, seed: int, draws=6_400_000):
         if partition not in ("train", "calibration", "confirmation"):
             raise ValueError("Unknown campaign partition")
-        entries = json.loads((root / "admitted-episodes.json").read_text())["episodes"]
-        if any(not entry.get("admitted") for entry in entries):
-            raise ValueError("Only reviewed, admitted episodes satisfy the learning gate")
-        if Counter((e["partition"], e["category"]) for e in entries) != EXPECTED:
-            raise ValueError("Learning waits for the complete admitted500/60/60 corpus")
-        if len({e["case"] for e in entries}) != 620:
-            raise ValueError("Repeated case identities cannot satisfy the new corpus quota")
-        family_partitions: dict[str, str] = {}
-        for entry in entries:
-            if (
-                family_partitions.setdefault(entry["family"], entry["partition"])
-                != entry["partition"]
-            ):
-                raise ValueError("A generation family crosses learning partitions")
+        entries = admitted_entries(root)
         self.seed, self.draws, self.partition = seed, draws, partition
         self.action_representation = "observation_arm_offset"
         self.episodes: list[PilotEpisode] = []
