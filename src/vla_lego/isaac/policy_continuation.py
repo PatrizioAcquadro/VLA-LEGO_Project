@@ -505,9 +505,10 @@ class PolicyIntervention:
         unsupported_since = None
         evidence = None
         recent = deque()
+        released_quiet = 0
 
         def observe(states):
-            nonlocal max_z, descent, lateral, unsupported_since, evidence
+            nonlocal max_z, descent, lateral, unsupported_since, evidence, released_quiet
             state = states[index]
             pose = state["block_pose_w"]
             recent.append((env.time, tuple(pose[:3])))
@@ -516,6 +517,33 @@ class PolicyIntervention:
             max_z = max(max_z, pose[2])
             descent = max(descent, max_z - pose[2])
             lateral = max(lateral, math.dist(pose[:2], initial_xy))
+            if (
+                stabilizer_side is None
+                and state["robot_contact_force_n"] < CONTACT_ZERO_N
+                and (
+                    state["nonrobot_contact_force_n"] > CONTACT_ZERO_N
+                    or any(f[2] > CONTACT_ZERO_N for f in state["block_contact_forces_n"])
+                )
+                and math.hypot(*state["block_velocity_w"][:3]) < 0.02
+                and max(descent, lateral) >= 0.02
+            ):
+                try:
+                    prefix = released_prefix(task, states)
+                except ValueError:
+                    prefix = -1
+                if 1 <= prefix <= case.error_level:
+                    released_quiet += 1
+                    if released_quiet >= 3:
+                        return {
+                            "mode": "released_failed_load_transfer",
+                            "completed_levels": prefix,
+                            "actual_descent_m": descent,
+                            "actual_lateral_motion_m": lateral,
+                        }
+                else:
+                    released_quiet = 0
+            else:
+                released_quiet = 0
             support = state["block_contact_forces_n"][indices[case.error_level - 1]][2]
             if (
                 gripping(state, side)
@@ -537,6 +565,47 @@ class PolicyIntervention:
             return None  # Normal transport pauses are not early failure interventions.
 
         source, _, after, _ = self._window(reference, task, index, ticks=ticks, stop_when=observe)
+        if source["source_terminal_decision"] in ("complete", "abstain"):
+            try:
+                completed = released_prefix(task, after)
+            except ValueError:
+                completed = -1
+            if source["executed_motor_commands"] > 0 and case.error_level < completed < 5:
+                source.update(
+                    physically_verified=True,
+                    error_basis="premature_terminal_after_actual_placement",
+                    observed_mechanism="interrupted_progress",
+                    completed_levels_at_intervention=completed,
+                )
+                recorder.admit_policy_intervention(source)
+                return {
+                    "type": "interrupted_progress",
+                    "teacher_induced": False,
+                    "physically_verified": True,
+                    "completed_levels": completed,
+                    "recovery_mode": "rebuild_released_prefix",
+                    "error_end_s": env.time,
+                    "policy_source": source,
+                }
+        observed = source.get("observed_error")
+        if observed and observed.get("mode") == "released_failed_load_transfer":
+            if (
+                source["executed_motor_commands"] < 1
+                or released_prefix(task, after) != observed["completed_levels"]
+            ):
+                raise RuntimeError("Released placement correction lost its supported prefix")
+            source.update(physically_verified=True, error_basis="released_failed_load_transfer")
+            recorder.admit_policy_intervention(source)
+            return {
+                "type": "placement",
+                "teacher_induced": False,
+                "physically_verified": True,
+                "target_level": case.error_level + 1,
+                "recovery_mode": "rebuild_released_prefix",
+                "error_end_s": env.time,
+                "policy_source": source,
+                **observed,
+            }
         recent_motion = (
             math.sqrt(
                 sum(

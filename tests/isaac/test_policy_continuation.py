@@ -293,7 +293,15 @@ def test_wrong_piece_intervention_requires_the_actual_incorrect_bilateral_lift(b
 
 
 @pytest.mark.parametrize(
-    "behavior", ["waiting", "supported", "still_descending", "failed_transfer"]
+    "behavior",
+    [
+        "waiting",
+        "supported",
+        "still_descending",
+        "failed_transfer",
+        "released_misplacement",
+        "premature_completion_after_placement",
+    ],
 )
 def test_placement_failure_excludes_transport_pauses_and_supported_placements(behavior):
     from copy import deepcopy
@@ -341,20 +349,33 @@ def test_placement_failure_excludes_transport_pauses_and_supported_placements(be
         stop_when(states)
         if behavior != "waiting":
             states[1]["block_pose_w"][2] -= 0.03
-        if behavior == "supported":
+        if behavior in ("supported", "premature_completion_after_placement"):
             states[1]["block_pose_w"][2] -= 0.05
             states[1]["block_contact_forces_n"][0][2] = 0.3
+        if behavior == "premature_completion_after_placement":
+            states[1]["robot_contact_force_n"] = 0
+            states[1]["robot_contact_forces_n"] = [[0.0] * 3 for _ in range(4)]
+        if behavior == "released_misplacement":
+            states[1]["block_pose_w"][2] = TABLE_TOP + task.targets[1].dimensions_m[2] / 2
+            states[1]["robot_contact_force_n"] = 0
+            states[1]["nonrobot_contact_force_n"] = 0.3
         env.time = 75
         stop_when(states)
         if behavior == "still_descending":
             states[1]["block_pose_w"][2] -= 0.02
         env.time = 80
-        stop_when(states)
+        event = stop_when(states)
+        if behavior == "released_misplacement":
+            env.time += 0.05
+            event = stop_when(states)
         return (
             {
                 "executed_motor_commands": 1400,
-                "source_terminal_decision": "budget",
+                "source_terminal_decision": (
+                    "complete" if behavior == "premature_completion_after_placement" else "budget"
+                ),
                 "start_time_s": 10,
+                "observed_error": event,
             },
             states,
             states,
@@ -363,9 +384,22 @@ def test_placement_failure_excludes_transport_pauses_and_supported_placements(be
 
     intervention = PolicyIntervention.__new__(PolicyIntervention)
     intervention._window = window
-    if behavior == "failed_transfer":
+    if behavior in (
+        "failed_transfer",
+        "released_misplacement",
+        "premature_completion_after_placement",
+    ):
         event = intervention.placement(SimpleNamespace(env=env), case, task, 1, "left")
-        assert not event["teacher_induced"] and event["height_gap_m"] > 0.01
+        assert not event["teacher_induced"]
+        if behavior == "premature_completion_after_placement":
+            assert event["type"] == "interrupted_progress"
+            assert event["completed_levels"] == 2
+            assert event["recovery_mode"] == "rebuild_released_prefix"
+        elif behavior == "released_misplacement":
+            assert event["recovery_mode"] == "rebuild_released_prefix"
+            assert event["completed_levels"] == 1
+        else:
+            assert event["height_gap_m"] > 0.01
         assert len(admitted) == 1
     else:
         with pytest.raises(RuntimeError, match="did not establish"):

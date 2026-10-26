@@ -40,6 +40,16 @@ def drop_and_recover(reference, case, task, index: int, side: str, yaw: float) -
     return event
 
 
+def resting_yaw(pose, spec) -> float:
+    """Orientation of the actual resting piece, including displaced source blocks."""
+    x, y, z, w = pose[3:]
+    if spec.shape == "prism" and abs(1 - 2 * (x * x + y * y)) < math.cos(math.radians(15)):
+        raise RuntimeError(
+            "Tipped prism requires a verified uprighting correction, not a nominal pick"
+        )
+    return math.degrees(math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z)))
+
+
 def recover_dropped(reference, task, index: int, side: str, yaw: float, *, replan=False) -> float:
     """Reacquire a block that has already fallen; this function never causes the fall."""
     env = reference.env
@@ -48,15 +58,7 @@ def recover_dropped(reference, task, index: int, side: str, yaw: float, *, repla
     if replan:
         from vla_lego.isaac.assembly_planning import pick_route
 
-        quaternion = state["block_pose_w"][3:]
-        x, y, z, w = quaternion
-        if task.placements[index].spec.shape == "prism" and abs(1 - 2 * (x * x + y * y)) < math.cos(
-            math.radians(15)
-        ):
-            raise RuntimeError(
-                "Tipped prism requires a verified uprighting correction, not a nominal pick"
-            )
-        actual_yaw = math.degrees(math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z)))
+        actual_yaw = resting_yaw(state["block_pose_w"], task.placements[index].spec)
         level = next(
             i for i, target in enumerate(task.targets) if target == task.placements[index].spec
         )

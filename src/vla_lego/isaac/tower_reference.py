@@ -562,9 +562,11 @@ def main() -> None:
             stabilizer_withdraw = None
             build_xy = task.assembly_xy_m
             # Per-piece yaw is a teacher planning choice, never a policy observation.
-            for level, (target, index, (side, base_yaw)) in enumerate(
-                zip(task.targets, indices, roles, strict=True)
-            ):
+            plan = list(zip(task.targets, indices, roles, strict=True))
+            remaining = list(enumerate(plan))
+            displaced_sources = set()
+            while remaining:
+                level, (target, index, (side, base_yaw)) = remaining.pop(0)
                 if campaign_stop and pilot_case and level == pilot_case.error_level:
                     break
                 if level < start_level:
@@ -627,7 +629,12 @@ def main() -> None:
                     stabilizer_withdraw = engage_stabilizer()
                 block = env.task_truth(index)["block_pose_w"][:3]
                 if pilot_case:
-                    yaw += task.placements[index].yaw_deg
+                    if index in displaced_sources:
+                        from vla_lego.isaac.campaign_faults import resting_yaw
+
+                        yaw += resting_yaw(env.task_truth(index)["block_pose_w"], target)
+                    else:
+                        yaw += task.placements[index].yaw_deg
                     from vla_lego.isaac.assembly_planning import pick_route
 
                     yaw = reference.grasp_yaw(
@@ -781,6 +788,7 @@ def main() -> None:
                     and pilot_case.category == "recovery"
                     and level == pilot_case.error_level
                     and pilot_case.row["error"] == "physically consequential incomplete placement"
+                    and "fault" not in report
                 ):
                     if policy_intervention is not None:
                         from vla_lego.isaac.campaign_faults import recover_held_placement
@@ -796,6 +804,15 @@ def main() -> None:
                             ticks=args.policy_window_ticks,
                         )
                         report["correction_source"] = recorder.correction_source
+                        if report["fault"].get("recovery_mode") == "rebuild_released_prefix":
+                            completed = report["fault"]["completed_levels"]
+                            # Re-execute the same physical assembly primitives from the loss.
+                            remaining = list(enumerate(plan))[completed : level + 1] + remaining
+                            displaced_sources.update(indices[completed : level + 1])
+                            bottom = TABLE_TOP + sum(
+                                t.dimensions_m[2] for t in task.targets[:completed]
+                            )
+                            continue
                         if level == cooperative_level:
                             _, joint_ids, _ = reference.ctrl.frames[stabilizer_side]
                             reference.hold_targets[stabilizer_side] = reference.ctrl.pose(
