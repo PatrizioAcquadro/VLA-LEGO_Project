@@ -57,6 +57,15 @@ def test_failed_attempt_cannot_be_loaded_as_positive_data(tmp_path):
         PilotEpisode(tmp_path)
 
 
+def test_motor_only_samples_exclude_terminal_targets_but_keep_error_masks(tmp_path):
+    recording(tmp_path)
+    episode = PilotEpisode(tmp_path, horizon=4, include_decisions=False)
+    correction = episode[1]
+    assert correction["action"].shape == (4, 16)
+    assert correction["action"][0].tolist() == [3.0] * 16
+    assert episode[0]["action_is_pad"].tolist() == [False, True, True, True]
+
+
 def test_diagnostics_cover_startup_and_first_acquisition_not_only_later_blocks():
     from types import SimpleNamespace
 

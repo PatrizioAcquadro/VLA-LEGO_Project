@@ -22,6 +22,7 @@ class PilotEpisode:
         horizon: int = 50,
         include_arm_velocity: bool = True,
         action_representation: str = "absolute",
+        include_decisions: bool = True,
     ):
         if horizon < 1:
             raise ValueError("Action horizon must be positive.")
@@ -46,6 +47,7 @@ class PilotEpisode:
         if action_representation not in ("absolute", "observation_arm_offset"):
             raise ValueError("Unknown pilot action representation")
         self.action_representation = action_representation
+        self.include_decisions = include_decisions
 
     def __len__(self) -> int:
         return len(self.eligible_frames)
@@ -59,14 +61,18 @@ class PilotEpisode:
         state = row["joint_position"]
         if self.include_arm_velocity:
             state = [*state, *row["joint_velocity"][:14]]
-        actions = np.zeros((self.horizon, 18), dtype=np.float32)
+        actions = np.zeros((self.horizon, 18 if self.include_decisions else 16), dtype=np.float32)
         action_is_pad = np.ones(self.horizon, dtype=bool)
         for offset, future in enumerate(self.frames[index : index + self.horizon]):
             if not self.annotations[index + offset]["positive_imitation"]:
                 # End this target chunk at an error. Corrective samples restart
                 # from their own observed error state, with the raw context retained.
                 break
-            actions[offset] = [*future["action"], *DECISION_TARGETS[future["task_decision"]]]
+            actions[offset] = (
+                [*future["action"], *DECISION_TARGETS[future["task_decision"]]]
+                if self.include_decisions
+                else future["action"]
+            )
             action_is_pad[offset] = False
         if self.action_representation == "observation_arm_offset":
             # Every future target uses this observation's measured anchor,
@@ -75,8 +81,14 @@ class PilotEpisode:
         image_path = (self.directory / row["head_rgb"]).resolve()
         if not image_path.is_relative_to(self.directory.resolve()):
             raise ValueError("Image path escapes its recording.")
-        with Image.open(image_path) as source:
-            rgb = np.asarray(source.convert("RGB"), dtype=np.float32).transpose(2, 0, 1) / 255.0
+        if "head_frame" in row:
+            from vla_lego.pretrained.rgb_video import read_rgb_frame
+
+            pixels = read_rgb_frame(image_path, row["head_frame"], fps=self.metadata["fps"])
+            rgb = np.asarray(pixels, dtype=np.float32).transpose(2, 0, 1) / 255.0
+        else:
+            with Image.open(image_path) as source:
+                rgb = np.asarray(source.convert("RGB"), dtype=np.float32).transpose(2, 0, 1) / 255.0
         return {
             "observation.state": np.asarray(state, dtype=np.float32),
             "observation.images.head": rgb,

@@ -17,6 +17,7 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--cache-dir", type=Path, required=True)
     parser.add_argument("--record", action="store_true")
+    parser.add_argument("--rgb-storage", choices=("png", "ffv1"), default="png")
     parser.add_argument("--family")
     parser.add_argument("--split", choices=("train", "development"))
     parser.add_argument("--event-settling", action="store_true")
@@ -230,6 +231,7 @@ def main() -> None:
                 correction_source=correction_source,
                 png_compress_level=6 if args.campaign_cases else 1,
                 min_free_bytes=512 * 1024**2 if args.campaign_cases else 0,
+                image_storage=args.rgb_storage,
             )
             env.recorder = recorder
         report["task"] = asdict(task)
@@ -963,6 +965,9 @@ def main() -> None:
                     ),
                 ),
             )
+            if recorder.video_error is not None:
+                report["passed"] = False
+                report["recording_error"] = recorder.video_error
         if reference is not None:
             report["stages"] = reference.stages
             report["max_native_limit_projection_rad"] = reference.max_limit_projection

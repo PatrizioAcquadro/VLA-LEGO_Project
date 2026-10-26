@@ -6,6 +6,8 @@ import json
 import shutil
 from pathlib import Path
 
+from vla_lego.pretrained.rgb_video import RGBVideoWriter
+
 
 class EpisodeRecorder:
     """Stream images and rows; accept positive labels only after verified completion."""
@@ -23,6 +25,7 @@ class EpisodeRecorder:
         collection_condition: str | None = None,
         png_compress_level: int = 1,
         min_free_bytes: int = 0,
+        image_storage: str = "png",
     ):
         if not family or split not in ("train", "development"):
             raise ValueError(
@@ -32,7 +35,13 @@ class EpisodeRecorder:
             raise ValueError("A corrective continuation requires exact native prefix replay.")
         directory.mkdir(parents=True, exist_ok=False)
         self.directory = directory
-        (directory / "head").mkdir()
+        if image_storage not in ("png", "ffv1"):
+            raise ValueError("Unknown RGB recording storage")
+        if image_storage == "png":
+            (directory / "head").mkdir()
+        self.image_storage = image_storage
+        self.video: RGBVideoWriter | None = None
+        self.video_error: str | None = None
         self.frames = (directory / "frames.jsonl").open("w")
         self.evidence = (directory / "privileged.jsonl").open("w")
         self.annotations = (directory / "annotations.jsonl").open("w")
@@ -97,9 +106,16 @@ class EpisodeRecorder:
         ):
             raise ValueError("Recorded sensor/action values must be finite.")
         image_path = f"head/{self.count:06d}.png"
-        Image.fromarray(observation["head_rgb"]).save(
-            self.directory / image_path, compress_level=self.png_compress_level
-        )
+        if self.image_storage == "ffv1":
+            image_path = "head.mkv"
+            if self.video is None:
+                height, width = observation["head_rgb"].shape[:2]
+                self.video = RGBVideoWriter(self.directory / image_path, width, height)
+            self.video.write(observation["head_rgb"])
+        else:
+            Image.fromarray(observation["head_rgb"]).save(
+                self.directory / image_path, compress_level=self.png_compress_level
+            )
         row = {
             "frame": self.count,
             "observation_time_s": observation["timestamp_s"],
@@ -111,6 +127,8 @@ class EpisodeRecorder:
             "action": np.asarray(action).tolist(),
             "requested_action": np.asarray(requested_action).tolist(),
         }
+        if self.image_storage == "ffv1":
+            row["head_frame"] = self.count
         if self.task_decisions:
             from vla_lego.pretrained.decisions import DECISION_TARGETS
 
@@ -150,6 +168,13 @@ class EpisodeRecorder:
         self.frames.close()
         self.evidence.close()
         self.annotations.close()
+        if self.video is not None:
+            try:
+                self.video.close()
+            except Exception as error:
+                self.video_error = repr(error)
+                verified_success, verified_stop = False, False
+                reason = "RGB encoding failed: " + self.video_error
         metadata: dict = {
             "instruction": self.instruction,
             "collection_condition": self.collection_condition,
@@ -182,5 +207,13 @@ class EpisodeRecorder:
         if self.collection_case is not None:
             metadata["collection_case"] = self.collection_case
             metadata["teacher_induced_fault"] = self.fault_verified
+        if self.video is not None:
+            metadata.update(
+                image_storage="ffv1_bgr0_lossless",
+                image_file="head.mkv",
+                image_frames=self.video.frames,
+                rgb_sha256=self.video.sha256.hexdigest(),
+                video_error=self.video_error,
+            )
         (self.directory / "episode.json").write_text(json.dumps(metadata, indent=2) + "\n")
         self.closed = True
