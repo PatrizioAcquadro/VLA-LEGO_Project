@@ -268,6 +268,55 @@ def test_resume_protocol_records_changes_to_declared_sampling(tmp_path):
     assert PilotTrainingData(tmp_path, "train", seed=1).protocol != saved
 
 
+def test_paired_instruction_pool_balances_families_and_admitted_variants(tmp_path):
+    import shutil
+    from collections import Counter
+
+    from vla_lego.pretrained.pilot_training_data import PilotTrainingData
+
+    correction_cohort(tmp_path)
+    entries = json.loads((tmp_path / "train-episodes.json").read_text())
+    for index, family in enumerate(("T6", "T6", "T7"), start=5):
+        directory = tmp_path / "attempts" / f"episode-{index}"
+        shutil.copytree(tmp_path / "attempts/episode-0", directory)
+        path = directory / "recording/episode.json"
+        metadata = json.loads(path.read_text())
+        metadata.update(
+            generation_family=family, collection_condition="marker_free_paired_instruction_v1"
+        )
+        path.write_text(json.dumps(metadata))
+        entries.append({"case": f"case-{index}", "path": f"attempts/episode-{index}/report.json"})
+    (tmp_path / "train-episodes.json").write_text(json.dumps(entries))
+    path = tmp_path / "cohort.json"
+    cohort = json.loads(path.read_text())
+    cohort["episode_counts"]["train"] = 8
+    cohort["paired_instruction_probability"] = 0.2
+    path.write_text(json.dumps(cohort))
+    data = PilotTrainingData(tmp_path, "train", seed=20261024)
+    categories, families, variants, acquisition = Counter(), Counter(), Counter(), Counter()
+    for draw in range(20000):
+        number, _, bucket = data.select(draw)
+        role = data.membership[number]["sampling_category"]
+        categories[role] += 1
+        if role == "paired_instruction":
+            families[data.membership[number]["family"]] += 1
+            variants[number] += 1
+            if bucket.startswith("policy_"):
+                acquisition[bucket] += 1
+    assert 3700 < categories["paired_instruction"] < 4300
+    assert 3700 < categories["policy_correction"] < 4300
+    assert all(1800 < value < 2200 for value in families.values())
+    assert all(850 < variants[index] < 1150 for index in (5, 6))
+    assert all(400 < value < 600 for value in acquisition.values())
+    assert len(acquisition) == 4
+    assert data.sampling_description["base_probability"] == pytest.approx(0.6)
+    assert not {"stage", "family", "sampling_category"} & data[0].keys()
+    cohort.pop("paired_instruction_probability")
+    path.write_text(json.dumps(cohort))
+    with pytest.raises(ValueError, match="Paired instructions require"):
+        PilotTrainingData(tmp_path, "train", seed=1)
+
+
 def test_extra_descendants_do_not_overweight_one_correction_family(tmp_path):
     import shutil
     from collections import Counter

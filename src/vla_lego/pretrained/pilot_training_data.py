@@ -30,7 +30,7 @@ def phase(stage: str) -> str:
 
 
 def policy_acquisition_phase(stage: str) -> str | None:
-    """Stratify the first physical acquisition of a policy-error continuation."""
+    """Stratify first acquisition offline, without exposing stages to the policy."""
     if "park" in stage:
         return "policy_start"
     if stage.startswith("level0_grip"):
@@ -80,9 +80,16 @@ class PilotTrainingData(Dataset[dict]):
         self.policy_acquisition_probability = (
             float(self.cohort["policy_acquisition_probability"]) if self.cohort else 0.0
         )
-        if not 0 <= self.policy_correction_probability < 1 or not (
-            0 <= self.policy_acquisition_probability <= 1
-        ):
+        self.paired_instruction_probability = (
+            float(self.cohort.get("paired_instruction_probability", 0.0))
+            if self.cohort and split == "train"
+            else 0.0
+        )
+        if not (
+            0 <= self.policy_correction_probability < 1
+            and 0 <= self.paired_instruction_probability < 1
+            and self.policy_correction_probability + self.paired_instruction_probability < 1
+        ) or not (0 <= self.policy_acquisition_probability <= 1):
             raise ValueError("Invalid declared policy-correction sampling mixture")
         self.episodes: list[PilotEpisode] = []
         self.cases: list[str] = []
@@ -96,9 +103,23 @@ class PilotTrainingData(Dataset[dict]):
             metadata = episode.metadata
             if metadata["split"] != split:
                 raise ValueError("Indexed episode belongs to another split")
-            if metadata.get("collection_condition") != "marker_free_continuous_site_v1":
+            condition = metadata.get("collection_condition")
+            if condition not in (
+                "marker_free_continuous_site_v1",
+                "marker_free_paired_instruction_v1",
+            ):
                 raise ValueError("Only the admitted marker-free corpus is accepted")
             category = metadata["collection_case"]["category"]
+            if condition == "marker_free_paired_instruction_v1":
+                if (
+                    split != "train"
+                    or not self.paired_instruction_probability
+                    or metadata["supervision_role"] != "verified_nominal"
+                    or metadata.get("correction_source")
+                    or category != "nominal"
+                ):
+                    raise ValueError("Paired instructions require a declared training cohort")
+                category = "paired_instruction"
             if metadata.get("correction_source"):
                 if (
                     split != "train"
@@ -116,7 +137,7 @@ class PilotTrainingData(Dataset[dict]):
             for sample, raw in enumerate(episode.eligible_frames):
                 row, annotation = episode.frames[raw], episode.annotations[raw]
                 pools[phase(annotation["stage"])].append(sample)
-                if category == "policy_correction":
+                if category in ("policy_correction", "paired_instruction"):
                     acquisition = policy_acquisition_phase(annotation["stage"])
                     if acquisition:
                         pools[acquisition].append(sample)
@@ -128,7 +149,7 @@ class PilotTrainingData(Dataset[dict]):
                     pools["correction"].append(sample)
             if not pools["terminal"] or (category == "recovery" and not pools["correction"]):
                 raise ValueError("Missing terminal/corrective supervision in an admitted episode")
-            if category == "policy_correction" and not all(
+            if category in ("policy_correction", "paired_instruction") and not all(
                 pools[name]
                 for name in ("policy_start", "policy_approach", "policy_grasp", "policy_lift")
             ):
@@ -151,6 +172,8 @@ class PilotTrainingData(Dataset[dict]):
         required = {"nominal", "recovery", "stop"}
         if self.policy_correction_probability:
             required.add("policy_correction")
+        if self.paired_instruction_probability:
+            required.add("paired_instruction")
         if set(self.categories) != required:
             raise ValueError("The pilot requires nominal, recovery and stop coverage")
 
@@ -170,6 +193,16 @@ class PilotTrainingData(Dataset[dict]):
                 policy_episode_sampling="uniform source families, then uniform continuations",
                 policy_acquisition_sampling="equal start/approach/grasp/lift, then uniform frame",
             )
+        if self.paired_instruction_probability:
+            result.update(
+                base_probability=(
+                    1 - self.policy_correction_probability - self.paired_instruction_probability
+                ),
+                paired_instruction_probability=self.paired_instruction_probability,
+                paired_episode_sampling="uniform families, then uniform admitted variants",
+                paired_acquisition_probability=self.policy_acquisition_probability,
+                paired_acquisition_sampling="equal start/approach/grasp/lift, then uniform frame",
+            )
         return result
 
     def __len__(self) -> int:
@@ -180,13 +213,26 @@ class PilotTrainingData(Dataset[dict]):
         correction = self.policy_correction_probability > 0 and (
             rng.random() < self.policy_correction_probability
         )
+        paired = False
+        if self.paired_instruction_probability:
+            # Keep the historical stream exactly unchanged when this pool is absent.
+            value = rng.random()
+            paired = value < self.paired_instruction_probability
+            correction = (
+                not paired
+                and value < self.paired_instruction_probability + self.policy_correction_probability
+            )
         category = (
-            "policy_correction"
-            if correction
-            else rng.choices(("nominal", "recovery", "stop"), weights=(60, 30, 10))[0]
+            "paired_instruction"
+            if paired
+            else (
+                "policy_correction"
+                if correction
+                else rng.choices(("nominal", "recovery", "stop"), weights=(60, 30, 10))[0]
+            )
         )
         eligible = self.categories[category]
-        if correction:
+        if correction or paired:
             family = rng.choice(
                 sorted({self.episodes[i].metadata["generation_family"] for i in eligible})
             )
@@ -195,7 +241,7 @@ class PilotTrainingData(Dataset[dict]):
             ]
         number = rng.choice(eligible)
         pools = self.pools[number]
-        if correction and rng.random() < self.policy_acquisition_probability:
+        if (correction or paired) and rng.random() < self.policy_acquisition_probability:
             bucket = rng.choice(["policy_start", "policy_approach", "policy_grasp", "policy_lift"])
             return number, rng.choice(pools[bucket]), bucket
         value = rng.random()
