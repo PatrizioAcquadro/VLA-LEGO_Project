@@ -2,19 +2,21 @@
 
 ## Expanded campaign storage — October 26, 2026
 
-The first 25 admitted episodes are copied to the campaign corpus on Gilbreth scratch: 13,284 files and 26,033,695,947 bytes, with every file size and SHA-256 verified against Blackwell. The original recordings and failed attempts remain on Blackwell; no source was deleted. The original 22-episode transfer and the subsequent three-episode append are separately verified; further admissions are not implicitly present in this snapshot. This is progressive storage preparation, not the complete 620-episode corpus or training readiness. Dataset admission and learning gates belong to [data](data.md#expanded-alex003-campaign--october-26-2026).
+The first 32 admitted episodes are copied to the campaign corpus on Gilbreth scratch: 13,326 files and 39,571,344,853 bytes, with every file size and SHA-256 verified against Blackwell. Original recordings and failed attempts remain on Blackwell. Each append is independently verified; the four newer admissions are not implicitly present in that snapshot. The reviewed coordination declaration is now canonical in the transferred corpus, with the original declaration preserved. This is progressive storage preparation, not the complete 620-episode corpus or training readiness. Dataset admission and learning gates belong to [data](data.md#expanded-alex003-campaign--october-26-2026).
+
+After the initial data gate, two native Blackwell collectors completed four additional single-block episodes that pass physical, reader and visual admission. Observed aggregate throughput was 6.70 recorded frames/s versus 4.67 frames/s in earlier single-collector runs, with about 13.2 GiB sampled peak GPU memory. This cross-case engineering measurement supports two bounded collectors; it is not a controlled hardware speed benchmark or policy qualification. The first actual-policy correction prototype runs separately for clear diagnosis.
 
 ## Planned resource roles
 
 | Resource | Intended role | Boundary |
 |---|---|---|
 | Local RTX 4090, 24 GB | Interactive development, visual simulation, small experiments and profiling | Larger VLA adaptation depends on measured fit; do not assume full fine-tuning fits. |
-| Blackwell workstation, about 96 GB | Broader rendered collection, training and larger offline teachers | Planning inspection identified RTX PRO 6000 Blackwell Max-Q. Shared availability and throughput still need workload-specific measurement. |
+| Blackwell workstation, about 96 GB | Broader rendered collection, training and larger offline teachers | RTX PRO 6000 Blackwell Max-Q; current rendered two-collector measurement is reported above. Availability and new workloads still require measurement. |
 | Gautschi | H100 training; RTX-capable L40-class nodes for rendering when available | Partition visibility is not a guaranteed allocation; select the actual available GPU and compatible runtime. |
 | Gilbreth | A100/H100 training; compatible A10 nodes for rendering | Access, account limits, memory and allocation must match the job. |
 | Robot Orin | All final VLA inference together with sensing, logging and robot communication | Qualify concurrent load on the real system; the NUC retains low-level control. |
 
-The planning inspection found the local 4090 and approximately 96 GB Blackwell device, Gautschi H100/L40 partitions and Gilbreth A10/A100/H100 partitions. These are hardware/access observations, not evidence of qualified Isaac or VLA jobs. [Gautschi](https://docs.rcac.purdue.edu/userguides/gautschi/overview/) and [Gilbreth](https://docs.rcac.purdue.edu/userguides/gilbreth/overview/) documentation describe system resources; actual allocations govern use.
+The planning inspection found the local 4090 and approximately 96 GB Blackwell device, Gautschi H100/L40 partitions and Gilbreth A10/A100/H100 partitions. Hardware/access observations alone do not qualify a workload; the campaign measurement above covers current rendered collection. [Gautschi](https://docs.rcac.purdue.edu/userguides/gautschi/overview/) and [Gilbreth](https://docs.rcac.purdue.edu/userguides/gilbreth/overview/) documentation describe system resources; actual allocations govern use.
 
 [Isaac Sim's RTX renderer requires supported RT hardware](https://docs.isaacsim.omniverse.nvidia.com/6.0.0/installation/requirements.html). A100/H100 are training destinations, not supported visual-rendering destinations. Separate rendered collection from training rather than treating every CUDA GPU as interchangeable.
 
