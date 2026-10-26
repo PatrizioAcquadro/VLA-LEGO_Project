@@ -16,6 +16,20 @@ def _separated(points, axes, obstacle_points, obstacle_axes):
     return _separation_distance(points, axes, obstacle_points, obstacle_axes) > 0
 
 
+def _sphere_separated(points, axes, center, radius):
+    """Prove separation using exact sphere projections, without a box enlargement."""
+    import torch
+
+    relative = points - center
+    nearest = relative[
+        torch.arange(len(points), device=points.device), relative.square().sum(-1).argmin(-1)
+    ]
+    directions = torch.cat((axes, nearest[:, None], relative.mean(1)[:, None]), dim=1)
+    projected = relative @ directions.transpose(1, 2)
+    reach = radius * directions.norm(dim=-1)
+    return torch.maximum(projected.amin(1) - reach, -reach - projected.amax(1)).amax(1) > 0
+
+
 def _unit_axes(vectors):
     import torch
 
@@ -124,6 +138,7 @@ def arm_clearance(env, solver, side: str):
 
     import numpy as np
     import torch
+    from isaaclab.utils.math import matrix_from_quat
     from pxr import Gf, Usd, UsdGeom, UsdPhysics
 
     stage = env.stage
@@ -139,7 +154,7 @@ def arm_clearance(env, solver, side: str):
             None,
         )
 
-    def parts(body, relative=None, required=True):
+    def parts(body, relative=None, required=True, spheres=None):
         if not body:
             raise RuntimeError("Native body unavailable for wrist clearance")
         result = []
@@ -179,6 +194,19 @@ def arm_clearance(env, solver, side: str):
                     ]
                 )
                 normals = np.asarray([matrix.TransformDir(Gf.Vec3d(*axis)) for axis in np.eye(3)])
+            elif prim.IsA(UsdGeom.Sphere) and spheres is not None:
+                scales = [
+                    Gf.Vec3d(matrix.TransformDir(Gf.Vec3d(*axis))).GetLength() for axis in np.eye(3)
+                ]
+                if max(scales) - min(scales) > 1e-6 * max(scales):
+                    raise RuntimeError("Nonuniformly scaled native sphere is not spherical")
+                spheres.append(
+                    (
+                        env.target.new_tensor(matrix.Transform(Gf.Vec3d(0, 0, 0))),
+                        UsdGeom.Sphere(prim).GetRadiusAttr().Get() * scales[0],
+                    )
+                )
+                continue
             else:
                 raise RuntimeError(f"Unsupported native clearance primitive: {prim.GetTypeName()}")
             lengths = np.linalg.norm(normals, axis=1)
@@ -216,6 +244,20 @@ def arm_clearance(env, solver, side: str):
         )
         for points, axes in parts(body)
     ]
+    spherical_obstacles: list[tuple] = []
+    # The head is not in either arm chain, but can obstruct a high cross-body reach.
+    for name in ("NECK_Z_LINK", "HEAD_LINK"):
+        body = body_named(name)
+        if body is None:
+            raise RuntimeError(f"Native head collision body unavailable: {name}")
+        pose = env.robot.data.body_link_pose_w.torch[0, env.robot.data.body_names.index(name)]
+        rotation = matrix_from_quat(pose[3:])
+        spheres: list = []
+        for points, axes in parts(body, relative=body, required=False, spheres=spheres):
+            obstacles.append((name, points @ rotation.T + pose[:3], axes @ rotation.T))
+        spherical_obstacles.extend(
+            (name, center @ rotation.T + pose[:3], radius) for center, radius in spheres
+        )
     adjacent = set()
     for prim in Usd.PrimRange(stage.GetPrimAtPath("/World/envs/env_0/Robot")):
         if not prim.IsA(UsdPhysics.Joint):
@@ -240,6 +282,9 @@ def arm_clearance(env, solver, side: str):
                     if frozenset((name, owner)) in adjacent:
                         continue
                     admissible &= _separated(world, directions, obstacle_points, obstacle_axes)
+                for owner, center, radius in spherical_obstacles:
+                    if frozenset((name, owner)) not in adjacent:
+                        admissible &= _sphere_separated(world, directions, center, radius)
         return admissible
 
     return clear

@@ -66,6 +66,7 @@ class PhysicalReference:
         object_index: int | None = None,
     ) -> float:
         """Choose an equivalent square-face grasp with a reachable carry route."""
+        self.admit_stabilizer_clearance(side)
         _, ids, _ = self.ctrl.frames[side]
         failures = []
         clear = None
