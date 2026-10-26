@@ -6,9 +6,20 @@ import numpy as np
 import pytest
 
 from vla_lego.isaac.environment import TABLE_TOP
-from vla_lego.isaac.policy_continuation import released_prefix
+from vla_lego.isaac.policy_continuation import reject_head_contact, released_prefix
 from vla_lego.isaac.recording import EpisodeRecorder, verify_policy_correction
 from vla_lego.isaac.task import initial_tower_task
+
+
+def test_head_contact_aborts_collection_but_normal_grasp_contact_does_not():
+    diagnostics = {
+        "robot_contact_paths": ["/robot/HEAD_LINK", "/robot/left_WSG32_NEGATIVE_JAW_LINK"],
+        "robot_contact_forces_n": [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]],
+    }
+    reject_head_contact(diagnostics)
+    diagnostics["robot_contact_forces_n"][0] = [0.0, 0.5, 0.0]
+    with pytest.raises(RuntimeError, match="contacted the head"):
+        reject_head_contact(diagnostics)
 
 
 def test_current_handoff_cannot_hide_a_held_piece_or_lost_support():
@@ -130,10 +141,23 @@ def test_a_correct_placement_or_held_piece_cannot_be_labeled_a_policy_drop():
         cooperative_level=3,
     )
     intervention = PolicyIntervention.__new__(PolicyIntervention)
-    intervention._window = lambda *a, **k: ({"executed_motor_commands": 1}, before, after, False)
+    observations = []
+
+    def window(*args, stop_when, **kwargs):
+        observations.clear()
+        # Do not accept the moving fall; intervene after three settled observations.
+        after[1]["block_velocity_w"][2] = -0.2
+        observations.append(stop_when(after))
+        after[1]["block_velocity_w"][2] = 0.0
+        observations.extend(stop_when(after) for _ in range(3))
+        return {"executed_motor_commands": 4}, before, after, False
+
+    intervention._window = window
     event = intervention.slip_drop(reference, case, task, 1)
     assert not event["teacher_induced"] and event["physically_verified"] and len(admitted) == 1
     assert event["fall_m"] == pytest.approx(0.1)
+    assert observations[:3] == [None, None, None]
+    assert observations[3]["error_basis"] == "actual_released_fall"
     after[1]["block_pose_w"][:2] = list(task.assembly_xy_m)
     after[1]["block_pose_w"][2] += task.targets[0].dimensions_m[2]
     after[1]["nonrobot_contact_force_n"] = 0

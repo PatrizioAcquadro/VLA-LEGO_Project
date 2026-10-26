@@ -14,6 +14,17 @@ from vla_lego.pretrained.decisions import DECISION_NAMES, decode_decision
 from vla_lego.pretrained.transport import receive_message, send_message
 
 
+def reject_head_contact(diagnostics):
+    """Abort collection on physical head contact; never steer the policy with truth."""
+    if any(
+        path.rsplit("/", 1)[-1] == "HEAD_LINK" and math.hypot(*force) > CONTACT_ZERO_N
+        for path, force in zip(
+            diagnostics["robot_contact_paths"], diagnostics["robot_contact_forces_n"], strict=True
+        )
+    ):
+        raise RuntimeError("Actual policy contacted the head; preserve and exclude this attempt")
+
+
 def released_prefix(task, states, *, held_index=None, supported_contacts=()):
     """Current ordered support, never a historical maximum or a controller input."""
     if any(
@@ -86,6 +97,7 @@ class PolicyIntervention:
         from vla_lego.isaac.environment import ARM_JOINTS, JAW_JOINTS
 
         env, recorder = reference.env, reference.env.recorder
+        reject_head_contact(env.robot_diagnostics())
         before = [env.task_truth(i) for i in range(len(env.blocks))]
         start_frame, start_time = recorder.count, env.time
         names = (*ARM_JOINTS, *JAW_JOINTS)
@@ -152,6 +164,7 @@ class PolicyIntervention:
                     env.set_joint_targets(dict(zip(names, bounded.tolist(), strict=True)))
                     env.step(10)
                     reference.sample("actual_policy_error_window")
+                    reject_head_contact(env.robot_diagnostics())
                     current = env.task_truth(index)
                     acquired_next |= (
                         current["block_pose_w"][2] - before[index]["block_pose_w"][2] >= 0.07
@@ -399,19 +412,36 @@ class PolicyIntervention:
             or held["block_pose_w"][2] < TABLE_TOP + height / 2 + 0.07
         ):
             raise ValueError("Policy drop window lacks its physically acquired starting block")
-        source, before, after, _ = self._window(reference, task, index, ticks=ticks)
+        quiet = 0
+
+        def dropped(states):
+            state = states[index]
+            fall = held["block_pose_w"][2] - state["block_pose_w"][2]
+            if (
+                fall >= 0.07
+                and abs(state["block_pose_w"][2] - TABLE_TOP - height / 2) < 0.01
+                and state["robot_contact_force_n"] < CONTACT_ZERO_N
+                and state["nonrobot_contact_force_n"] > CONTACT_ZERO_N
+                and math.hypot(*state["block_velocity_w"][:3]) < 0.02
+                and 0.25 <= state["block_pose_w"][0] <= 0.55
+                and abs(state["block_pose_w"][1]) < 0.5
+                and released_prefix(task, states) == case.error_level
+            ):
+                return {"error_basis": "actual_released_fall", "fall_m": fall}
+            return None
+
+        def observe(states):
+            nonlocal quiet
+            event = dropped(states)
+            quiet = quiet + 1 if event is not None else 0
+            return event if quiet >= 3 else None
+
+        source, before, after, _ = self._window(
+            reference, task, index, ticks=ticks, stop_when=observe
+        )
         state = after[index]
         fall = before[index]["block_pose_w"][2] - state["block_pose_w"][2]
-        if not (
-            source["executed_motor_commands"] > 0
-            and fall >= 0.07
-            and abs(state["block_pose_w"][2] - TABLE_TOP - height / 2) < 0.01
-            and state["robot_contact_force_n"] < CONTACT_ZERO_N
-            and state["nonrobot_contact_force_n"] > CONTACT_ZERO_N
-            and 0.25 <= state["block_pose_w"][0] <= 0.55
-            and abs(state["block_pose_w"][1]) < 0.5
-            and released_prefix(task, after) == case.error_level
-        ):
+        if source["executed_motor_commands"] < 1 or dropped(after) is None:
             raise RuntimeError("Actual policy did not produce the declared reachable released drop")
         source.update(physically_verified=True, error_basis="actual_released_fall", fall_m=fall)
         recorder.admit_policy_intervention(source)
