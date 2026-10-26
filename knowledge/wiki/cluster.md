@@ -2,9 +2,15 @@
 
 ## Expanded campaign storage — October 26, 2026
 
-A verified **137-episode storage snapshot** is on the campaign corpus in Gilbreth scratch: 13,959 files and 119,993,064,236 bytes, with file sizes and SHA-256 checked against Blackwell. Subsequent admissions are appended progressively with separate verification; this is a dated storage milestone, not a claim that every current admission has already transferred. Original recordings and failed attempts remain on Blackwell. The mechanism-coverage revision is canonical in the transferred corpus; original and coordination declarations remain preserved. Storage preparation does not establish the complete 620-episode corpus or training readiness. [Data](data.md#expanded-alex003-campaign--october-26-2026) owns admission and learning gates.
+A verified **168-episode storage snapshot** is on the campaign corpus in Gilbreth scratch: 14,146 files and 135,258,366,859 bytes, with file sizes and SHA-256 checked against Blackwell. Subsequent admissions are appended progressively with separate verification; this is a dated storage milestone, not a claim that every current admission has already transferred. Original recordings and failed attempts remain on Blackwell. The mechanism-coverage revision is canonical in the transferred corpus; original and coordination declarations remain preserved. Storage preparation does not establish the complete 620-episode corpus or training readiness. [Data](data.md#expanded-alex003-campaign--october-26-2026) owns admission and learning gates.
 
 After the initial data gate, two native Blackwell collectors completed four additional single-block episodes that pass physical, reader and visual admission. Observed aggregate throughput was 6.70 recorded frames/s versus 4.67 frames/s in earlier single-collector runs, with about 13.2 GiB sampled peak GPU memory. This cross-case engineering measurement supports two bounded collectors; it is not a controlled hardware speed benchmark or policy qualification. Actual-policy correction collection uses the same bounded slots and leases, preserving separate setup, physical and behavioral outcomes.
+
+## Shared workstation admission
+
+The local RTX 4090 and Blackwell are shared with AlexDoor-XAS and SquadBot-AV. A persistent reservation and the same device lease govern admission for every queued successor and restart; free memory or an idle device does not cancel another project's window. Transfer ownership explicitly after the active episode and cleanup finish. Time limits cannot interrupt a healthy episode or silently reclaim its reservation.
+
+Blackwell collection additionally respects its reserved slots under the shared device lease. Existing workloads drain before a slot changes owner, and a waiting successor cannot capture a slot reserved for another project. Keep unrelated workloads protected. Current windows and handoffs belong to the local execution records, not a fixed schedule in this wiki. These resource agreements change neither the scientific scope nor dataset, optimization or allocation budgets.
 
 ## Planned resource roles
 
