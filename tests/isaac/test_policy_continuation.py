@@ -301,6 +301,8 @@ def test_wrong_piece_intervention_requires_the_actual_incorrect_bilateral_lift(b
         "failed_transfer",
         "released_misplacement",
         "premature_completion_after_placement",
+        "held_below_support",
+        "brief_below_support",
     ],
 )
 def test_placement_failure_excludes_transport_pauses_and_supported_placements(behavior):
@@ -360,10 +362,19 @@ def test_placement_failure_excludes_transport_pauses_and_supported_placements(be
             states[1]["robot_contact_force_n"] = 0
             states[1]["nonrobot_contact_force_n"] = 0.3
         env.time = 75
+        if behavior == "held_below_support":
+            states[1]["block_pose_w"][2] -= 0.08
+            states[1]["block_pose_w"][0] += 0.06
         stop_when(states)
         if behavior == "still_descending":
             states[1]["block_pose_w"][2] -= 0.02
         env.time = 80
+        if behavior == "held_below_support":
+            # Consequential misplacement can persist while the policy still oscillates.
+            states[1]["block_pose_w"][1] += 0.02
+        elif behavior == "brief_below_support":
+            states[1]["block_pose_w"][2] -= 0.08
+            states[1]["block_pose_w"][0] += 0.06
         event = stop_when(states)
         if behavior == "released_misplacement":
             env.time += 0.05
@@ -388,6 +399,7 @@ def test_placement_failure_excludes_transport_pauses_and_supported_placements(be
         "failed_transfer",
         "released_misplacement",
         "premature_completion_after_placement",
+        "held_below_support",
     ):
         event = intervention.placement(SimpleNamespace(env=env), case, task, 1, "left")
         assert not event["teacher_induced"]
@@ -398,6 +410,11 @@ def test_placement_failure_excludes_transport_pauses_and_supported_placements(be
         elif behavior == "released_misplacement":
             assert event["recovery_mode"] == "rebuild_released_prefix"
             assert event["completed_levels"] == 1
+        elif behavior == "held_below_support":
+            assert event["recovery_mode"] == "return_held_then_rebuild"
+            assert event["completed_levels"] == 1
+            assert event["height_gap_m"] < -0.02
+            assert event["return_source_xy_m"] == list(task.placements[1].xy_m)
         else:
             assert event["height_gap_m"] > 0.01
         assert len(admitted) == 1

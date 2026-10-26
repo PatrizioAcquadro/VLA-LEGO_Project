@@ -503,12 +503,14 @@ class PolicyIntervention:
         max_z = initial[index]["block_pose_w"][2]
         descent, lateral = 0.0, 0.0
         unsupported_since = None
+        below_support_since = None
         evidence = None
         recent = deque()
         released_quiet = 0
 
         def observe(states):
             nonlocal max_z, descent, lateral, unsupported_since, evidence, released_quiet
+            nonlocal below_support_since
             state = states[index]
             pose = state["block_pose_w"]
             recent.append((env.time, tuple(pose[:3])))
@@ -517,6 +519,11 @@ class PolicyIntervention:
             max_z = max(max_z, pose[2])
             descent = max(descent, max_z - pose[2])
             lateral = max(lateral, math.dist(pose[:2], initial_xy))
+            if gripping(state, side) and pose[2] <= expected_z - 0.02:
+                if below_support_since is None:
+                    below_support_since = env.time
+            else:
+                below_support_since = None
             if (
                 stabilizer_side is None
                 and state["robot_contact_force_n"] < CONTACT_ZERO_N
@@ -616,6 +623,53 @@ class PolicyIntervention:
             if recent
             else math.inf
         )
+        completed = released_prefix(task, after, held_index=index, supported_contacts=allowed)
+        stabilizer_lost = stabilizer_side is not None and not any(
+            gripping(after[i], stabilizer_side) for i in allowed
+        )
+        # A held piece below the required support plane is a different failure
+        # from an above-stack stall. Wait for the original policy budget/terminal.
+        if (
+            source["executed_motor_commands"] > 0
+            and below_support_since is not None
+            and env.time - below_support_since >= 2
+            and descent >= 0.02
+            and completed == case.error_level
+            and (
+                source["source_terminal_decision"] in ("complete", "abstain")
+                or (
+                    source["source_terminal_decision"] == "budget"
+                    and env.time - source["start_time_s"] >= 60
+                )
+            )
+        ):
+            observed = {
+                "height_gap_m": after[index]["block_pose_w"][2] - expected_z,
+                "below_support_duration_s": env.time - below_support_since,
+                "actual_descent_m": descent,
+                "actual_lateral_motion_m": lateral,
+                "stabilizer_grasp_lost": stabilizer_lost,
+            }
+            source.update(
+                physically_verified=True,
+                error_basis="held_below_required_support",
+                observed_error=observed,
+            )
+            recorder.admit_policy_intervention(source)
+            return {
+                "type": "placement",
+                "teacher_induced": False,
+                "physically_verified": True,
+                "target_level": case.error_level + 1,
+                "recovery_mode": "return_held_then_rebuild",
+                "completed_levels": completed,
+                "object_index": index,
+                "side": side,
+                "return_source_xy_m": list(task.placements[index].xy_m),
+                "error_end_s": env.time,
+                "policy_source": source,
+                **observed,
+            }
         if (
             source["executed_motor_commands"] < 1
             or evidence is None
@@ -630,14 +684,9 @@ class PolicyIntervention:
                     or recent_motion >= 0.01
                 )
             )
-            or released_prefix(task, after, held_index=index, supported_contacts=allowed)
-            != case.error_level
+            or completed != case.error_level
         ):
             raise RuntimeError("Actual policy did not establish failed physical placement")
-        if stabilizer_side is not None and not any(
-            gripping(after[i], stabilizer_side) for i in allowed
-        ):
-            raise RuntimeError("Placement also lost stabilization; its grasp must be reacquired")
         source.update(
             physically_verified=True,
             error_basis="failed_actual_load_transfer",
@@ -645,7 +694,7 @@ class PolicyIntervention:
             recent_held_motion_m=recent_motion,
         )
         recorder.admit_policy_intervention(source)
-        return {
+        event = {
             "type": "placement",
             "teacher_induced": False,
             "physically_verified": True,
@@ -654,6 +703,16 @@ class PolicyIntervention:
             "policy_source": source,
             **evidence,
         }
+        if stabilizer_lost:
+            event.update(
+                recovery_mode="return_held_then_rebuild",
+                completed_levels=completed,
+                object_index=index,
+                side=side,
+                return_source_xy_m=list(task.placements[index].xy_m),
+                stabilizer_grasp_lost=True,
+            )
+        return event
 
     def close(self):
         try:

@@ -804,7 +804,40 @@ def main() -> None:
                             ticks=args.policy_window_ticks,
                         )
                         report["correction_source"] = recorder.correction_source
-                        if report["fault"].get("recovery_mode") == "rebuild_released_prefix":
+                        recovery_mode = report["fault"].get("recovery_mode")
+                        if recovery_mode == "return_held_then_rebuild":
+                            from vla_lego.isaac.campaign_faults import return_held_piece
+
+                            if level == cooperative_level:
+                                # Retain the measured hand pose, not the old policy prefix target.
+                                _, joint_ids, _ = reference.ctrl.frames[stabilizer_side]
+                                reference.hold_targets[stabilizer_side] = reference.ctrl.pose(
+                                    stabilizer_side
+                                )[0].tolist()
+                                reference.hold_postures[stabilizer_side] = (
+                                    env.robot.data.joint_pos.torch[0, joint_ids].tolist()
+                                )
+                                stabilizer_grip_floor = None
+                            return_held_piece(reference, task, report["fault"])
+                            if level == cooperative_level:
+                                reference.grip(
+                                    "placement_correction_stabilizer_open", stabilizer_side, None
+                                )
+                                reference.hold_targets.pop(stabilizer_side, None)
+                                reference.hold_postures.pop(stabilizer_side, None)
+                                tool = reference.ctrl.pose(stabilizer_side)[0].tolist()
+                                reference.move(
+                                    "placement_correction_stabilizer_clear",
+                                    stabilizer_side,
+                                    [*tool[:2], max(tool[2] + 0.06, stabilizer_clear_z)],
+                                    quaternion_xyzw=tool[3:],
+                                    linear=True,
+                                )
+                            verify_support(level - 1, "held placement returned to source")
+                        if recovery_mode in (
+                            "rebuild_released_prefix",
+                            "return_held_then_rebuild",
+                        ):
                             completed = report["fault"]["completed_levels"]
                             # Re-execute the same physical assembly primitives from the loss.
                             remaining = list(enumerate(plan))[completed : level + 1] + remaining

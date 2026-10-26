@@ -96,6 +96,13 @@ def recover_dropped(reference, task, index: int, side: str, yaw: float, *, repla
 
 def return_wrong_piece(reference, task, event) -> None:
     """Return the actually held wrong piece before resuming the instructed tower."""
+    return_held_piece(reference, task, event, stage_prefix="wrong_piece_correction")
+
+
+def return_held_piece(
+    reference, task, event, *, stage_prefix="placement_correction_return"
+) -> None:
+    """Physically release a held piece at its vacant source before another pick."""
     from vla_lego.isaac.evaluation import CONTACT_ZERO_N, POSITION_TOLERANCE_M, _corners
 
     env = reference.env
@@ -109,7 +116,7 @@ def return_wrong_piece(reference, task, event) -> None:
             + 0.01
         ):
             raise RuntimeError(
-                "Wrong piece's return space is occupied; another correction is needed"
+                "Held piece's return space is occupied; another correction is needed"
             )
     state = env.task_truth(index)
     tool = reference.ctrl.pose(side)[0].tolist()
@@ -117,14 +124,20 @@ def return_wrong_piece(reference, task, event) -> None:
     offset = tool[2] - state["block_pose_w"][2]
     bottom = min(c[2] for c in _corners(spec.dimensions_m, state["block_pose_w"]))
     release_z = TABLE_TOP + state["block_pose_w"][2] - bottom + offset
-    clear_z = max(tool[2], release_z + 0.12, 1.02)
+    obstacle_top = max(
+        c[2]
+        for i, placement in enumerate(task.placements)
+        if i != index
+        for c in _corners(placement.spec.dimensions_m, env.task_truth(i)["block_pose_w"])
+    )
+    clear_z = max(tool[2], release_z + 0.12, 1.02, tool[2] + obstacle_top + 0.025 - bottom)
     for stage, xyz in (
         ("raise", [*tool[:2], clear_z]),
         ("return", [*xy, clear_z]),
         ("lower", [*xy, release_z]),
     ):
         reference.move(
-            "wrong_piece_correction_" + stage,
+            stage_prefix + "_" + stage,
             side,
             xyz,
             0,
@@ -132,16 +145,16 @@ def return_wrong_piece(reference, task, event) -> None:
             linear=True,
             linear_step_m=0.02,
         )
-    reference.grip("wrong_piece_correction_release", side, None)
+    reference.grip(stage_prefix + "_release", side, None)
     reference.move(
-        "wrong_piece_correction_withdraw",
+        stage_prefix + "_withdraw",
         side,
         [*xy, clear_z],
         0,
         quaternion_xyzw=orientation,
         linear=True,
     )
-    reference.wait(10, "wrong_piece_correction_support")
+    reference.wait(10, stage_prefix + "_support")
     returned = env.task_truth(index)
     actual_bottom = min(c[2] for c in _corners(spec.dimensions_m, returned["block_pose_w"]))
     event["returned_table_support"] = (
@@ -150,7 +163,7 @@ def return_wrong_piece(reference, task, event) -> None:
         and abs(actual_bottom - TABLE_TOP) < POSITION_TOLERANCE_M
     )
     if not event["returned_table_support"]:
-        raise RuntimeError("Actual wrong piece was not physically returned to table support")
+        raise RuntimeError("Actual held piece was not physically returned to table support")
 
 
 def recover_held_placement(reference, task, index, side, yaw, bottom) -> float:
