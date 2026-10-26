@@ -307,6 +307,16 @@ def main() -> None:
                 sample_cooperation,
                 event_settling=args.event_settling,
             )
+            if args.campaign_cases:
+                from isaaclab.utils.math import quat_from_matrix
+
+                # A resting reset must not redefine the source grasp frame.
+                reference.initial_orientations = {
+                    side: quat_from_matrix(
+                        solver.forward(env.target.new_zeros((1, 7)))[0][:, :3, :3]
+                    )[0]
+                    for side, solver in reference.solvers.items()
+                }
             if reference_orientations is not None:
                 # Preserve the shared initial grasp convention, not the failed policy's wrist pose.
                 reference.initial_orientations = reference_orientations
