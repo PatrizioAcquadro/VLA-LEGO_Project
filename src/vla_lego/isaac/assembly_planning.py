@@ -61,6 +61,8 @@ def choose_build_site(reference, task, indices, roles, cooperative_level):
     No source scene, instruction or goal criterion changes. A free site is a
     teacher choice, not a hidden destination that the policy must reproduce.
     """
+    from vla_lego.isaac.stabilizer_planning import plan_stabilizer
+
     rejected = []
     for xy in build_site_candidates(task):
         try:
@@ -73,10 +75,33 @@ def choose_build_site(reference, task, indices, roles, cooperative_level):
                     yaw + task.placements[index].yaw_deg,
                     pick_route(task, level, block, xy, side, cooperative_level),
                 )
+            # Predict only nominal prefix geometry; never write those poses into simulation.
+            states = [reference.env.task_truth(i) for i in range(len(task.placements))]
+            bottom = TABLE_TOP
+            for level in range(cooperative_level):
+                index = indices[level]
+                height = task.targets[level].dimensions_m[2]
+                states[index] = {
+                    **states[index],
+                    "block_pose_w": [*xy, bottom + height / 2, *states[index]["block_pose_w"][3:]],
+                }
+                bottom += height
+            selected, _, failures = plan_stabilizer(
+                reference,
+                task,
+                indices,
+                cooperative_level,
+                roles[cooperative_level - 1][0],
+                states=states,
+            )
+            if selected is None:
+                rejected.append({"xy_m": xy, "stage": "stabilizer", "reasons": failures})
+                continue
             return xy, {
                 "declared_preference_xy_m": task.assembly_xy_m,
                 "selected_xy_m": xy,
                 "all_level_arm_routes_admitted": True,
+                "stabilizer_approach_and_withdrawal_admitted": True,
                 "rejected": rejected,
                 "physical_success": False,
             }

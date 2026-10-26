@@ -11,7 +11,10 @@ from vla_lego.isaac.campaign_design import build_declaration
 from vla_lego.isaac.environment import TABLE_TOP
 
 
-def test_site_selection_checks_the_last_level_without_changing_scene_or_goal(tmp_path):
+def test_site_selection_checks_the_last_level_without_changing_scene_or_goal(tmp_path, monkeypatch):
+    from vla_lego.isaac import stabilizer_planning
+
+    monkeypatch.setattr(stabilizer_planning, "plan_stabilizer", lambda *a, **k: (True, 0, []))
     path = tmp_path / "cases.json"
     path.write_text(json.dumps(build_declaration()))
     case = next(c for c in load_campaign(path) if c.name == "TR-R-slip_drop-01-00-0")
@@ -40,3 +43,36 @@ def test_site_selection_checks_the_last_level_without_changing_scene_or_goal(tmp
     route = pick_route(task, 4, block, selected, roles[-1][0], 3)
     expected = TABLE_TOP + sum(t.dimensions_m[2] for t in task.targets[:4])
     assert route[-3][2] == pytest.approx(expected + task.targets[4].dimensions_m[2] / 2 + 0.06)
+
+
+def test_a_placeable_tower_site_still_requires_stabilizer_access(tmp_path, monkeypatch):
+    from copy import deepcopy
+
+    from vla_lego.isaac import stabilizer_planning
+
+    path = tmp_path / "cases.json"
+    path.write_text(json.dumps(build_declaration()))
+    case = next(c for c in load_campaign(path) if c.name == "DC-T01-00-0")
+    task = case.task()
+    indices = [next(i for i, p in enumerate(task.placements) if p.spec == t) for t in task.targets]
+    roles = [("left" if task.placements[i].xy_m[1] > 0 else "right", 0) for i in indices]
+    states = [
+        {"block_pose_w": [*p.xy_m, TABLE_TOP + p.spec.dimensions_m[2] / 2, 0, 0, 0, 1]}
+        for p in task.placements
+    ]
+    original = deepcopy(states)
+
+    def plan(*args, states, **kwargs):
+        xy = states[indices[0]]["block_pose_w"][:2]
+        return (
+            (True, 0, []) if xy == [0.4, 0.0] else (None, float("inf"), ["inaccessible stabilizer"])
+        )
+
+    monkeypatch.setattr(stabilizer_planning, "plan_stabilizer", plan)
+    reference = SimpleNamespace(
+        env=SimpleNamespace(task_truth=lambda i: states[i]), grasp_yaw=lambda *a: 0
+    )
+    selected, report = choose_build_site(reference, task, indices, roles, 3)
+    assert selected == (0.4, 0.0) and report["stabilizer_approach_and_withdrawal_admitted"]
+    assert report["rejected"][0]["stage"] == "stabilizer"
+    assert states == original and task.assembly_xy_m != selected
