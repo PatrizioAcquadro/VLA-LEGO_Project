@@ -201,7 +201,7 @@ def main() -> None:
             )
         stabilizer_y = 0.20 if stabilizer_side == "left" else -0.20
         stabilizer_level = 0 if single_block or campaign_stop else cooperative_level - 1
-        if pilot_case:
+        if pilot_case and not (single_block or campaign_stop):
             from vla_lego.isaac.stabilizer_planning import stabilized_level
 
             stabilizer_level = stabilized_level(task, cooperative_level)
