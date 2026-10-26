@@ -25,6 +25,7 @@ def main() -> None:
     parser.add_argument("--case")
     parser.add_argument("--policy-source-run", type=Path)
     parser.add_argument("--policy-prefix-ticks", type=int)
+    parser.add_argument("--preserve-first-placement", action="store_true")
     parser.add_argument(
         "--motion-measurement",
         choices=("pose_dwell", "solver_velocity", "pose_step_peaks"),
@@ -41,6 +42,8 @@ def main() -> None:
         parser.error("Policy correction requires both source run and applied prefix length")
     if args.policy_source_run and (not args.record or not args.cases or args.split != "train"):
         parser.error("Own-policy corrections require a recorded training case")
+    if args.preserve_first_placement and not args.policy_source_run:
+        parser.error("Preserving a placement requires an actual training-policy prefix")
     args.output_dir.mkdir(parents=True, exist_ok=False)
     report: dict = {
         "kind": "physical_tower_reference",
@@ -171,6 +174,16 @@ def main() -> None:
             if not correction_source["exact_native_parity"]:
                 raise RuntimeError("Policy-error replay does not reproduce its recorded state")
             correction_source["source_terminal_decision"] = source["terminal_decision"]
+            if args.preserve_first_placement:
+                from itertools import islice
+
+                from vla_lego.isaac.policy_replay import preserved_first_placement
+
+                with (args.policy_source_run / "trace.jsonl").open() as stream:
+                    correction_source["first_placement"] = preserved_first_placement(
+                        task,
+                        (json.loads(line) for line in islice(stream, args.policy_prefix_ticks)),
+                    )
             report["correction_source"] = correction_source
         if args.record:
             recorder = EpisodeRecorder(
@@ -521,13 +534,18 @@ def main() -> None:
             env.capture()
             Image.fromarray(env.observe()["head_rgb"]).save(args.output_dir / "initial.png")
             env.stage.Export(str(args.output_dir / "scene.usda"))
-            bottom = TABLE_TOP
+            start_level = 1 if args.preserve_first_placement else 0
+            bottom = TABLE_TOP + sum(t.dimensions_m[2] for t in task.targets[:start_level])
+            if start_level:
+                verify_support(0, "preserved policy placement and park")
             stabilizer_withdraw = None
             build_xy = task.assembly_xy_m
             # Per-piece yaw is a teacher planning choice, never a policy observation.
             for level, (target, index, (side, base_yaw)) in enumerate(
                 zip(task.targets, indices, roles, strict=True)
             ):
+                if level < start_level:
+                    continue
                 if level and pilot_case:
                     build_xy = tuple(env.task_truth(indices[0])["block_pose_w"][:2])
                 prefix = f"level{level}"

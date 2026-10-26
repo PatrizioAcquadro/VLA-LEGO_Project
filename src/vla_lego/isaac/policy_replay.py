@@ -6,9 +6,75 @@ import argparse
 import json
 import time
 import traceback
+from collections import deque
+from collections.abc import Iterable
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
+
+
+def preserved_first_placement(task: Any, rows: Iterable[dict]) -> dict:
+    """Admit a teacher handoff after an actual first pick/place, never a loose reset."""
+    from vla_lego.isaac.evaluation import (
+        CONTACT_ZERO_N,
+        DWELL_DISPLACEMENT_M,
+        DWELL_S,
+        PERIOD_S,
+        POSITION_TOLERANCE_M,
+        TowerEvaluator,
+        _footprint_inside,
+    )
+
+    index = next(i for i, p in enumerate(task.placements) if p.spec == task.targets[0])
+    valid: deque = deque(maxlen=round(DWELL_S / PERIOD_S) + 1)
+    evaluator = None
+    acquired = False
+    for tick, row in enumerate(rows):
+        if row.get("tick") != tick or row.get("decision") != "continue":
+            raise ValueError("First-placement handoff requires an applied contiguous prefix")
+        if evaluator is None:
+            evaluator = TowerEvaluator(task, row["robot"]["robot_contact_paths"])
+            initial_z = row["blocks"][index]["block_pose_w"][2]
+        evaluator.update(row["time_s"], row["blocks"])
+        block = row["blocks"][index]
+        pose = block["block_pose_w"]
+        # Reuse the acquisition review's functional lift, not a contact bounce.
+        acquired |= pose[2] - initial_z > 0.03 and any(
+            evaluator._gripping(block, side) for side in ("left", "right")
+        )
+        site_valid = _footprint_inside(task, index, pose)
+        if task.build_region_xy_m is not None:
+            x0, x1, y0, y1 = task.build_region_xy_m
+            site_valid &= x0 <= pose[0] <= x1 and y0 <= pose[1] <= y1
+        valid.append(
+            site_valid
+            and all(check["finite"] for check in evaluator.history[-1][1])
+            and abs(pose[2] - evaluator.expected_z[0]) < POSITION_TOLERANCE_M
+            and block["nonrobot_contact_force_n"] > CONTACT_ZERO_N
+            and all(b["robot_contact_force_n"] < CONTACT_ZERO_N for b in row["blocks"])
+        )
+    if evaluator is None:
+        raise ValueError("Missing first-placement prefix")
+    times = [row[0] for row in evaluator.history]
+    drift = evaluator._dwell_displacements()[index]
+    if not (
+        acquired
+        and len(valid) == valid.maxlen
+        and all(valid)
+        and times[-1] - times[0] >= DWELL_S - 1e-8
+        and all(b - a <= PERIOD_S + 1e-8 for a, b in zip(times, times[1:], strict=False))
+        and drift <= DWELL_DISPLACEMENT_M
+    ):
+        raise ValueError("First piece lacks acquired, supported, released and stable placement")
+    return {
+        "preserved_target_levels": [0],
+        "next_target_level": 1,
+        "prefix_ticks": tick + 1,
+        "base_pose_w": list(pose),
+        "released_dwell_s": times[-1] - times[0],
+        "dwell_corner_displacement_m": drift,
+        "autonomous_full_task_success": False,
+    }
 
 
 def replay_prefix(env: Any, source: Path, ticks: int) -> dict:

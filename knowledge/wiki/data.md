@@ -31,6 +31,12 @@ All eight initial/cooperative-or-failure/final image triplets were inspected. Pa
 
 The separate iteration04 cohort contains **63 training / 10 unchanged development episodes**: original 50, seven admitted policy corrections and these six new nominal demonstrations. Four new scene families contribute, with only two complete pairs. Sampling allocates 60% to the original 60/30/10 nominal/recovery/stop mixture, 20% to prior corrections and 20% to the new episodes. Each added pool chooses families uniformly before admitted continuations/variants; half its draws balance first start/approach/grasp/lift and the remainder retains the full tower and terminals. Stages remain offline strata. Original 3,757 masked error frames and all negative outcomes remain preserved. Membership, mixture and sample stream freeze within this new campaign; the earlier cohort and normalization are unchanged.
 
+## Continuations after an autonomous first placement
+
+The completed iteration04-30k review does not retain the 15k first placement. The next bounded batch has two TRAIN-only teacher attempts: T1 from exact 15k after 1,000 applied commands, when its correct first cube is already released and stable, and T2 from exact 30k after 1,200 commands of its failed approach. These are descendants of two existing families, not new independent scenes. No data are admitted yet.
+
+Each continuation physically replays only the recorded robot commands and requires exact native robot/all-block state parity. The optional teacher-only `--preserve-first-placement` additionally requires prior bilateral functional lift and an unchanged two-second supported, released, stable dwell inside the valid build region. It skips re-acquiring the first piece and starts with the second, preserving the policy-chosen base and complete five-piece instruction. It supplies no task stage or privileged state to policy inputs. The unmodified full-tower evaluator still requires order, cooperation, release and stability. Every failed attempt stays entirely context only, without retries; only whole verified continuations may enter a subsequently declared cohort. This is teacher-data collection, not autonomous tower evidence.
+
 ## Public sources and admission
 
 Start from a robot-pretrained checkpoint and inventory public data broadly. Reuse its existing knowledge without automatically reproducing its pretraining. Add relevant public episodes when they improve manipulation, language grounding, coordination or robustness; preserve sufficient Alex task exposure.
