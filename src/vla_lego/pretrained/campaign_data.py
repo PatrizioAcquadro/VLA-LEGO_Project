@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 from torch.utils.data import Dataset
 
-from vla_lego.isaac.campaign import CONDITION, EXPECTED
+from vla_lego.isaac.campaign import CONDITION, EXPECTED, RECOVERIES
 from vla_lego.pretrained.pilot_dataset import PilotEpisode
 from vla_lego.pretrained.pilot_training_data import phase
 
@@ -39,6 +39,38 @@ def motor_supervision(annotations: list[dict], category: str) -> np.ndarray:
         ],
         dtype=bool,
     )
+
+
+def recovery_coverage(root: Path, entries: list[dict]) -> Counter:
+    """Count verified observed errors, independently of the requested collection mechanism."""
+    aliases = {
+        "missed grasp": "missed_grasp",
+        "wrong distractor picked": "wrong_piece",
+        "physically consequential incomplete placement": "placement",
+    }
+    coverage: Counter = Counter()
+    for entry in entries:
+        if entry["category"] != "recovery":
+            continue
+        recording = (root / entry["recording"]).resolve()
+        if not recording.is_relative_to(root.resolve()):
+            raise ValueError("Correction source escapes the admitted corpus")
+        report = json.loads((recording.parent / "report.json").read_text())
+        fault = report.get("fault", {})
+        mechanism = aliases.get(fault.get("type"), fault.get("type"))
+        if (
+            not report.get("passed")
+            or not fault.get("physically_verified")
+            or mechanism not in RECOVERIES
+        ):
+            raise ValueError("Recovery coverage requires a verified physical error and completion")
+        observed = fault.get("policy_source", {}).get("observed_mechanism")
+        if observed is not None and observed != mechanism:
+            raise ValueError("Observed policy error differs from the recorded recovery mechanism")
+        if entry.get("observed_mechanism", mechanism) != mechanism:
+            raise ValueError("Admission labels differ from the physically observed recovery")
+        coverage[(entry["partition"], mechanism)] += 1
+    return coverage
 
 
 def admitted_entries(root: Path) -> list[dict]:
@@ -82,6 +114,17 @@ def admitted_entries(root: Path) -> list[dict]:
                 raise ValueError("A nominal pause cannot satisfy a teacher coordination recovery")
     if policy_corrections < 30:
         raise ValueError("Learning requires30 actual new TRAIN policy-state corrections")
+    expected_coverage = Counter(
+        {
+            (partition, mechanism): count
+            for partition, count in (("train", 15), ("calibration", 2), ("confirmation", 2))
+            for mechanism in RECOVERIES
+        }
+    )
+    if recovery_coverage(root, entries) != expected_coverage:
+        raise ValueError(
+            "Learning waits for actual recovery coverage:15 TRAIN and4 development per mechanism"
+        )
     return list(entries)
 
 

@@ -76,6 +76,37 @@ def test_complete_episode_counts_cannot_replace_actual_policy_state_corrections(
         admitted_entries(tmp_path)
 
 
+def test_recovery_coverage_counts_observed_interruption_instead_of_requested_placement(tmp_path):
+    from vla_lego.pretrained.campaign_data import recovery_coverage
+
+    recording = tmp_path / "episode" / "recording"
+    recording.mkdir(parents=True)
+    entry = {
+        "category": "recovery",
+        "partition": "train",
+        "recording": "episode/recording",
+        "declared_mechanism": "placement",
+    }
+    report = {
+        "passed": True,
+        "fault": {
+            "type": "interrupted_progress",
+            "physically_verified": True,
+            "policy_source": {"observed_mechanism": "interrupted_progress"},
+        },
+    }
+    (recording.parent / "report.json").write_text(json.dumps(report))
+    assert recovery_coverage(tmp_path, [entry]) == {("train", "interrupted_progress"): 1}
+    entry["observed_mechanism"] = "placement"
+    with pytest.raises(ValueError, match="Admission labels"):
+        recovery_coverage(tmp_path, [entry])
+    entry.pop("observed_mechanism")
+    report["fault"]["physically_verified"] = False
+    (recording.parent / "report.json").write_text(json.dumps(report))
+    with pytest.raises(ValueError, match="verified physical"):
+        recovery_coverage(tmp_path, [entry])
+
+
 def test_impossible_task_prefix_is_not_sampled_or_used_for_motor_statistics(tmp_path, monkeypatch):
     from types import SimpleNamespace
 
