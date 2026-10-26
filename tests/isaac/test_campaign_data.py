@@ -74,3 +74,52 @@ def test_complete_episode_counts_cannot_replace_actual_policy_state_corrections(
     (tmp_path / "admitted-episodes.json").write_text(json.dumps({"episodes": entries}))
     with pytest.raises(ValueError, match="30 actual"):
         admitted_entries(tmp_path)
+
+
+def test_impossible_task_prefix_is_not_sampled_or_used_for_motor_statistics(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from vla_lego.isaac.campaign import CONDITION
+    from vla_lego.pretrained import campaign_data
+
+    annotations = [{"stage": "level0_transport", "positive_imitation": True} for _ in range(3)] + [
+        {"stage": "verified_justified_abstention", "positive_imitation": True} for _ in range(3)
+    ]
+    frames = [
+        {
+            "joint_position": [1000.0 if i < 3 else 2.0] * 18,
+            "joint_velocity": [0.0] * 18,
+            "action": [1000.0 if i < 3 else 3.0] * 16,
+        }
+        for i in range(6)
+    ]
+    entry = {
+        "case": "stop",
+        "family": "stop-family",
+        "category": "stop",
+        "partition": "train",
+        "recording": "recording",
+    }
+    episode = SimpleNamespace(
+        metadata={
+            "collection_condition": CONDITION,
+            "collection_case": entry,
+            "generation_family": "stop-family",
+        },
+        annotations=annotations,
+        frames=frames,
+        eligible_frames=list(range(6)),
+        horizon=2,
+    )
+    monkeypatch.setattr(campaign_data, "admitted_entries", lambda root: [entry])
+    monkeypatch.setattr(campaign_data, "PilotEpisode", lambda *a, **k: episode)
+    data = CampaignData(tmp_path, "train", seed=1)
+    assert {sample for values in data.pools[0].values() for sample in values} == {3, 4, 5}
+    assert data.diagnostic_samples() == [(0, 3, "released_stop")]
+    statistics = data.statistics()
+    assert np.allclose(statistics["observation.state"]["mean"][:18], 2.0)
+    assert np.allclose(statistics["action"]["mean"][:14], 1.0)
+    assert np.allclose(statistics["action"]["mean"][14:], 3.0)
+    assert len(episode.frames) == 6 and all(a["positive_imitation"] for a in annotations)

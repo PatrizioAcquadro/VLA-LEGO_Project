@@ -29,6 +29,18 @@ def motor_phase(stage: str) -> str:
     return base
 
 
+def motor_supervision(annotations: list[dict], category: str) -> np.ndarray:
+    """An impossible-task prefix is context; its verified released stop is the motor target."""
+    return np.asarray(
+        [
+            a["positive_imitation"]
+            and (category != "stop" or a["stage"] == "verified_justified_abstention")
+            for a in annotations
+        ],
+        dtype=bool,
+    )
+
+
 def admitted_entries(root: Path) -> list[dict]:
     entries = json.loads((root / "admitted-episodes.json").read_text())["episodes"]
     if any(not entry.get("admitted") for entry in entries):
@@ -105,7 +117,10 @@ class CampaignData(Dataset[dict]):
             ):
                 raise ValueError("Episode differs from its admitted membership")
             pools: dict[str, list[int]] = defaultdict(list)
+            supervised = motor_supervision(episode.annotations, entry["category"])
             for sample, raw in enumerate(episode.eligible_frames):
+                if not supervised[raw]:
+                    continue
                 stage = episode.annotations[raw]["stage"]
                 if entry["category"] != "stop" and any(
                     t in stage for t in ("verified_complete", "final_released_dwell")
@@ -138,6 +153,7 @@ class CampaignData(Dataset[dict]):
             "control_updates": 20000,
             "full_category_weights": [0.30, 0.50, 0.15, 0.05],
             "sampling": "uniform families, episodes, available level/phase buckets",
+            "stop_motor_targets": "verified released abstention only; prefix remains context",
         }
 
     def __len__(self):
@@ -167,7 +183,9 @@ class CampaignData(Dataset[dict]):
         for number, _episode in enumerate(self.episodes):
             if single_only and self.entries[number]["category"] != "single_block":
                 continue
-            selected = {0: "startup"}
+            stop = self.entries[number]["category"] == "stop"
+            first = min(min(values) for values in self.pools[number].values()) if stop else 0
+            selected = {first: "released_stop" if stop else "startup"}
             for bucket, values in self.pools[number].items():
                 if bucket.endswith(("grasp", "place", "release")) or bucket == "shared/cooperation":
                     selected.setdefault(values[len(values) // 2], bucket)
@@ -179,18 +197,17 @@ class CampaignData(Dataset[dict]):
             raise ValueError("Only training families fit normalization")
         state_total, state_squares, state_count = np.zeros(32), np.zeros(32), 0
         action_total, action_squares, action_count = np.zeros(16), np.zeros(16), 0
-        for episode in self.episodes:
+        for entry, episode in zip(self.entries, self.episodes, strict=True):
+            supervised = motor_supervision(episode.annotations, entry["category"])
             positions = np.asarray([row["joint_position"][:14] for row in episode.frames])
             actions = np.asarray([row["action"] for row in episode.frames])
             states = np.asarray(
                 [[*row["joint_position"], *row["joint_velocity"][:14]] for row in episode.frames]
-            )[episode.eligible_frames]
+            )[supervised]
             state_total += states.sum(0)
             state_squares += (states * states).sum(0)
             state_count += len(states)
-            invalid = np.r_[
-                0, np.cumsum([not a["positive_imitation"] for a in episode.annotations])
-            ]
+            invalid = np.r_[0, np.cumsum(~supervised)]
             for offset in range(min(episode.horizon, len(actions))):
                 valid = invalid[offset + 1 :] == invalid[: len(actions) - offset]
                 values = actions[offset:][valid].copy()
