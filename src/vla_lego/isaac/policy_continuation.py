@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import socket
+from collections import deque
 from pathlib import Path
 
 from vla_lego.isaac.environment import TABLE_TOP
@@ -473,11 +474,15 @@ class PolicyIntervention:
         descent, lateral = 0.0, 0.0
         unsupported_since = None
         evidence = None
+        recent = deque()
 
         def observe(states):
             nonlocal max_z, descent, lateral, unsupported_since, evidence
             state = states[index]
             pose = state["block_pose_w"]
+            recent.append((env.time, tuple(pose[:3])))
+            while len(recent) > 1 and recent[1][0] <= env.time - 5:
+                recent.popleft()
             max_z = max(max_z, pose[2])
             descent = max(descent, max_z - pose[2])
             lateral = max(lateral, math.dist(pose[:2], initial_xy))
@@ -502,6 +507,16 @@ class PolicyIntervention:
             return None  # Normal transport pauses are not early failure interventions.
 
         source, _, after, _ = self._window(reference, task, index, ticks=ticks, stop_when=observe)
+        recent_motion = (
+            math.sqrt(
+                sum(
+                    (max(p[axis] for _, p in recent) - min(p[axis] for _, p in recent)) ** 2
+                    for axis in range(3)
+                )
+            )
+            if recent
+            else math.inf
+        )
         if (
             source["executed_motor_commands"] < 1
             or evidence is None
@@ -509,7 +524,12 @@ class PolicyIntervention:
             or max(descent, lateral) < 0.02
             or (
                 source["source_terminal_decision"] == "budget"
-                and env.time - source["start_time_s"] < 60
+                and (
+                    env.time - source["start_time_s"] < 60
+                    or not recent
+                    or env.time - recent[0][0] < 5
+                    or recent_motion >= 0.01
+                )
             )
             or released_prefix(task, after, held_index=index, supported_contacts=allowed)
             != case.error_level
@@ -523,6 +543,7 @@ class PolicyIntervention:
             physically_verified=True,
             error_basis="failed_actual_load_transfer",
             observed_error=evidence,
+            recent_held_motion_m=recent_motion,
         )
         recorder.admit_policy_intervention(source)
         return {

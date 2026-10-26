@@ -268,7 +268,9 @@ def test_wrong_piece_intervention_requires_the_actual_incorrect_bilateral_lift(b
         assert not admitted
 
 
-@pytest.mark.parametrize("behavior", ["waiting", "supported", "failed_transfer"])
+@pytest.mark.parametrize(
+    "behavior", ["waiting", "supported", "still_descending", "failed_transfer"]
+)
 def test_placement_failure_excludes_transport_pauses_and_supported_placements(behavior):
     from copy import deepcopy
     from types import SimpleNamespace
@@ -318,6 +320,10 @@ def test_placement_failure_excludes_transport_pauses_and_supported_placements(be
         if behavior == "supported":
             states[1]["block_pose_w"][2] -= 0.05
             states[1]["block_contact_forces_n"][0][2] = 0.3
+        env.time = 75
+        stop_when(states)
+        if behavior == "still_descending":
+            states[1]["block_pose_w"][2] -= 0.02
         env.time = 80
         stop_when(states)
         return (
