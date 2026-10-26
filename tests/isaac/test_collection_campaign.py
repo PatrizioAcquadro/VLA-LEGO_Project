@@ -50,6 +50,49 @@ def test_campaign_rejects_changed_scene_within_instruction_pair(tmp_path):
         load_campaign(path)
 
 
+def test_stop_evidence_requires_impossibility_and_released_support(tmp_path):
+    from vla_lego.isaac.campaign_faults import verify_stop
+
+    data = build_declaration()
+    path = tmp_path / "cases.json"
+    path.write_text(json.dumps(data))
+    cases = load_campaign(path)
+    case = next(c for c in cases if c.row.get("stop_reason") == "missing_color")
+    task = case.task()
+
+    class Environment:
+        blocks = task.placements
+
+        def task_truth(self, index):
+            return {
+                "block_pose_w": [*task.placements[index].xy_m, 0.82, 0, 0, 0, 1],
+                "robot_contact_force_n": 0.0,
+                "nonrobot_contact_force_n": 0.25,
+                "block_contact_forces_n": [[0, 0, 0] for _ in task.placements],
+            }
+
+    assert verify_stop(task, case, Environment())["passed"]
+    feasible = next(c.task() for c in cases if c.category == "tower")
+    assert not verify_stop(feasible, case, Environment())["passed"]
+    placements = [
+        c for c in cases if c.category == "recovery" and c.row["mechanism"] == "placement"
+    ]
+    assert all(1 <= c.error_level < 5 for c in placements)
+    for missing in (c for c in cases if c.row.get("stop_reason", "").startswith("missing_")):
+        attribute = missing.row["stop_reason"].removeprefix("missing_")
+        attribute = "scale" if attribute == "size" else attribute
+        desired = missing.task().targets[missing.error_level]
+        assert any(
+            getattr(p.spec, attribute) != getattr(desired, attribute)
+            and all(
+                getattr(p.spec, k) == getattr(desired, k)
+                for k in ("shape", "scale", "color")
+                if k != attribute
+            )
+            for p in missing.task().placements
+        )
+
+
 def test_single_block_success_requires_actual_grasp_transport_release_and_dwell(tmp_path):
     from vla_lego.isaac.environment import TABLE_TOP
 

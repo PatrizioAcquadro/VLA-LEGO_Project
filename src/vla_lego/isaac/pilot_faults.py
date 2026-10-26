@@ -116,6 +116,8 @@ def placement_fault(
     side: str,
     yaw: float,
     release_z: float,
+    *,
+    horizontal_offset_m: float = 0.015,
 ) -> dict:
     env = reference.env
     index = indices[case.error_level]
@@ -126,7 +128,7 @@ def placement_fault(
     reference.move(
         prefix,
         side,
-        [task.assembly_xy_m[0] + 0.015, task.assembly_xy_m[1], release_z + 0.018],
+        [task.assembly_xy_m[0] + horizontal_offset_m, task.assembly_xy_m[1], release_z + 0.018],
         yaw,
         linear=True,
     )

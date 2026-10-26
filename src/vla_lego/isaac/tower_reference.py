@@ -41,7 +41,9 @@ def main() -> None:
         parser.error("--record requires --family and --split before collection")
     if bool(args.policy_source_run) != bool(args.policy_prefix_ticks):
         parser.error("Policy correction requires both source run and applied prefix length")
-    if args.policy_source_run and (not args.record or not args.cases or args.split != "train"):
+    if args.policy_source_run and (
+        not args.record or not (args.cases or args.campaign_cases) or args.split != "train"
+    ):
         parser.error("Own-policy corrections require a recorded training case")
     if args.preserve_first_placement and not args.policy_source_run:
         parser.error("Preserving a placement requires an actual training-policy prefix")
@@ -88,8 +90,10 @@ def main() -> None:
             pilot_case = next(c for c in load_campaign(args.campaign_cases) if c.name == args.case)
             paired_task = pilot_case.task()
             collection_condition = CONDITION
-            if pilot_case.category in ("recovery", "stop"):
-                raise ValueError("Campaign fault/stop collection requires its explicit mechanism")
+            if pilot_case.row.get("correction_origin") == "policy":
+                raise ValueError(
+                    "Policy-origin campaign recovery requires a verified rollout handoff"
+                )
         if args.cases:
             from vla_lego.isaac.pilot import load_cases
 
@@ -114,8 +118,16 @@ def main() -> None:
             if not task.requested_pieces_available:
                 raise ValueError("A continuation demonstration requires a completable inventory")
         single_block = len(task.targets) == 1
-        cooperative_level = 2 if single_block else pilot_case.cooperative_level if pilot_case else 3
+        campaign_stop = bool(args.campaign_cases and pilot_case and pilot_case.category == "stop")
+        cooperative_level = (
+            len(task.targets) + 1
+            if single_block or campaign_stop
+            else pilot_case.cooperative_level if pilot_case else 3
+        )
         report["task_kind"] = "single_block" if single_block else "tower"
+        if single_block or campaign_stop:
+            report["task_kind"] = "single_block" if single_block else "justified_stop"
+            report["kind"] = f"physical_{report['task_kind']}_reference"
         stabilizer_quaternion = [0.0, 0.0, 0.0, 1.0]
         stabilizer_clear_quaternion = [
             0.0,
@@ -139,15 +151,17 @@ def main() -> None:
             if (args.family, args.split) != (pilot_case.row["family"], pilot_case.row["split"]):
                 raise ValueError("Collection family/split differs from the approved case.")
             roles = tuple(
-                (
-                    "left" if p.xy_m[1] > 0 else "right",
-                    -90 if p.xy_m[1] > 0 else 90,
+                next(
+                    (
+                        ("left" if p.xy_m[1] > 0 else "right", -90 if p.xy_m[1] > 0 else 90)
+                        for p in task.placements
+                        if p.spec == target
+                    ),
+                    ("left", -90),
                 )
-                for level, target in enumerate(task.targets)
-                for p in task.placements
-                if p.spec == target
+                for target in task.targets
             )
-        if single_block:
+        if single_block or campaign_stop:
             placer_side = roles[0][0]
             stabilizer_side = "right" if placer_side == "left" else "left"
         else:
@@ -156,7 +170,7 @@ def main() -> None:
                 roles[cooperative_level][0],
             )
         stabilizer_y = 0.20 if stabilizer_side == "left" else -0.20
-        stabilizer_level = 0 if single_block else cooperative_level - 1
+        stabilizer_level = 0 if single_block or campaign_stop else cooperative_level - 1
         if pilot_case:
             # Keep the 40 mm pads away from a wider layer directly below a short cube.
             while (
@@ -215,6 +229,7 @@ def main() -> None:
                 collection_condition=collection_condition if pilot_case else None,
                 correction_source=correction_source,
                 png_compress_level=6 if args.campaign_cases else 1,
+                min_free_bytes=512 * 1024**2 if args.campaign_cases else 0,
             )
             env.recorder = recorder
         report["task"] = asdict(task)
@@ -230,7 +245,8 @@ def main() -> None:
         report["robot_joint_names"] = env.robot.data.joint_names
         report["physics_solver_iterations"] = list(env.solver_iterations)
         indices = [
-            next(i for i, p in enumerate(task.placements) if p.spec == t) for t in task.targets
+            next((i for i, p in enumerate(task.placements) if p.spec == t), -1)
+            for t in task.targets
         ]
         contact_ids = {
             side: [i for i, path in enumerate(env.contact_robot_paths) if f"{side}_WSG32" in path]
@@ -259,6 +275,8 @@ def main() -> None:
                     side: reference.ctrl.pose(side)[0, :3].tolist() for side in ("left", "right")
                 },
             )
+            if args.campaign_cases and recorder is not None and not campaign_stop:
+                recorder.task_decision = "complete" if evaluator.result()["passed"] else "continue"
             if (
                 stabilizer_grip_floor is not None
                 and stabilizer_side in reference.hold_targets
@@ -582,6 +600,8 @@ def main() -> None:
             for level, (target, index, (side, base_yaw)) in enumerate(
                 zip(task.targets, indices, roles, strict=True)
             ):
+                if campaign_stop and pilot_case and level == pilot_case.error_level:
+                    break
                 if level < start_level:
                     continue
                 if level and pilot_case:
@@ -593,6 +613,7 @@ def main() -> None:
                     and pilot_case.category == "recovery"
                     and level == pilot_case.error_level
                     and pilot_case.row["error"] != "physically consequential incomplete placement"
+                    and pilot_case.row["error"] not in ("slip_drop", "interrupted_progress")
                 ):
                     from vla_lego.isaac.pilot_faults import pick_fault
 
@@ -677,6 +698,18 @@ def main() -> None:
                 )
                 if env.task_truth(index)["block_pose_w"][2] < block[2] + 0.07:
                     raise RuntimeError(f"No verified contact-only lift at {prefix}")
+                if (
+                    args.campaign_cases
+                    and pilot_case
+                    and pilot_case.category == "recovery"
+                    and level == pilot_case.error_level
+                    and pilot_case.row["mechanism"] == "slip_drop"
+                ):
+                    from vla_lego.isaac.campaign_faults import drop_and_recover
+
+                    report["fault"] = drop_and_recover(
+                        reference, pilot_case, task, index, side, yaw
+                    )
                 carry_z = transit_z
                 if pilot_case:
                     held = env.task_truth(index)["block_pose_w"]
@@ -755,6 +788,16 @@ def main() -> None:
                         side,
                         yaw,
                         release_z,
+                        **(
+                            {
+                                "horizontal_offset_m": 0.8
+                                * min(
+                                    target.dimensions_m[0], task.targets[level - 1].dimensions_m[0]
+                                )
+                            }
+                            if args.campaign_cases
+                            else {}
+                        ),
                     )
                 reference.move(
                     f"{prefix}_place",
@@ -858,21 +901,48 @@ def main() -> None:
                         reference.park(stabilizer_side)
                     verify_support(level, "stabilizer withdrawal")
                 bottom += target.dimensions_m[2]
+                if (
+                    args.campaign_cases
+                    and pilot_case
+                    and pilot_case.category == "recovery"
+                    and level == min(pilot_case.error_level, 3)
+                    and pilot_case.row["mechanism"] == "interrupted_progress"
+                ):
+                    from vla_lego.isaac.campaign_faults import interrupt_progress
+
+                    report["fault"] = interrupt_progress(reference, pilot_case, level)
             reference.wait(40, "final_released_dwell")
-            if recorder is not None and evaluator.result()["passed"]:
+            stop_evaluation = None
+            if campaign_stop:
+                from vla_lego.isaac.campaign_faults import verify_stop
+
+                stop_evaluation = verify_stop(task, pilot_case, env)
+                report["verified_stop"] = stop_evaluation["passed"]
+                if recorder is not None and stop_evaluation["passed"]:
+                    recorder.task_decision = "abstain"
+                    reference.wait(20, "verified_justified_abstention")
+            elif recorder is not None and evaluator.result()["passed"]:
                 recorder.task_decision = "complete"
-                reference.wait(1, "verified_complete")
+                reference.wait(20 if args.campaign_cases else 1, "verified_complete")
             env.capture()
             Image.fromarray(env.observe()["head_rgb"]).save(args.output_dir / "final.png")
             report.update(
-                completed_reference_sequence=True,
+                completed_reference_sequence=not campaign_stop,
+                tower_success=(
+                    not single_block and not campaign_stop and evaluator.result()["passed"]
+                ),
+                single_block_success=single_block and evaluator.result()["passed"],
                 final_tool_poses={
                     side: reference.ctrl.pose(side)[0].tolist() for side in ("left", "right")
                 },
                 final_truth=[env.task_truth(i) for i in range(len(env.blocks))],
                 cooperation_samples=cooperation,
-                passed=evaluator.result()["passed"],
-                evaluation=evaluator.result(),
+                passed=(
+                    stop_evaluation["passed"]
+                    if stop_evaluation is not None
+                    else evaluator.result()["passed"]
+                ),
+                evaluation=stop_evaluation if campaign_stop else evaluator.result(),
                 qualification=False,
             )
     except Exception:
@@ -881,7 +951,9 @@ def main() -> None:
     finally:
         if recorder is not None:
             recorder.finish(
-                verified_success=bool(report.get("passed")),
+                verified_success=bool(report.get("passed"))
+                and not report.get("verified_stop", False),
+                verified_stop=bool(report.get("verified_stop", False)),
                 reason=report.get(
                     "error",
                     (

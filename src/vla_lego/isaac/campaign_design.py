@@ -153,6 +153,10 @@ def _item(
         "error_target_level": str(1 + repetition % 5),
         "variation": extra.pop("profile", "baseline"),
     }
+    if category == "recovery" and extra.get("mechanism") == "placement":
+        row["error_target_level"] = str(2 + repetition % 4)
+    if category == "recovery" and extra.get("mechanism") == "interrupted_progress":
+        row["error_target_level"] = str(1 + repetition % 4)
     row.update(extra)
     return dict(row=row, targets=targets, instruction=instruction, **scene)
 
@@ -241,36 +245,39 @@ def _add_recoveries_and_stops(cases: list[dict]) -> None:
 
 def _stop_case(family: str, partition: str, reason: str, seed: int, j: int) -> dict:
     rng = random.Random(seed)
-    targets = rng.sample(list(PIECES), 5)
-    scene = _scene(_inventory(targets, rng), seed, "baseline", left=j % 2 == 0)
     level = (0, 2, 4)[j % 3]
+    contrast = None
+    if reason == "unreachable":
+        targets = rng.sample(list(PIECES), 5)
+    else:
+        attribute = reason.removeprefix("missing_")
+        attribute = "scale" if attribute == "size" else attribute
+        pairs = [
+            (a, b)
+            for a in PIECES
+            for b in PIECES
+            if a != b
+            and getattr(piece(a), attribute) != getattr(piece(b), attribute)
+            and all(
+                getattr(piece(a), k) == getattr(piece(b), k)
+                for k in ("color", "shape", "scale")
+                if k != attribute
+            )
+        ]
+        selected, contrast = rng.choice(pairs)
+        targets = rng.sample([p for p in PIECES if p not in (selected, contrast)], 4)
+        targets.insert(level, selected)
+    scene = _scene(_inventory(targets, rng), seed, "baseline", left=j % 2 == 0)
     selected = targets[level]
-    original = piece(selected)
     placement = next(p for p in scene["placements"] if p["piece"] == selected)
     if reason == "unreachable":
         placement["xy_m"] = [0.84, 0.40 if j % 2 else -0.40]
     else:
-        attribute = reason.removeprefix("missing_")
-        alternatives = [
-            p
-            for p in PIECES
-            if p not in targets
-            and p not in [q["piece"] for q in scene["placements"]]
-            and getattr(piece(p), "scale" if attribute == "size" else attribute)
-            != getattr(original, "scale" if attribute == "size" else attribute)
-        ]
-        if not alternatives:
-            raise ValueError("No visible missing-piece contrast is available")
-        # Prefer a replacement that changes only the requested attribute.
-        other_attributes = {"shape", "scale", "color"} - {
-            "scale" if attribute == "size" else attribute
-        }
-        alternatives.sort(
-            key=lambda p: sum(
-                getattr(piece(p), a) != getattr(original, a) for a in other_attributes
-            )
-        )
-        placement["piece"] = alternatives[0]
+        inventory = [p["piece"] for p in scene["placements"]]
+        if contrast in inventory:
+            placement["piece"] = rng.choice([p for p in PIECES if p not in inventory])
+        else:
+            placement["piece"] = contrast
     return _item(
         family,
         "stop",

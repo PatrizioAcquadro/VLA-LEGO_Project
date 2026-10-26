@@ -65,7 +65,22 @@ def load_campaign(path: Path) -> tuple[CollectionCase, ...]:
     data = json.loads(path.read_text())
     if data.get("collection_condition") != CONDITION:
         raise ValueError("Expected the declared Alex003 expansion campaign")
-    cases = tuple(CollectionCase(item["row"], i, item) for i, item in enumerate(data["cases"]))
+    cases = []
+    errors = {
+        "missed_grasp": "missed grasp",
+        "wrong_piece": "wrong distractor picked",
+        "placement": "physically consequential incomplete placement",
+        "slip_drop": "slip_drop",
+        "interrupted_progress": "interrupted_progress",
+    }
+    for i, item in enumerate(data["cases"]):
+        row = dict(item["row"])
+        if row["category"] == "recovery":
+            row["error"] = errors[row["mechanism"]]
+            row["wrong_piece"] = next(
+                p["piece"] for p in item["placements"] if p["piece"] not in item["targets"]
+            )
+        cases.append(CollectionCase(row, i, item))
     if Counter((c.row["partition"], c.category) for c in cases) != EXPECTED:
         raise ValueError("Campaign must contain the complete declared 500/60/60 allocation")
     if len({c.name for c in cases}) != len(cases):
@@ -100,4 +115,4 @@ def load_campaign(path: Path) -> tuple[CollectionCase, ...]:
             for k in ("mass_scale", "friction", "appearance", "assembly_xy_m")
         ):
             raise ValueError("An instruction pair changes physics or destination")
-    return cases
+    return tuple(cases)

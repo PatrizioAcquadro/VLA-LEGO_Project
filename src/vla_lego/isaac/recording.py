@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 
@@ -21,6 +22,7 @@ class EpisodeRecorder:
         collection_case: dict | None = None,
         collection_condition: str | None = None,
         png_compress_level: int = 1,
+        min_free_bytes: int = 0,
     ):
         if not family or split not in ("train", "development"):
             raise ValueError(
@@ -45,6 +47,7 @@ class EpisodeRecorder:
         if not 0 <= png_compress_level <= 9:
             raise ValueError("PNG compression must be in0..9")
         self.png_compress_level = png_compress_level
+        self.min_free_bytes = min_free_bytes
         self.fault_verified = False
         self.task_decision = "continue"
         self.count = 0
@@ -68,6 +71,8 @@ class EpisodeRecorder:
 
         if self.closed:
             raise RuntimeError("Cannot append to a closed episode.")
+        if self.count % 20 == 0 and shutil.disk_usage(self.directory).free < self.min_free_bytes:
+            raise OSError("Insufficient free space for the campaign's bounded recording staging")
         state_names = tuple(observation["joint_names"])
         if self.state_names is None:
             self.state_names, self.action_names = state_names, action_names
