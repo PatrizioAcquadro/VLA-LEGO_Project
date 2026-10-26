@@ -105,7 +105,12 @@ def main() -> None:
             paired_task = pilot_case.task()
             collection_condition = CONDITION
             if pilot_case.row.get("correction_origin") == "policy" and (
-                not args.policy_socket or pilot_case.row["mechanism"] != "interrupted_progress"
+                not args.policy_socket
+                or pilot_case.row["mechanism"] not in ("interrupted_progress", "slip_drop")
+                or (
+                    pilot_case.row["mechanism"] == "slip_drop"
+                    and pilot_case.error_level >= pilot_case.cooperative_level
+                )
             ):
                 raise ValueError(
                     "Policy-origin recovery needs its actual supported in-place mechanism"
@@ -650,6 +655,7 @@ def main() -> None:
                 if (
                     policy_intervention is not None
                     and pilot_case is not None
+                    and pilot_case.row["mechanism"] == "interrupted_progress"
                     and level == pilot_case.error_level + 1
                     and "fault" not in report
                 ):
@@ -735,11 +741,22 @@ def main() -> None:
                     and level == pilot_case.error_level
                     and pilot_case.row["mechanism"] == "slip_drop"
                 ):
-                    from vla_lego.isaac.campaign_faults import drop_and_recover
+                    from vla_lego.isaac.campaign_faults import drop_and_recover, recover_dropped
 
-                    report["fault"] = drop_and_recover(
-                        reference, pilot_case, task, index, side, yaw
-                    )
+                    if policy_intervention is not None:
+                        assert recorder is not None
+                        report["fault"] = policy_intervention.slip_drop(
+                            reference, pilot_case, task, index, ticks=args.policy_window_ticks
+                        )
+                        report["correction_source"] = recorder.correction_source
+                        verify_support(level - 1, "actual policy drop")
+                        yaw = recover_dropped(reference, task, index, side, yaw, replan=True)
+                        block = report["fault"]["recovery_source_pose_w"][:3]
+                        lift_z = block[2] + 0.16
+                    else:
+                        report["fault"] = drop_and_recover(
+                            reference, pilot_case, task, index, side, yaw
+                        )
                 carry_z = transit_z
                 if pilot_case:
                     held = env.task_truth(index)["block_pose_w"]

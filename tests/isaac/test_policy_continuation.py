@@ -97,3 +97,50 @@ def test_policy_window_actions_stay_negative_and_cannot_be_declared_teacher_faul
     (tmp_path / "policy-window.jsonl").write_text("")
     with pytest.raises(ValueError, match="actual applied"):
         verify_policy_correction(directory, metadata)
+
+
+def test_a_correct_placement_or_held_piece_cannot_be_labeled_a_policy_drop():
+    from copy import deepcopy
+    from types import SimpleNamespace
+
+    from vla_lego.isaac.policy_continuation import PolicyIntervention
+
+    task = initial_tower_task()
+    after = [
+        {
+            "block_pose_w": [*p.xy_m, TABLE_TOP + p.spec.dimensions_m[2] / 2, 0, 0, 0, 1],
+            "block_velocity_w": [0.0] * 6,
+            "robot_contact_force_n": 0.0,
+            "nonrobot_contact_force_n": 0.3,
+            "block_contact_forces_n": [[0.0] * 3 for _ in task.placements],
+        }
+        for p in task.placements
+    ]
+    after[0]["block_pose_w"][:2] = list(task.assembly_xy_m)
+    before = deepcopy(after)
+    before[1]["block_pose_w"][2] += 0.1
+    before[1]["robot_contact_force_n"] = 1
+    admitted = []
+    recorder = SimpleNamespace(admit_policy_intervention=admitted.append)
+    env = SimpleNamespace(task_truth=lambda i: before[i], time=10, recorder=recorder)
+    reference = SimpleNamespace(env=env)
+    case = SimpleNamespace(
+        row={"correction_origin": "policy", "mechanism": "slip_drop", "partition": "train"},
+        error_level=1,
+        cooperative_level=3,
+    )
+    intervention = PolicyIntervention.__new__(PolicyIntervention)
+    intervention._window = lambda *a, **k: ({"executed_motor_commands": 1}, before, after, False)
+    event = intervention.slip_drop(reference, case, task, 1)
+    assert not event["teacher_induced"] and event["physically_verified"] and len(admitted) == 1
+    assert event["fall_m"] == pytest.approx(0.1)
+    after[1]["block_pose_w"][:2] = list(task.assembly_xy_m)
+    after[1]["block_pose_w"][2] += task.targets[0].dimensions_m[2]
+    after[1]["nonrobot_contact_force_n"] = 0
+    after[1]["block_contact_forces_n"][0][2] = 0.3
+    with pytest.raises(RuntimeError, match="did not produce"):
+        intervention.slip_drop(reference, case, task, 1)
+    after[1]["robot_contact_force_n"] = 1
+    with pytest.raises(RuntimeError, match="did not produce"):
+        intervention.slip_drop(reference, case, task, 1)
+    assert len(admitted) == 1

@@ -35,6 +35,43 @@ def drop_and_recover(reference, case, task, index: int, side: str, yaw: float) -
         "error_end_s": env.time,
     }
     recorder.positive_imitation = True
+    recover_dropped(reference, task, index, side, yaw)
+    recorder.fault_verified = True
+    return event
+
+
+def recover_dropped(reference, task, index: int, side: str, yaw: float, *, replan=False) -> float:
+    """Reacquire a block that has already fallen; this function never causes the fall."""
+    env = reference.env
+    state = env.task_truth(index)
+    source = state["block_pose_w"][:3]
+    if replan:
+        from vla_lego.isaac.assembly_planning import pick_route
+
+        quaternion = state["block_pose_w"][3:]
+        x, y, z, w = quaternion
+        if task.placements[index].spec.shape == "prism" and abs(1 - 2 * (x * x + y * y)) < math.cos(
+            math.radians(15)
+        ):
+            raise RuntimeError(
+                "Tipped prism requires a verified uprighting correction, not a nominal pick"
+            )
+        actual_yaw = math.degrees(math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z)))
+        level = next(
+            i for i, target in enumerate(task.targets) if target == task.placements[index].spec
+        )
+        yaw = reference.grasp_yaw(
+            side,
+            (-90 if side == "left" else 90) + actual_yaw,
+            pick_route(task, level, source, task.assembly_xy_m, side, 3),
+            object_index=index,
+        )
+        reference.grip("drop_recovery_open", side, None)
+        for name, xyz in (
+            ("edge", [0.4, 0.4 if side == "left" else -0.4, 1.05]),
+            ("source_high", [min(source[0], 0.46), source[1], 1.02]),
+        ):
+            reference.move("drop_recovery_" + name, side, xyz, yaw)
     for name, xyz in (
         ("above", [source[0], source[1], source[2] + 0.16]),
         ("approach", [source[0], source[1], source[2] + 0.10]),
@@ -52,8 +89,7 @@ def drop_and_recover(reference, case, task, index: int, side: str, yaw: float) -
     )
     if env.task_truth(index)["block_pose_w"][2] - source[2] < 0.07:
         raise RuntimeError("Drop correction failed physical re-acquisition")
-    recorder.fault_verified = True
-    return event
+    return yaw
 
 
 def interrupt_progress(reference, case, level: int) -> dict:
