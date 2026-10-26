@@ -1,5 +1,11 @@
 # Models
 
+## Expanded-corpus learning assignment — October 26, 2026
+
+After the new [500/120 corpus](data.md#expanded-alex003-campaign--october-26-2026), start SmolVLA from robot-pretrained weights and establish a substantial 20k-update single-block control, targeting 8/10 correct physical selections, grasps, transports and released placements across familiar and held-out starts. Only then adapt to the complete tower/recovery mixture. Separate compact temporal task classification from the 16 motor targets; calibrate continue/complete/abstain using sensor history and independent family partitions. This is supervised motor learning with outcome-based selection, not reward-optimized policy learning.
+
+The total campaign ceiling is 100k motor updates including control and corrective reruns. Preserve optimizer/scheduler across allocation resumes, inspect behavior and development evidence, and stop extensions on stagnation or regression. A smaller current-versus-best physical panel governs intermediate decisions; the final comparison has 20 fixed confirmation cases. Training has not begun. Historical 15k remains only a component reference and the negative 30k outcome remains preserved.
+
 ## Repair after the negative pilot — October 25, 2026
 
 The completed 70k pilot remains a negative historical result. The new authorized repair campaign starts by isolating acquisition on familiar versus development scenes and the effect of feedback cadence. It does not resume the old run or change its checkpoint selection retrospectively.

@@ -42,6 +42,7 @@ class AssemblyEnvironment:
         solver_iterations: tuple[int, int] = (8, 4),
         measure_pose_motion: bool = False,
         appearance: str = "legacy",
+        parked_start: bool = False,
     ):
         import isaaclab.sim as sim_utils
         import omni.usd
@@ -114,6 +115,11 @@ class AssemblyEnvironment:
             "NECK_Y": 0.40,
             ".*_WSG32_JAW_.*": 0.034,
         }
+        if parked_start:
+            for side in ("LEFT", "RIGHT"):
+                values = (0.8, 0.35 if side == "LEFT" else -0.35, 0.0, -1.8, 0.0, 0.0, 0.0)
+                names = [name for name in ARM_JOINTS if name.startswith(side)]
+                cfg.robot.init_state.joint_pos.update(zip(names, values, strict=True))
         cfg.table = AssetBaseCfg(
             prim_path="{ENV_REGEX_NS}/Table",
             spawn=sim_utils.CuboidCfg(

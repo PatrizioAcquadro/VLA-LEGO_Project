@@ -1,5 +1,13 @@
 # Data strategy and pilot
 
+## Expanded Alex003 campaign — October 26, 2026
+
+The user authorized **500 new training episodes and 120 new development episodes** after the negative pilot and repair handoff at `901ffca`. Training allocation is 160 complete single-block pick-place, 240 complete cooperative towers, 75 corrected recoveries and 25 justified stops; development is 30/50/20/20, split by generation family into 60 calibration and 60 confirmation episodes. Historical episodes and derived decision clips do not satisfy these new quotas. The four reserved color/geometry combinations remain untouched. These counts are an engineering coverage budget, not a literature guarantee of learning.
+
+`vla_lego.isaac.campaign_design` declares instruction pairs, repeated scenes, centimeter-scale variation and split membership before collection. The first 24 training plus eight calibration episodes gate bulk collection. Single-block tasks have their own instruction and physical grasp/transport/release/dwell criterion; they are not tower completions. Native integration of the new path is pending; **no new usable episode is claimed yet**. Recordings remain separate from immutable historical cohorts. Ignored specification and execution evidence are under `outputs/data-expansion-plan-20261026` and `outputs/data-expansion-20261026`.
+
+The campaign also separates learned temporal continue/complete/abstain decisions from motor flow targets, using partial-task negatives and sensor-only history. After collection, a substantial single-block learning control precedes full-task adaptation. [Models](models.md) owns learning decisions; [compute](cluster.md) owns resource boundaries. Physical robot/Orin work and Phase 6 qualification are outside this assignment.
+
 The marker-free Alex003 pilot is complete: 50 training and 10 development episodes, physically executed in Isaac Sim/Lab with causal sensor/action recording. The [bounded collection milestone](#approved-5010-collection-milestone) owns its evidence and limits. A subsequent bounded SmolVLA training/evaluation assignment is also complete, with a [negative learned-task result](validation.md#smolvla-pilot-before-and-after--october-25-2026). Larger collection and final qualification remain separate decisions.
 
 ## Next data decision after the first learned baseline

@@ -18,6 +18,9 @@ class TowerTask:
     def __post_init__(self) -> None:
         if len(self.targets) != 5:
             raise ValueError("The task requires exactly five ordered blocks.")
+        self._validate_distractors()
+
+    def _validate_distractors(self) -> None:
         remaining = [placement.spec for placement in self.placements]
         for target in self.targets:
             if target in remaining:
@@ -56,6 +59,16 @@ class TowerTask:
     def without_target(self, level: int) -> TowerTask:
         index = next(i for i, p in enumerate(self.placements) if p.spec == self.targets[level])
         return replace(self, placements=self.placements[:index] + self.placements[index + 1 :])
+
+
+@dataclass(frozen=True)
+class SingleBlockTask(TowerTask):
+    """A complete pick-place instruction, distinct from a partial tower."""
+
+    def __post_init__(self) -> None:
+        if len(self.targets) != 1 or not self.instruction_text:
+            raise ValueError("A single-block task requires one target and its own instruction.")
+        self._validate_distractors()
 
 
 def initial_tower_task(*, mirror: bool = False) -> TowerTask:

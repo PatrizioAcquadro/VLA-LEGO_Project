@@ -20,6 +20,7 @@ class EpisodeRecorder:
         task_decisions: bool = False,
         collection_case: dict | None = None,
         collection_condition: str | None = None,
+        png_compress_level: int = 1,
     ):
         if not family or split not in ("train", "development"):
             raise ValueError(
@@ -41,6 +42,9 @@ class EpisodeRecorder:
         self.task_decisions = task_decisions
         self.collection_case = collection_case
         self.collection_condition = collection_condition
+        if not 0 <= png_compress_level <= 9:
+            raise ValueError("PNG compression must be in0..9")
+        self.png_compress_level = png_compress_level
         self.fault_verified = False
         self.task_decision = "continue"
         self.count = 0
@@ -88,7 +92,9 @@ class EpisodeRecorder:
         ):
             raise ValueError("Recorded sensor/action values must be finite.")
         image_path = f"head/{self.count:06d}.png"
-        Image.fromarray(observation["head_rgb"]).save(self.directory / image_path, compress_level=1)
+        Image.fromarray(observation["head_rgb"]).save(
+            self.directory / image_path, compress_level=self.png_compress_level
+        )
         row = {
             "frame": self.count,
             "observation_time_s": observation["timestamp_s"],

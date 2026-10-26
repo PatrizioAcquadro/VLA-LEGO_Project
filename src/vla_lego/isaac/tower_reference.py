@@ -9,6 +9,7 @@ import time
 import traceback
 from dataclasses import asdict, replace
 from pathlib import Path
+from typing import Any
 
 
 def main() -> None:
@@ -22,6 +23,7 @@ def main() -> None:
     parser.add_argument("--mirror", action="store_true")
     parser.add_argument("--cases", type=Path)
     parser.add_argument("--paired-cases", type=Path)
+    parser.add_argument("--campaign-cases", type=Path)
     parser.add_argument("--case")
     parser.add_argument("--policy-source-run", type=Path)
     parser.add_argument("--policy-prefix-ticks", type=int)
@@ -32,9 +34,8 @@ def main() -> None:
         default="pose_dwell",
     )
     args = parser.parse_args()
-    if (args.cases and args.paired_cases) or bool(args.cases or args.paired_cases) != bool(
-        args.case
-    ):
+    selectors = (args.cases, args.paired_cases, args.campaign_cases)
+    if sum(bool(p) for p in selectors) > 1 or any(selectors) != bool(args.case):
         parser.error("Provide one case file with --case")
     if args.record and (not args.family or not args.split):
         parser.error("--record requires --family and --split before collection")
@@ -81,6 +82,14 @@ def main() -> None:
                 (c, t) for c, t in load_paired_cases(args.paired_cases) if c.name == args.case
             )
             collection_condition = "marker_free_paired_instruction_v1"
+        if args.campaign_cases:
+            from vla_lego.isaac.campaign import CONDITION, load_campaign
+
+            pilot_case = next(c for c in load_campaign(args.campaign_cases) if c.name == args.case)
+            paired_task = pilot_case.task()
+            collection_condition = CONDITION
+            if pilot_case.category in ("recovery", "stop"):
+                raise ValueError("Campaign fault/stop collection requires its explicit mechanism")
         if args.cases:
             from vla_lego.isaac.pilot import load_cases
 
@@ -104,7 +113,9 @@ def main() -> None:
                 raise ValueError("Generated correction scene differs from the actual policy scene")
             if not task.requested_pieces_available:
                 raise ValueError("A continuation demonstration requires a completable inventory")
-        cooperative_level = pilot_case.cooperative_level if pilot_case else 3
+        single_block = len(task.targets) == 1
+        cooperative_level = 2 if single_block else pilot_case.cooperative_level if pilot_case else 3
+        report["task_kind"] = "single_block" if single_block else "tower"
         stabilizer_quaternion = [0.0, 0.0, 0.0, 1.0]
         stabilizer_clear_quaternion = [
             0.0,
@@ -136,9 +147,16 @@ def main() -> None:
                 for p in task.placements
                 if p.spec == target
             )
-        stabilizer_side, placer_side = roles[cooperative_level - 1][0], roles[cooperative_level][0]
+        if single_block:
+            placer_side = roles[0][0]
+            stabilizer_side = "right" if placer_side == "left" else "left"
+        else:
+            stabilizer_side, placer_side = (
+                roles[cooperative_level - 1][0],
+                roles[cooperative_level][0],
+            )
         stabilizer_y = 0.20 if stabilizer_side == "left" else -0.20
-        stabilizer_level = cooperative_level - 1
+        stabilizer_level = 0 if single_block else cooperative_level - 1
         if pilot_case:
             # Keep the 40 mm pads away from a wider layer directly below a short cube.
             while (
@@ -158,6 +176,7 @@ def main() -> None:
             mass_scale=pilot_case.mass_scale if pilot_case else 1.0,
             friction=pilot_case.friction if pilot_case else (0.6, 0.5),
             appearance=pilot_case.appearance if pilot_case else "legacy",
+            parked_start=bool(args.campaign_cases),
         )
         env.step(400)
         correction_source = None
@@ -195,6 +214,7 @@ def main() -> None:
                 collection_case=pilot_case.row if pilot_case else None,
                 collection_condition=collection_condition if pilot_case else None,
                 correction_source=correction_source,
+                png_compress_level=6 if args.campaign_cases else 1,
             )
             env.recorder = recorder
         report["task"] = asdict(task)
@@ -218,9 +238,17 @@ def main() -> None:
         }
         if not all(contact_ids.values()):
             raise RuntimeError("Cannot identify actual WSG bodies for cooperation evidence.")
-        evaluator = TowerEvaluator(
-            task, env.contact_robot_paths, motion_measurement=args.motion_measurement
-        )
+        if single_block:
+            from vla_lego.isaac.pick_evaluation import PickPlaceEvaluator
+            from vla_lego.isaac.task import SingleBlockTask
+
+            assert isinstance(task, SingleBlockTask)
+            evaluator: Any
+            evaluator = PickPlaceEvaluator(task, env.contact_robot_paths)
+        else:
+            evaluator = TowerEvaluator(
+                task, env.contact_robot_paths, motion_measurement=args.motion_measurement
+            )
 
         def sample_cooperation(stage: str, truth: list[dict]) -> None:
             assert reference is not None
