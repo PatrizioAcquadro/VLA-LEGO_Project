@@ -214,13 +214,13 @@ def main() -> None:
         listener.bind(str(args.socket))
         bound = True
         listener.listen(1)
-        listener.settimeout(180)
+        # The episode owner bounds wall time. Sensor startup and physical teacher
+        # prefixes may legitimately outlast an inference-response timeout.
         print(json.dumps({"ready": True, "socket": str(args.socket)}), flush=True)
         connection, _ = listener.accept()
         previous_actions = None
         instruction = None
         with connection:
-            connection.settimeout(120)
             while True:
                 request, image_bytes = receive_message(connection)
                 if request.get("close"):
