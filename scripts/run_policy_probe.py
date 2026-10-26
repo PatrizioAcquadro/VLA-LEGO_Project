@@ -53,6 +53,7 @@ def main() -> int:
     parser.add_argument("--campaign-partition", choices=("train", "calibration", "confirmation"))
     parser.add_argument("--campaign-corpus", type=Path)
     parser.add_argument("--decision-checkpoint", type=Path)
+    parser.add_argument("--instruction-capacity", type=int, choices=range(1, 97))
     parser.add_argument("--collect-campaign-correction", action="store_true")
     parser.add_argument("--wall-seconds", type=int, default=3600)
     args = parser.parse_args()
@@ -105,6 +106,7 @@ def main() -> int:
         "decision_checkpoint": (
             None if args.decision_checkpoint is None else str(args.decision_checkpoint.resolve())
         ),
+        "instruction_capacity": args.instruction_capacity,
         "campaign_case": args.campaign_case,
         "campaign_partition": args.campaign_partition,
         "collection_only": args.collect_campaign_correction,
@@ -138,6 +140,8 @@ def main() -> int:
                 worker_command += ["--execution-horizon", str(args.execution_horizon)]
             if args.jaw_overlap:
                 worker_command += ["--jaw-overlap"]
+            if args.instruction_capacity is not None:
+                worker_command += ["--instruction-capacity", str(args.instruction_capacity)]
             if args.decision_checkpoint:
                 worker_command += ["--decision-checkpoint", str(args.decision_checkpoint.resolve())]
             if args.pilot_case or args.campaign_case:

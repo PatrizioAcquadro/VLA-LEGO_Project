@@ -52,6 +52,7 @@ def main() -> None:
     parser.add_argument("--legacy-absolute-interface", action="store_true")
     parser.add_argument("--record-video", action="store_true")
     parser.add_argument("--decision-checkpoint", type=Path)
+    parser.add_argument("--instruction-capacity", type=int, choices=range(1, 97))
     args = parser.parse_args()
     if args.socket.exists():
         raise FileExistsError(args.socket)
@@ -98,6 +99,10 @@ def main() -> None:
         torch.manual_seed(args.seed)
         started = time.monotonic()
         policy = SmolVLAPolicy.from_pretrained(args.checkpoint).to("cuda").eval()
+        checkpoint_instruction_capacity = policy.config.tokenizer_max_length
+        if args.instruction_capacity is not None:
+            if args.instruction_capacity < checkpoint_instruction_capacity:
+                raise ValueError("Serving cannot reduce the checkpoint's instruction capacity")
         decision_names = interface.get("task_decision_names", [])
         separate_decisions = interface.get("task_decision_module") == (
             "separate_causal_temporal_classifier"
@@ -128,6 +133,37 @@ def main() -> None:
         preprocessor, postprocessor = make_pre_post_processors(
             policy.config, pretrained_path=args.checkpoint
         )
+        prepared_instruction = None
+
+        def prepare_instruction(text):
+            nonlocal preprocessor, prepared_instruction
+            if prepared_instruction is not None:
+                if text != prepared_instruction:
+                    raise ValueError("A new instruction requires a fresh temporal episode")
+                return instruction_token_count(policy, text)
+            tokenizer = policy.model.vlm_with_expert.processor.tokenizer
+            count = len(tokenizer(text + "\n", truncation=False)["input_ids"])
+            if count > checkpoint_instruction_capacity:
+                if args.instruction_capacity is None or count > args.instruction_capacity:
+                    raise ValueError(
+                        "The complete instruction would be truncated by this checkpoint"
+                    )
+                policy.config.tokenizer_max_length = args.instruction_capacity
+                preprocessor, _ = make_pre_post_processors(
+                    policy.config,
+                    pretrained_path=args.checkpoint,
+                    preprocessor_overrides={
+                        "tokenizer_processor": {
+                            "max_length": args.instruction_capacity,
+                            "truncation": False,
+                        }
+                    },
+                )
+            # Preserve the saved padding/kernel whenever the complete instruction fits.
+            prepared_instruction = text
+            report["served_instruction_capacity"] = policy.config.tokenizer_max_length
+            return instruction_token_count(policy, text)
+
         policy.reset()
         horizon = (
             policy.config.n_action_steps
@@ -140,6 +176,9 @@ def main() -> None:
             raise ValueError("This calibrated temporal head observes the policy at2Hz")
         report.update(
             load_seconds=time.monotonic() - started,
+            checkpoint_instruction_capacity=checkpoint_instruction_capacity,
+            served_instruction_capacity=policy.config.tokenizer_max_length,
+            permitted_instruction_capacity=args.instruction_capacity,
             device=torch.cuda.get_device_name(),
             execution_horizon=horizon,
             alex_interface=interface,
@@ -190,7 +229,7 @@ def main() -> None:
                     # Long physical recovery prefixes keep the transport alive;
                     # this message never enters model observations or inference.
                     tokens = (
-                        instruction_token_count(policy, request["instruction"])
+                        prepare_instruction(request["instruction"])
                         if "instruction" in request
                         else None
                     )
@@ -203,6 +242,8 @@ def main() -> None:
                             "jaw_overlap": args.jaw_overlap,
                             "seed": args.seed,
                             "tokenizer_max_length": policy.config.tokenizer_max_length,
+                            "checkpoint_instruction_capacity": checkpoint_instruction_capacity,
+                            "permitted_instruction_capacity": args.instruction_capacity,
                             "full_instruction_tokens": tokens,
                         },
                     )
@@ -210,7 +251,7 @@ def main() -> None:
                 state = np.asarray(request["state"], dtype=np.float32)
                 if instruction is None:
                     instruction = request["instruction"]
-                    instruction_token_count(policy, instruction)
+                    prepare_instruction(instruction)
                 elif request["instruction"] != instruction:
                     raise ValueError("A new instruction requires a fresh temporal episode")
                 arm_anchor = state[:14].copy()
