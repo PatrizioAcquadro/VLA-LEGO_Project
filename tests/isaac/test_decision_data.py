@@ -3,6 +3,7 @@
 import json
 
 import pytest
+from PIL import Image
 
 from vla_lego.isaac.campaign import load_campaign
 from vla_lego.isaac.campaign_design import build_declaration
@@ -11,6 +12,7 @@ from vla_lego.pretrained.decision_data import (
     episode_sequences,
     observation_grid,
 )
+from vla_lego.pretrained.pilot_dataset import load_observation
 
 
 def test_decision_stream_preserves_terminal_frame_and_refuses_noncausal_clocks():
@@ -80,3 +82,20 @@ def test_derived_sequences_keep_source_family_and_do_not_create_motor_demonstrat
     assert original.kind != negative.kind and original.case == negative.case
     assert negative.indices[-1] == 100 and negative.times[0] <= negative.times[-1] - 3
     assert (directory / "frames.jsonl").read_text() == raw
+
+
+def test_decision_observation_constructor_excludes_labels_actions_and_hidden_fields(tmp_path):
+    Image.new("RGB", (2, 2), (20, 30, 40)).save(tmp_path / "head.png")
+    row = {
+        "joint_position": [0.1] * 18,
+        "joint_velocity": [0.2] * 18,
+        "head_rgb": "head.png",
+        "task_decision": "complete",
+        "action": [float("nan")] * 16,
+        "teacher_stage": "verified_complete",
+        "privileged_progress": 5,
+    }
+    observed = load_observation(tmp_path, row)
+    assert set(observed) == {"observation.state", "observation.images.head"}
+    assert observed["observation.state"].shape == (32,)
+    assert observed["observation.images.head"].shape == (3, 2, 2)

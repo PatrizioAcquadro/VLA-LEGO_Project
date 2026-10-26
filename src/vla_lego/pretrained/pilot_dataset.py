@@ -8,6 +8,30 @@ from pathlib import Path
 from vla_lego.pretrained.decisions import DECISION_TARGETS
 
 
+def load_observation(directory: Path, row: dict, *, fps=20, include_arm_velocity=True) -> dict:
+    """Construct deployable inputs without actions, labels, stages or simulator truth."""
+    import numpy as np
+    from PIL import Image
+
+    state = row["joint_position"]
+    if include_arm_velocity:
+        state = [*state, *row["joint_velocity"][:14]]
+    image_path = (directory / row["head_rgb"]).resolve()
+    if not image_path.is_relative_to(directory.resolve()):
+        raise ValueError("Image path escapes its recording.")
+    if "head_frame" in row:
+        from vla_lego.pretrained.rgb_video import read_rgb_frame
+
+        pixels = read_rgb_frame(image_path, row["head_frame"], fps=fps)
+    else:
+        with Image.open(image_path) as source:
+            pixels = np.asarray(source.convert("RGB")).copy()
+    return {
+        "observation.state": np.asarray(state, dtype=np.float32),
+        "observation.images.head": np.asarray(pixels, dtype=np.float32).transpose(2, 0, 1) / 255.0,
+    }
+
+
 class PilotEpisode:
     """Prepare SmolVLA-compatible samples without loading privileged evidence.
 
@@ -54,13 +78,9 @@ class PilotEpisode:
 
     def __getitem__(self, sample: int) -> dict:
         import numpy as np
-        from PIL import Image
 
         index = self.eligible_frames[sample]
         row = self.frames[index]
-        state = row["joint_position"]
-        if self.include_arm_velocity:
-            state = [*state, *row["joint_velocity"][:14]]
         actions = np.zeros((self.horizon, 18 if self.include_decisions else 16), dtype=np.float32)
         action_is_pad = np.ones(self.horizon, dtype=bool)
         for offset, future in enumerate(self.frames[index : index + self.horizon]):
@@ -78,20 +98,13 @@ class PilotEpisode:
             # Every future target uses this observation's measured anchor,
             # never an unobserved future state or a moving runtime anchor.
             actions[~action_is_pad, :14] -= np.asarray(row["joint_position"][:14], np.float32)
-        image_path = (self.directory / row["head_rgb"]).resolve()
-        if not image_path.is_relative_to(self.directory.resolve()):
-            raise ValueError("Image path escapes its recording.")
-        if "head_frame" in row:
-            from vla_lego.pretrained.rgb_video import read_rgb_frame
-
-            pixels = read_rgb_frame(image_path, row["head_frame"], fps=self.metadata["fps"])
-            rgb = np.asarray(pixels, dtype=np.float32).transpose(2, 0, 1) / 255.0
-        else:
-            with Image.open(image_path) as source:
-                rgb = np.asarray(source.convert("RGB"), dtype=np.float32).transpose(2, 0, 1) / 255.0
         return {
-            "observation.state": np.asarray(state, dtype=np.float32),
-            "observation.images.head": rgb,
+            **load_observation(
+                self.directory,
+                row,
+                fps=self.metadata["fps"] if "head_frame" in row else 20,
+                include_arm_velocity=self.include_arm_velocity,
+            ),
             "task": self.metadata["instruction"],
             "action": actions,
             "action_is_pad": action_is_pad,
