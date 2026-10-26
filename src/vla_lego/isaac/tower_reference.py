@@ -337,6 +337,21 @@ def main() -> None:
                     )[0]
                     for side, solver in reference.solvers.items()
                 }
+            if (
+                args.campaign_cases
+                and not single_block
+                and not campaign_stop
+                and not args.policy_source_run
+            ):
+                from vla_lego.isaac.assembly_planning import choose_build_site
+
+                selected_xy, planning = choose_build_site(
+                    reference, task, indices, roles, cooperative_level
+                )
+                task = replace(task, assembly_xy_m=tuple(selected_xy))
+                evaluator.task = task
+                report["task"] = asdict(task)
+                report["teacher_build_site"] = planning
             if reference_orientations is not None:
                 # Preserve the shared initial grasp convention, not the failed policy's wrist pose.
                 reference.initial_orientations = reference_orientations
@@ -626,45 +641,12 @@ def main() -> None:
                 block = env.task_truth(index)["block_pose_w"][:3]
                 if pilot_case:
                     yaw += task.placements[index].yaw_deg
-                    release = bottom + target.dimensions_m[2] / 2 + 0.06
-                    planned_carry_z = max(block[2] + 0.16, release + 0.030)
+                    from vla_lego.isaac.assembly_planning import pick_route
+
                     yaw = reference.grasp_yaw(
                         side,
                         yaw,
-                        [
-                            [0.40, 0.40 if side == "left" else -0.40, 1.05],
-                            [min(block[0], 0.46), block[1], 1.02],
-                            [block[0], block[1], block[2] + 0.10],
-                            [block[0], block[1], block[2] + 0.06],
-                            [block[0], block[1], block[2] + 0.16],
-                            # Screen the raised source pose with the 5 mm tracking guard.
-                            [block[0], block[1], planned_carry_z],
-                            *(
-                                [
-                                    [
-                                        build_xy[0],
-                                        build_xy[1] + (y if side == "left" else -y),
-                                        planned_carry_z,
-                                    ]
-                                    for y in (0.20, 0.10)
-                                ]
-                                if level >= cooperative_level
-                                else []
-                            ),
-                            *(
-                                [[*build_xy, block[2] + 0.16]]
-                                if release + 0.025 < block[2] + 0.16
-                                else []
-                            ),
-                            [*build_xy, release + 0.025],
-                            [*build_xy, release],
-                            [*build_xy, release + target.dimensions_m[2] / 2 + 0.025],
-                            [
-                                build_xy[0],
-                                build_xy[1] + (0.15 if side == "left" else -0.15),
-                                release + target.dimensions_m[2] / 2 + 0.025,
-                            ],
-                        ],
+                        pick_route(task, level, block, build_xy, side, cooperative_level),
                         object_index=index,
                     )
                 for stage, xyz in (
