@@ -106,9 +106,10 @@ def main() -> None:
             collection_condition = CONDITION
             if pilot_case.row.get("correction_origin") == "policy" and (
                 not args.policy_socket
-                or pilot_case.row["mechanism"] not in ("interrupted_progress", "slip_drop")
+                or pilot_case.row["mechanism"]
+                not in ("interrupted_progress", "slip_drop", "missed_grasp", "wrong_piece")
                 or (
-                    pilot_case.row["mechanism"] == "slip_drop"
+                    pilot_case.row["mechanism"] in ("slip_drop", "missed_grasp", "wrong_piece")
                     and pilot_case.error_level >= pilot_case.cooperative_level
                 )
             ):
@@ -708,9 +709,27 @@ def main() -> None:
                     and pilot_case.row["error"] != "physically consequential incomplete placement"
                     and pilot_case.row["error"] not in ("slip_drop", "interrupted_progress")
                 ):
-                    from vla_lego.isaac.pilot_faults import pick_fault
+                    if policy_intervention is not None:
+                        assert recorder is not None
+                        method = (
+                            policy_intervention.missed_grasp
+                            if pilot_case.row["mechanism"] == "missed_grasp"
+                            else policy_intervention.wrong_piece
+                        )
+                        report["fault"] = method(
+                            reference, pilot_case, task, index, ticks=args.policy_window_ticks
+                        )
+                        report["correction_source"] = recorder.correction_source
+                        if pilot_case.row["mechanism"] == "wrong_piece":
+                            from vla_lego.isaac.campaign_faults import return_wrong_piece
 
-                    report["fault"] = pick_fault(reference, pilot_case, task, index)
+                            return_wrong_piece(reference, task, report["fault"])
+                        for hand in ("left", "right"):
+                            reference.grip("pick_correction_open", hand, None)
+                    else:
+                        from vla_lego.isaac.pilot_faults import pick_fault
+
+                        report["fault"] = pick_fault(reference, pilot_case, task, index)
                     verify_support(level - 1, "pick fault correction")
                 if level == cooperative_level:
                     stabilizer_withdraw = engage_stabilizer()

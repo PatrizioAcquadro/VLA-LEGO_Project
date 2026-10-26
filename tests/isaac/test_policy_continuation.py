@@ -144,3 +144,125 @@ def test_a_correct_placement_or_held_piece_cannot_be_labeled_a_policy_drop():
     with pytest.raises(RuntimeError, match="did not produce"):
         intervention.slip_drop(reference, case, task, 1)
     assert len(admitted) == 1
+
+
+@pytest.mark.parametrize("behavior", ["waiting", "successful_lift", "empty_lift"])
+def test_only_a_physical_empty_close_and_lift_qualifies_as_a_miss(behavior):
+    from types import SimpleNamespace
+
+    from vla_lego.isaac.policy_continuation import PolicyIntervention
+
+    task = initial_tower_task()
+    states = [
+        {
+            "block_pose_w": [*p.xy_m, TABLE_TOP + p.spec.dimensions_m[2] / 2, 0, 0, 0, 1],
+            "block_velocity_w": [0.0] * 6,
+            "robot_contact_force_n": 0.0,
+            "nonrobot_contact_force_n": 0.3,
+            "block_contact_forces_n": [[0.0] * 3 for _ in task.placements],
+        }
+        for p in task.placements
+    ]
+    states[0]["block_pose_w"][:2] = list(task.assembly_xy_m)
+    admitted = []
+    env = SimpleNamespace(
+        blocks=states,
+        task_truth=lambda i: states[i],
+        time=10,
+        recorder=SimpleNamespace(admit_policy_intervention=admitted.append),
+        robot=SimpleNamespace(
+            data=SimpleNamespace(
+                joint_names=["left_WSG32_JAW_OPENING", "right_WSG32_JAW_OPENING"],
+                joint_pos=SimpleNamespace(torch=np.array([[0.005, 0.034]])),
+            )
+        ),
+    )
+    tool = np.array([[*states[1]["block_pose_w"][:2], states[1]["block_pose_w"][2] + 0.06]])
+    reference = SimpleNamespace(env=env, ctrl=SimpleNamespace(pose=lambda side: tool))
+    case = SimpleNamespace(
+        row={"correction_origin": "policy", "mechanism": "missed_grasp", "partition": "train"},
+        error_level=1,
+        cooperative_level=3,
+    )
+
+    def window(*args, stop_when, **kwargs):
+        assert stop_when(states) is None
+        if behavior != "waiting":
+            tool[0, 2] += 0.08
+        if behavior == "successful_lift":
+            states[1]["block_pose_w"][2] += 0.08
+            states[1]["robot_contact_force_n"] = 1
+        event = stop_when(states)
+        return {"executed_motor_commands": 2, "observed_error": event}, states, states, False
+
+    intervention = PolicyIntervention.__new__(PolicyIntervention)
+    intervention._window = window
+    if behavior == "empty_lift":
+        event = intervention.missed_grasp(reference, case, task, 1)
+        assert not event["teacher_induced"] and event["physically_verified"]
+        assert len(admitted) == 1
+    else:
+        with pytest.raises(RuntimeError, match="did not produce"):
+            intervention.missed_grasp(reference, case, task, 1)
+        assert not admitted
+
+
+@pytest.mark.parametrize("behavior", ["correct_piece", "wrong_unilateral", "wrong_bilateral"])
+def test_wrong_piece_intervention_requires_the_actual_incorrect_bilateral_lift(behavior):
+    from copy import deepcopy
+    from types import SimpleNamespace
+
+    from vla_lego.isaac.policy_continuation import PolicyIntervention
+
+    task = initial_tower_task()
+    states = [
+        {
+            "block_pose_w": [*p.xy_m, TABLE_TOP + p.spec.dimensions_m[2] / 2, 0, 0, 0, 1],
+            "block_velocity_w": [0.0] * 6,
+            "robot_contact_force_n": 0.0,
+            "robot_contact_forces_n": [[0.0] * 3 for _ in range(4)],
+            "nonrobot_contact_force_n": 0.3,
+            "block_contact_forces_n": [[0.0] * 3 for _ in task.placements],
+        }
+        for p in task.placements
+    ]
+    states[0]["block_pose_w"][:2] = list(task.assembly_xy_m)
+    admitted = []
+    env = SimpleNamespace(
+        blocks=states,
+        time=10,
+        task_truth=lambda i: deepcopy(states[i]),
+        recorder=SimpleNamespace(admit_policy_intervention=admitted.append),
+        contact_robot_paths=[
+            f"/{side}_WSG32_{jaw}_JAW_LINK"
+            for side in ("left", "right")
+            for jaw in ("NEGATIVE", "POSITIVE")
+        ],
+    )
+    case = SimpleNamespace(
+        row={"correction_origin": "policy", "mechanism": "wrong_piece", "partition": "train"},
+        error_level=1,
+        cooperative_level=3,
+    )
+    lifted = 1 if behavior == "correct_piece" else 2
+
+    def window(*args, stop_when, **kwargs):
+        states[lifted]["block_pose_w"][2] += 0.08
+        states[lifted]["robot_contact_force_n"] = 1
+        states[lifted]["robot_contact_forces_n"][0][0] = 0.6
+        if behavior != "wrong_unilateral":
+            states[lifted]["robot_contact_forces_n"][1][0] = 0.6
+        states[lifted]["nonrobot_contact_force_n"] = 0
+        event = stop_when(states)
+        return {"executed_motor_commands": 2, "observed_error": event}, states, states, False
+
+    intervention = PolicyIntervention.__new__(PolicyIntervention)
+    intervention._window = window
+    if behavior == "wrong_bilateral":
+        event = intervention.wrong_piece(SimpleNamespace(env=env), case, task, 1)
+        assert event["object_index"] == lifted and event["side"] == "left"
+        assert not event["teacher_induced"] and len(admitted) == 1
+    else:
+        with pytest.raises(RuntimeError, match="did not produce"):
+            intervention.wrong_piece(SimpleNamespace(env=env), case, task, 1)
+        assert not admitted

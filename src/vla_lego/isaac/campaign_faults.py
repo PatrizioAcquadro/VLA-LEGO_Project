@@ -92,6 +92,65 @@ def recover_dropped(reference, task, index: int, side: str, yaw: float, *, repla
     return yaw
 
 
+def return_wrong_piece(reference, task, event) -> None:
+    """Return the actually held wrong piece before resuming the instructed tower."""
+    from vla_lego.isaac.evaluation import CONTACT_ZERO_N, POSITION_TOLERANCE_M, _corners
+
+    env = reference.env
+    index, side = event["object_index"], event["side"]
+    xy = event["return_source_xy_m"]
+    spec = task.placements[index].spec
+    for i, placement in enumerate(task.placements):
+        if i != index and math.dist(xy, env.task_truth(i)["block_pose_w"][:2]) < (
+            math.hypot(*spec.dimensions_m[:2]) / 2
+            + math.hypot(*placement.spec.dimensions_m[:2]) / 2
+            + 0.01
+        ):
+            raise RuntimeError(
+                "Wrong piece's return space is occupied; another correction is needed"
+            )
+    state = env.task_truth(index)
+    tool = reference.ctrl.pose(side)[0].tolist()
+    orientation = tool[3:]
+    offset = tool[2] - state["block_pose_w"][2]
+    bottom = min(c[2] for c in _corners(spec.dimensions_m, state["block_pose_w"]))
+    release_z = TABLE_TOP + state["block_pose_w"][2] - bottom + offset
+    clear_z = max(tool[2], release_z + 0.12, 1.02)
+    for stage, xyz in (
+        ("raise", [*tool[:2], clear_z]),
+        ("return", [*xy, clear_z]),
+        ("lower", [*xy, release_z]),
+    ):
+        reference.move(
+            "wrong_piece_correction_" + stage,
+            side,
+            xyz,
+            0,
+            quaternion_xyzw=orientation,
+            linear=True,
+            linear_step_m=0.02,
+        )
+    reference.grip("wrong_piece_correction_release", side, None)
+    reference.move(
+        "wrong_piece_correction_withdraw",
+        side,
+        [*xy, clear_z],
+        0,
+        quaternion_xyzw=orientation,
+        linear=True,
+    )
+    reference.wait(10, "wrong_piece_correction_support")
+    returned = env.task_truth(index)
+    actual_bottom = min(c[2] for c in _corners(spec.dimensions_m, returned["block_pose_w"]))
+    event["returned_table_support"] = (
+        returned["nonrobot_contact_force_n"] > CONTACT_ZERO_N
+        and returned["robot_contact_force_n"] < CONTACT_ZERO_N
+        and abs(actual_bottom - TABLE_TOP) < POSITION_TOLERANCE_M
+    )
+    if not event["returned_table_support"]:
+        raise RuntimeError("Actual wrong piece was not physically returned to table support")
+
+
 def interrupt_progress(reference, case, level: int) -> dict:
     env, recorder = reference.env, reference.env.recorder
     if not 0 <= level < 4:
