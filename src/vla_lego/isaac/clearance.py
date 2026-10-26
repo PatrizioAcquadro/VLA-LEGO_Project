@@ -54,6 +54,19 @@ def _mesh_axes(points, counts, indices):
     )
 
 
+def source_grasp_span(env, object_index: int, yaw_deg: float) -> float:
+    """Observed horizontal block span along the top-down jaw closing axis."""
+    import math
+
+    from vla_lego.isaac.evaluation import _corners
+
+    yaw = math.radians(yaw_deg)
+    state = env.task_truth(object_index)
+    outline = _corners(env.placements[object_index].spec.dimensions_m, state["block_pose_w"])
+    projected = [-math.sin(yaw) * p[0] + math.cos(yaw) * p[1] for p in outline]
+    return float(max(projected) - min(projected))
+
+
 def source_grasp_clearance(env, controller, side: str, object_index: int):
     """Rank source approaches by open-jaw clearance from other visible pieces."""
     import torch

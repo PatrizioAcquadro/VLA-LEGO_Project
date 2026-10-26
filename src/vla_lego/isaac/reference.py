@@ -66,7 +66,7 @@ class PhysicalReference:
         *,
         object_index: int | None = None,
     ) -> float:
-        """Choose an equivalent square-face grasp with a reachable carry route."""
+        """Choose a physically fitting source grasp with a reachable carry route."""
         self.admit_stabilizer_clearance(side)
         _, ids, _ = self.ctrl.frames[side]
         failures = []
@@ -75,43 +75,52 @@ class PhysicalReference:
             from vla_lego.isaac.clearance import source_grasp_clearance
 
             clear = source_grasp_clearance(self.env, self.ctrl, side, object_index)
-        candidates = [(1.0, preferred + offset) for offset in (0, 90, -90, 180)]
-        if clear is not None:
-            candidates = [
-                (
-                    clear(
-                        self.env.target.new_tensor(
-                            [*waypoints[3], *self.orientation(side, yaw).tolist()]
-                        )
-                    ),
-                    yaw,
-                )
-                for _, yaw in candidates
-            ]
-            # Equivalent millimeter clearance retains the preferred face order.
-            candidates.sort(key=lambda candidate: round(candidate[0], 3), reverse=True)
-        for clearance_m, yaw in candidates:
-            seed = self.env.robot.data.joint_pos.torch[0, ids]
-            try:
-                if clearance_m <= 0:
-                    raise RuntimeError("Open jaws intersect another source object")
-                for step, xyz in enumerate(waypoints):
-                    points = (
-                        [xyz]
-                        if step < 3
-                        else [point for point, _ in _linear_profile(waypoints[step - 1], xyz)]
-                    )
-                    for point in points:
-                        seed = self.solvers[side].solve(
+        for adjustment in (0, -10, 10):
+            # Prefer square-face grasps, then small in-plane wrist alternatives.
+            candidates = [(1.0, preferred + offset + adjustment) for offset in (0, 90, -90, 180)]
+            if clear is not None:
+                candidates = [
+                    (
+                        clear(
                             self.env.target.new_tensor(
-                                [*point, *self.orientation(side, yaw).tolist()]
-                            ),
-                            seed,
+                                [*waypoints[3], *self.orientation(side, yaw).tolist()]
+                            )
+                        ),
+                        yaw,
+                    )
+                    for _, yaw in candidates
+                ]
+                candidates.sort(key=lambda candidate: round(candidate[0], 3), reverse=True)
+            for clearance_m, yaw in candidates:
+                seed = self.env.robot.data.joint_pos.torch[0, ids]
+                try:
+                    if clearance_m <= 0:
+                        raise RuntimeError("Open jaws intersect another source object")
+                    if object_index is not None:
+                        from vla_lego.isaac.clearance import source_grasp_span
+
+                        span = source_grasp_span(self.env, object_index, yaw)
+                        if span + 0.006 > 0.070:
+                            raise RuntimeError(
+                                "Source projection exceeds open-jaw tracking clearance"
+                            )
+                    for step, xyz in enumerate(waypoints):
+                        points = (
+                            [xyz]
+                            if step < 3
+                            else [point for point, _ in _linear_profile(waypoints[step - 1], xyz)]
                         )
-                return yaw
-            except RuntimeError as error:
-                failures.append(str(error))
-        raise RuntimeError(f"No reachable square-face grasp approach: {failures}")
+                        for point in points:
+                            seed = self.solvers[side].solve(
+                                self.env.target.new_tensor(
+                                    [*point, *self.orientation(side, yaw).tolist()]
+                                ),
+                                seed,
+                            )
+                    return yaw
+                except RuntimeError as error:
+                    failures.append(f"yaw={yaw:g}: {error}")
+        raise RuntimeError(f"No reachable source grasp approach: {failures}")
 
     def orientation(self, side: str, yaw_deg: float):
         from isaaclab.utils.math import quat_mul

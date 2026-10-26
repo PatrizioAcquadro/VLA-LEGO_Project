@@ -2,6 +2,7 @@
 
 import itertools
 
+import pytest
 import torch
 
 from vla_lego.isaac.clearance import _mesh_axes, _separated, _separation_distance
@@ -45,3 +46,24 @@ def test_mesh_face_planes_clear_a_box_beside_a_sloped_finger():
     assert not _separated(
         finger[None], normals[None], box + torch.tensor([0.4, 0.4, 0.0]), axes
     ).item()
+
+
+def test_source_span_accounts_for_actual_piece_yaw_and_oblique_grasp():
+    import math
+    from types import SimpleNamespace
+
+    from vla_lego.isaac.clearance import source_grasp_span
+
+    env = SimpleNamespace(
+        placements=[SimpleNamespace(spec=SimpleNamespace(dimensions_m=(0.047, 0.047, 0.068)))],
+        task_truth=lambda _: {"block_pose_w": [0.5, 0.4, 0.834, 0, 0, 0, 1]},
+    )
+    assert source_grasp_span(env, 0, -90) == pytest.approx(0.047)
+    assert source_grasp_span(env, 0, -100) + 0.006 < 0.070
+    assert source_grasp_span(env, 0, -135) + 0.006 > 0.070
+
+    env.task_truth = lambda _: {
+        "block_pose_w": [0.5, 0.4, 0.834, 0, 0, math.sin(math.pi / 8), math.cos(math.pi / 8)]
+    }
+    assert source_grasp_span(env, 0, 45) == pytest.approx(0.047)
+    assert source_grasp_span(env, 0, 0) + 0.006 > 0.070
