@@ -266,3 +266,78 @@ def test_wrong_piece_intervention_requires_the_actual_incorrect_bilateral_lift(b
         with pytest.raises(RuntimeError, match="did not produce"):
             intervention.wrong_piece(SimpleNamespace(env=env), case, task, 1)
         assert not admitted
+
+
+@pytest.mark.parametrize("behavior", ["waiting", "supported", "failed_transfer"])
+def test_placement_failure_excludes_transport_pauses_and_supported_placements(behavior):
+    from copy import deepcopy
+    from types import SimpleNamespace
+
+    from vla_lego.isaac.policy_continuation import PolicyIntervention
+
+    task = initial_tower_task()
+    states = [
+        {
+            "block_pose_w": [*p.xy_m, TABLE_TOP + p.spec.dimensions_m[2] / 2, 0, 0, 0, 1],
+            "block_velocity_w": [0.0] * 6,
+            "robot_contact_force_n": 0.0,
+            "robot_contact_forces_n": [[0.0] * 3 for _ in range(4)],
+            "nonrobot_contact_force_n": 0.3,
+            "block_contact_forces_n": [[0.0] * 3 for _ in task.placements],
+        }
+        for p in task.placements
+    ]
+    for state in states[:2]:
+        state["block_pose_w"][:2] = list(task.assembly_xy_m)
+    states[1]["block_pose_w"][2] += task.targets[0].dimensions_m[2] + 0.08
+    states[1]["robot_contact_force_n"] = 1
+    states[1]["nonrobot_contact_force_n"] = 0
+    states[1]["robot_contact_forces_n"][0][0] = 0.6
+    states[1]["robot_contact_forces_n"][1][0] = 0.6
+    admitted = []
+    env = SimpleNamespace(
+        blocks=states,
+        time=10,
+        task_truth=lambda i: deepcopy(states[i]),
+        recorder=SimpleNamespace(admit_policy_intervention=admitted.append),
+        contact_robot_paths=[
+            f"/{side}_WSG32_{jaw}_JAW_LINK"
+            for side in ("left", "right")
+            for jaw in ("NEGATIVE", "POSITIVE")
+        ],
+    )
+    case = SimpleNamespace(
+        row={"correction_origin": "policy", "mechanism": "placement", "partition": "train"},
+        error_level=1,
+    )
+
+    def window(*args, stop_when, **kwargs):
+        stop_when(states)
+        if behavior != "waiting":
+            states[1]["block_pose_w"][2] -= 0.03
+        if behavior == "supported":
+            states[1]["block_pose_w"][2] -= 0.05
+            states[1]["block_contact_forces_n"][0][2] = 0.3
+        env.time = 80
+        stop_when(states)
+        return (
+            {
+                "executed_motor_commands": 1400,
+                "source_terminal_decision": "budget",
+                "start_time_s": 10,
+            },
+            states,
+            states,
+            False,
+        )
+
+    intervention = PolicyIntervention.__new__(PolicyIntervention)
+    intervention._window = window
+    if behavior == "failed_transfer":
+        event = intervention.placement(SimpleNamespace(env=env), case, task, 1, "left")
+        assert not event["teacher_induced"] and event["height_gap_m"] > 0.01
+        assert len(admitted) == 1
+    else:
+        with pytest.raises(RuntimeError, match="did not establish"):
+            intervention.placement(SimpleNamespace(env=env), case, task, 1, "left")
+        assert not admitted

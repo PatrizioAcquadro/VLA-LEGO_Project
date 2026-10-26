@@ -13,12 +13,12 @@ from vla_lego.pretrained.decisions import DECISION_NAMES, decode_decision
 from vla_lego.pretrained.transport import receive_message, send_message
 
 
-def released_prefix(task, states, *, held_index=None):
+def released_prefix(task, states, *, held_index=None, supported_contacts=()):
     """Current ordered support, never a historical maximum or a controller input."""
     if any(
         state["robot_contact_force_n"] >= CONTACT_ZERO_N
         for i, state in enumerate(states)
-        if i != held_index
+        if i != held_index and i not in supported_contacts
     ):
         raise ValueError("Interruption handoff still holds a block; another recovery is required")
     if any(
@@ -423,6 +423,116 @@ class PolicyIntervention:
             "recovery_source_pose_w": state["block_pose_w"],
             "error_end_s": env.time,
             "policy_source": source,
+        }
+
+    def placement(self, reference, case, task, index, side, *, stabilizer_side=None, ticks=1800):
+        """Require failed physical load transfer after actual policy placement motion."""
+        env, recorder = reference.env, reference.env.recorder
+        if (
+            case.row["correction_origin"] != "policy"
+            or case.row["mechanism"] != "placement"
+            or case.row["partition"] != "train"
+            or not 1 <= case.error_level < 5
+            or ticks < 1
+        ):
+            raise ValueError("Placement handoff requires its declared incomplete TRAIN tower")
+        indices = [
+            next(i for i, p in enumerate(task.placements) if p.spec == target)
+            for target in task.targets
+        ]
+        allowed = indices[: case.error_level] if stabilizer_side is not None else ()
+
+        def gripping(state, hand):
+            ids = [
+                i
+                for i, path in enumerate(env.contact_robot_paths)
+                if path.rsplit("/", 1)[-1]
+                in (f"{hand}_WSG32_NEGATIVE_JAW_LINK", f"{hand}_WSG32_POSITIVE_JAW_LINK")
+            ]
+            forces = [
+                math.sqrt(sum(v * v for v in state["robot_contact_forces_n"][i])) for i in ids
+            ]
+            return len(forces) == 2 and min(forces) > CONTACT_ZERO_N and sum(forces) > 0.5
+
+        initial = [env.task_truth(i) for i in range(len(env.blocks))]
+        if (
+            not gripping(initial[index], side)
+            or released_prefix(task, initial, held_index=index, supported_contacts=allowed)
+            != case.error_level
+        ):
+            raise ValueError(
+                "Placement window lacks an acquired block and physically supported prefix"
+            )
+        expected_z = (
+            TABLE_TOP
+            + sum(target.dimensions_m[2] for target in task.targets[: case.error_level])
+            + task.targets[case.error_level].dimensions_m[2] / 2
+        )
+        initial_xy = initial[index]["block_pose_w"][:2]
+        max_z = initial[index]["block_pose_w"][2]
+        descent, lateral = 0.0, 0.0
+        unsupported_since = None
+        evidence = None
+
+        def observe(states):
+            nonlocal max_z, descent, lateral, unsupported_since, evidence
+            state = states[index]
+            pose = state["block_pose_w"]
+            max_z = max(max_z, pose[2])
+            descent = max(descent, max_z - pose[2])
+            lateral = max(lateral, math.dist(pose[:2], initial_xy))
+            support = state["block_contact_forces_n"][indices[case.error_level - 1]][2]
+            if (
+                gripping(state, side)
+                and support <= CONTACT_ZERO_N
+                and pose[2] - expected_z > 0.01
+                and math.dist(pose[:2], states[indices[0]]["block_pose_w"][:2]) < 0.10
+            ):
+                if unsupported_since is None:
+                    unsupported_since = env.time
+                evidence = {
+                    "support_n": support,
+                    "height_gap_m": pose[2] - expected_z,
+                    "unsupported_duration_s": env.time - unsupported_since,
+                    "actual_descent_m": descent,
+                    "actual_lateral_motion_m": lateral,
+                }
+            else:
+                unsupported_since, evidence = None, None
+            return None  # Normal transport pauses are not early failure interventions.
+
+        source, _, after, _ = self._window(reference, task, index, ticks=ticks, stop_when=observe)
+        if (
+            source["executed_motor_commands"] < 1
+            or evidence is None
+            or evidence["unsupported_duration_s"] < 2
+            or max(descent, lateral) < 0.02
+            or (
+                source["source_terminal_decision"] == "budget"
+                and env.time - source["start_time_s"] < 60
+            )
+            or released_prefix(task, after, held_index=index, supported_contacts=allowed)
+            != case.error_level
+        ):
+            raise RuntimeError("Actual policy did not establish failed physical placement")
+        if stabilizer_side is not None and not any(
+            gripping(after[i], stabilizer_side) for i in allowed
+        ):
+            raise RuntimeError("Placement also lost stabilization; its grasp must be reacquired")
+        source.update(
+            physically_verified=True,
+            error_basis="failed_actual_load_transfer",
+            observed_error=evidence,
+        )
+        recorder.admit_policy_intervention(source)
+        return {
+            "type": "placement",
+            "teacher_induced": False,
+            "physically_verified": True,
+            "target_level": case.error_level + 1,
+            "error_end_s": env.time,
+            "policy_source": source,
+            **evidence,
         }
 
     def close(self):

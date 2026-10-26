@@ -151,6 +151,34 @@ def return_wrong_piece(reference, task, event) -> None:
         raise RuntimeError("Actual wrong piece was not physically returned to table support")
 
 
+def recover_held_placement(reference, task, index, side, yaw, bottom) -> float:
+    """Restore clearance and the intended grasp orientation before physical load transfer."""
+    from vla_lego.isaac.evaluation import _corners
+
+    env = reference.env
+    pose = env.task_truth(index)["block_pose_w"]
+    tool = reference.ctrl.pose(side)[0].tolist()
+    lowest = min(c[2] for c in _corners(task.placements[index].spec.dimensions_m, pose))
+    clear_z = tool[2] + max(0.025, bottom + 0.025 - lowest)
+    reference.move(
+        "placement_correction_raise",
+        side,
+        [*tool[:2], clear_z],
+        quaternion_xyzw=tool[3:],
+        linear=True,
+    )
+    reference.move(
+        "placement_correction_align",
+        side,
+        [*task.assembly_xy_m, clear_z],
+        yaw,
+        linear=True,
+    )
+    held_z = env.task_truth(index)["block_pose_w"][2]
+    tool_z = float(reference.ctrl.pose(side)[0, 2])
+    return float(bottom + task.placements[index].spec.dimensions_m[2] / 2 + tool_z - held_z)
+
+
 def interrupt_progress(reference, case, level: int) -> dict:
     env, recorder = reference.env, reference.env.recorder
     if not 0 <= level < 4:

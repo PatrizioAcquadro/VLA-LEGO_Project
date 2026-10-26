@@ -107,7 +107,13 @@ def main() -> None:
             if pilot_case.row.get("correction_origin") == "policy" and (
                 not args.policy_socket
                 or pilot_case.row["mechanism"]
-                not in ("interrupted_progress", "slip_drop", "missed_grasp", "wrong_piece")
+                not in (
+                    "interrupted_progress",
+                    "slip_drop",
+                    "missed_grasp",
+                    "wrong_piece",
+                    "placement",
+                )
                 or (
                     pilot_case.row["mechanism"] in ("slip_drop", "missed_grasp", "wrong_piece")
                     and pilot_case.error_level >= pilot_case.cooperative_level
@@ -868,27 +874,59 @@ def main() -> None:
                     and level == pilot_case.error_level
                     and pilot_case.row["error"] == "physically consequential incomplete placement"
                 ):
-                    from vla_lego.isaac.pilot_faults import placement_fault
+                    if policy_intervention is not None:
+                        from vla_lego.isaac.campaign_faults import recover_held_placement
 
-                    report["fault"] = placement_fault(
-                        reference,
-                        pilot_case,
-                        replace(task, assembly_xy_m=build_xy),
-                        indices,
-                        side,
-                        yaw,
-                        release_z,
-                        **(
-                            {
-                                "horizontal_offset_m": 0.8
-                                * min(
-                                    target.dimensions_m[0], task.targets[level - 1].dimensions_m[0]
-                                )
-                            }
-                            if args.campaign_cases
-                            else {}
-                        ),
-                    )
+                        assert recorder is not None
+                        report["fault"] = policy_intervention.placement(
+                            reference,
+                            pilot_case,
+                            task,
+                            index,
+                            side,
+                            stabilizer_side=stabilizer_side if level == cooperative_level else None,
+                            ticks=args.policy_window_ticks,
+                        )
+                        report["correction_source"] = recorder.correction_source
+                        if level == cooperative_level:
+                            _, joint_ids, _ = reference.ctrl.frames[stabilizer_side]
+                            reference.hold_targets[stabilizer_side] = reference.ctrl.pose(
+                                stabilizer_side
+                            )[0].tolist()
+                            reference.hold_postures[stabilizer_side] = (
+                                env.robot.data.joint_pos.torch[0, joint_ids].tolist()
+                            )
+                        release_z = recover_held_placement(
+                            reference,
+                            replace(task, assembly_xy_m=build_xy),
+                            index,
+                            side,
+                            yaw,
+                            bottom,
+                        )
+                    else:
+                        from vla_lego.isaac.pilot_faults import placement_fault
+
+                        report["fault"] = placement_fault(
+                            reference,
+                            pilot_case,
+                            replace(task, assembly_xy_m=build_xy),
+                            indices,
+                            side,
+                            yaw,
+                            release_z,
+                            **(
+                                {
+                                    "horizontal_offset_m": 0.8
+                                    * min(
+                                        target.dimensions_m[0],
+                                        task.targets[level - 1].dimensions_m[0],
+                                    )
+                                }
+                                if args.campaign_cases
+                                else {}
+                            ),
+                        )
                 reference.move(
                     f"{prefix}_place",
                     side,

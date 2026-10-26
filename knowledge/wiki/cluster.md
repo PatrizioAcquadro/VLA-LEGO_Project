@@ -2,7 +2,7 @@
 
 ## Expanded campaign storage — October 26, 2026
 
-The first 22 admitted episodes are copied to the campaign corpus on Gilbreth scratch: 7,650 files and 19,356,843,940 bytes, with every file size and SHA-256 verified against Blackwell. The original recordings and failed attempts remain on Blackwell; no source was deleted. Subsequent admissions are not present in this transfer snapshot. This is progressive storage preparation, not the complete 620-episode corpus or training readiness. Dataset admission and learning gates belong to [data](data.md#expanded-alex003-campaign--october-26-2026).
+The first 25 admitted episodes are copied to the campaign corpus on Gilbreth scratch: 13,284 files and 26,033,695,947 bytes, with every file size and SHA-256 verified against Blackwell. The original recordings and failed attempts remain on Blackwell; no source was deleted. The original 22-episode transfer and the subsequent three-episode append are separately verified; further admissions are not implicitly present in this snapshot. This is progressive storage preparation, not the complete 620-episode corpus or training readiness. Dataset admission and learning gates belong to [data](data.md#expanded-alex003-campaign--october-26-2026).
 
 ## Planned resource roles
 
