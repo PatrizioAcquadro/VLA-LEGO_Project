@@ -75,7 +75,7 @@ class PhysicalReference:
             from vla_lego.isaac.clearance import source_grasp_clearance
 
             clear = source_grasp_clearance(self.env, self.ctrl, side, object_index)
-        for adjustment in (0, -10, 10):
+        for adjustment in (0, -10, 10, -20, 20):
             # Prefer square-face grasps, then small in-plane wrist alternatives.
             candidates = [(1.0, preferred + offset + adjustment) for offset in (0, 90, -90, 180)]
             if clear is not None:
