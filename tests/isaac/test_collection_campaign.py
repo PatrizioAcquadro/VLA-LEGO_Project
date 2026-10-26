@@ -38,6 +38,12 @@ def test_campaign_preserves_quota_pairs_and_balanced_single_block_targets(tmp_pa
     }
     initial = [c for c in cases if c.name in data["initial_cases"]]
     assert Counter(c.row["split"] for c in initial) == {"train": 24, "development": 8}
+    coordination = [c for c in cases if c.row.get("mechanism") == "interrupted_progress"]
+    assert all(
+        c.error_level == c.cooperative_level
+        for c in coordination
+        if c.row["correction_origin"] == "teacher"
+    )
 
 
 def test_campaign_rejects_changed_scene_within_instruction_pair(tmp_path):

@@ -45,15 +45,29 @@ def admitted_entries(root: Path) -> list[dict]:
 
     policy_corrections = 0
     for entry in entries:
-        if (entry["partition"], entry["category"]) != ("train", "recovery"):
+        if entry["category"] != "recovery":
             continue
         directory = (root / entry["recording"]).resolve()
         if not directory.is_relative_to(root.resolve()):
             raise ValueError("Correction source escapes the admitted corpus")
         metadata = json.loads((directory / "episode.json").read_text())
-        if metadata["collection_case"].get("correction_origin") == "policy":
+        row = metadata["collection_case"]
+        if row.get("correction_origin") == "policy":
+            if entry["partition"] != "train":
+                raise ValueError("Policy-state correction quota belongs to TRAIN only")
             verify_policy_correction(directory, metadata)
             policy_corrections += 1
+        elif row.get("mechanism") == "interrupted_progress":
+            fault = json.loads((directory.parent / "report.json").read_text()).get("fault", {})
+            if not (
+                fault.get("mechanism") == "premature_stabilizer_withdrawal"
+                and fault.get("physically_verified")
+                and fault.get("stabilizer_grasp_before")
+                and fault.get("stabilizer_grasp_at_intervention") is False
+                and fault.get("placer_grasp_at_intervention")
+                and fault.get("stabilization_restored")
+            ):
+                raise ValueError("A nominal pause cannot satisfy a teacher coordination recovery")
     if policy_corrections < 30:
         raise ValueError("Learning requires30 actual new TRAIN policy-state corrections")
     return list(entries)

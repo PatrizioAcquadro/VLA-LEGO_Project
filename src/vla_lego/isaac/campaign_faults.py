@@ -179,26 +179,6 @@ def recover_held_placement(reference, task, index, side, yaw, bottom) -> float:
     return float(bottom + task.placements[index].spec.dimensions_m[2] / 2 + tool_z - held_z)
 
 
-def interrupt_progress(reference, case, level: int) -> dict:
-    env, recorder = reference.env, reference.env.recorder
-    if not 0 <= level < 4:
-        raise ValueError("An interrupted tower must remain incomplete")
-    recorder.positive_imitation = False
-    beginning = env.time
-    reference.wait(60, f"level{level}_fault_interrupted_progress")
-    recorder.positive_imitation = True
-    recorder.fault_verified = True
-    return {
-        "type": "interrupted_progress",
-        "teacher_induced": True,
-        "physically_verified": True,
-        "completed_levels": level + 1,
-        "pause_s": env.time - beginning,
-        "error_end_s": env.time,
-        "original_task_resumed": True,
-    }
-
-
 def verify_stop(task, case, env) -> dict:
     """Offline justification; this information is never a deployed decision input."""
     return stop_evidence(task, case, [env.task_truth(i) for i in range(len(env.blocks))])

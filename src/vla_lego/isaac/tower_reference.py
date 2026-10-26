@@ -494,6 +494,62 @@ def main() -> None:
                     stabilizer_grip_floor = float(env.robot.data.joint_pos_limits.torch[0, jaw, 0])
                 return withdraw
 
+            def interrupt_coordination(index, side, withdraw):
+                assert recorder is not None
+                if not any(
+                    evaluator._gripping(env.task_truth(i), stabilizer_side)
+                    for i in indices[:cooperative_level]
+                ) or not evaluator._gripping(env.task_truth(index), side):
+                    raise RuntimeError("Coordination interruption needs two actual active grasps")
+                _, holding_ids, _ = reference.ctrl.frames[side]
+                reference.hold_targets[side] = reference.ctrl.pose(side)[0].tolist()
+                reference.hold_postures[side] = env.robot.data.joint_pos.torch[
+                    0, holding_ids
+                ].tolist()
+                recorder.positive_imitation = False
+                reference.hold_targets.pop(stabilizer_side)
+                reference.hold_postures.pop(stabilizer_side)
+                reference.grip("fault_interrupted_coordination_release", stabilizer_side, None)
+                reference.move(
+                    "fault_interrupted_coordination_retract",
+                    stabilizer_side,
+                    withdraw,
+                    quaternion_xyzw=stabilizer_quaternion,
+                    linear=True,
+                )
+                reference.move(
+                    "fault_interrupted_coordination_clear",
+                    stabilizer_side,
+                    [*withdraw[:2], stabilizer_clear_z],
+                    quaternion_xyzw=stabilizer_clear_quaternion,
+                )
+                reference.move(
+                    "fault_interrupted_coordination_exit",
+                    stabilizer_side,
+                    [withdraw[0], stabilizer_y, stabilizer_clear_z],
+                    quaternion_xyzw=stabilizer_clear_quaternion,
+                )
+                verify_support(cooperative_level - 1, "interrupted coordination")
+                if any(
+                    evaluator._gripping(env.task_truth(i), stabilizer_side)
+                    for i in range(len(env.blocks))
+                ) or not evaluator._gripping(env.task_truth(index), side):
+                    raise RuntimeError("The intended loss of coordination was not established")
+                recorder.positive_imitation = True
+                return {
+                    "type": "interrupted_progress",
+                    "mechanism": "premature_stabilizer_withdrawal",
+                    "teacher_induced": True,
+                    "physically_verified": True,
+                    "completed_levels": cooperative_level,
+                    "stabilizer": stabilizer_side,
+                    "placer": side,
+                    "stabilizer_grasp_before": True,
+                    "stabilizer_grasp_at_intervention": False,
+                    "placer_grasp_at_intervention": True,
+                    "error_end_s": env.time,
+                }
+
             for side in ("left", "right"):
                 reference.park(side)
             env.capture()
@@ -613,6 +669,28 @@ def main() -> None:
                 )
                 if env.task_truth(index)["block_pose_w"][2] < block[2] + 0.07:
                     raise RuntimeError(f"No verified contact-only lift at {prefix}")
+                if (
+                    args.campaign_cases
+                    and pilot_case
+                    and pilot_case.category == "recovery"
+                    and pilot_case.row["mechanism"] == "interrupted_progress"
+                    and pilot_case.row.get("correction_origin") == "teacher"
+                    and level == pilot_case.error_level == cooperative_level
+                ):
+                    report["fault"] = interrupt_coordination(index, side, stabilizer_withdraw)
+                    stabilizer_withdraw = engage_stabilizer()
+                    report["fault"]["stabilization_restored"] = any(
+                        evaluator._gripping(env.task_truth(i), stabilizer_side)
+                        for i in indices[:cooperative_level]
+                    )
+                    if not report["fault"]["stabilization_restored"]:
+                        raise RuntimeError(
+                            "Interrupted stabilizer grasp was not physically restored"
+                        )
+                    reference.hold_targets.pop(side)
+                    reference.hold_postures.pop(side)
+                    assert recorder is not None
+                    recorder.fault_verified = True
                 if (
                     args.campaign_cases
                     and pilot_case
@@ -860,17 +938,6 @@ def main() -> None:
                         reference.park(stabilizer_side)
                     verify_support(level, "stabilizer withdrawal")
                 bottom += target.dimensions_m[2]
-                if (
-                    args.campaign_cases
-                    and pilot_case
-                    and pilot_case.category == "recovery"
-                    and level == min(pilot_case.error_level, 3)
-                    and pilot_case.row["mechanism"] == "interrupted_progress"
-                    and pilot_case.row.get("correction_origin") != "policy"
-                ):
-                    from vla_lego.isaac.campaign_faults import interrupt_progress
-
-                    report["fault"] = interrupt_progress(reference, pilot_case, level)
             reference.wait(40, "final_released_dwell")
             stop_evaluation = None
             if campaign_stop:

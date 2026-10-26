@@ -244,5 +244,29 @@ def test_new_recovery_handoff_requires_the_actual_drop_or_supported_partial_towe
     states[second]["block_pose_w"][2] += task.targets[0].dimensions_m[2]
     states[second]["block_contact_forces_n"][first][2] = 0.3
     assert recovered_fault_is_present(task, interrupted, states)
+    paths = [
+        f"/{side}_WSG32_{jaw}_JAW_LINK"
+        for side in ("left", "right")
+        for jaw in ("NEGATIVE", "POSITIVE")
+    ]
+    coordinated = deepcopy(states)
+    following = next(i for i, p in enumerate(task.placements) if p.spec == task.targets[2])
+    for state in coordinated:
+        state["robot_contact_forces_n"] = [[0.0, 0, 0] for _ in paths]
+    coordinated[following]["block_pose_w"][2] += 0.10
+    coordinated[following]["robot_contact_force_n"] = 0.8
+    coordinated[following]["robot_contact_forces_n"][2:] = [[0.4, 0, 0], [-0.4, 0, 0]]
+    new_report = {
+        "fault": {
+            **interrupted["fault"],
+            "mechanism": "premature_stabilizer_withdrawal",
+            "stabilizer": "left",
+            "placer": "right",
+        }
+    }
+    assert not recovered_fault_is_present(task, new_report, coordinated)
+    assert recovered_fault_is_present(task, new_report, coordinated, robot_contact_paths=paths)
+    coordinated[first]["robot_contact_forces_n"][:2] = [[0.4, 0, 0], [-0.4, 0, 0]]
+    assert not recovered_fault_is_present(task, new_report, coordinated, robot_contact_paths=paths)
     states[second]["block_contact_forces_n"][first][2] = 0
     assert not recovered_fault_is_present(task, interrupted, states)

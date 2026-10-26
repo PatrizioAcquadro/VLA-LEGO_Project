@@ -58,7 +58,9 @@ def recovery_prefix(directory: Path) -> tuple[list[dict], dict, list[dict]]:
     return frames[:boundary], frames[boundary], expected
 
 
-def recovered_fault_is_present(task: TowerTask, report: dict, truth: list[dict]) -> bool:
+def recovered_fault_is_present(
+    task: TowerTask, report: dict, truth: list[dict], *, robot_contact_paths=None
+) -> bool:
     from vla_lego.isaac.environment import TABLE_TOP
 
     fault = report["fault"]
@@ -103,6 +105,29 @@ def recovered_fault_is_present(task: TowerTask, report: dict, truth: list[dict])
         next_index = next(
             i for i, p in enumerate(task.placements) if p.spec == task.targets[completed]
         )
+        if fault.get("mechanism") == "premature_stabilizer_withdrawal":
+            if robot_contact_paths is None:
+                return False
+
+            def gripping(state, side):
+                ids = [
+                    i
+                    for i, path in enumerate(robot_contact_paths)
+                    if path.rsplit("/", 1)[-1]
+                    in (f"{side}_WSG32_NEGATIVE_JAW_LINK", f"{side}_WSG32_POSITIVE_JAW_LINK")
+                ]
+                forces = [
+                    sum(v * v for v in state["robot_contact_forces_n"][i]) ** 0.5 for i in ids
+                ]
+                return len(forces) == 2 and min(forces) > 1e-6 and sum(forces) > 0.5
+
+            state = truth[next_index]
+            return bool(
+                state["block_pose_w"][2] - TABLE_TOP - task.targets[completed].dimensions_m[2] / 2
+                >= 0.07
+                and gripping(state, fault["placer"])
+                and not any(gripping(other, fault["stabilizer"]) for other in truth)
+            )
         return bool(
             abs(
                 truth[next_index]["block_pose_w"][2]
@@ -211,7 +236,9 @@ def replay_recovery(
         float(np.linalg.norm(np.asarray(a["block_pose_w"][:3]) - b["block_pose_w"][:3]))
         for a, b in zip(truth, expected_truth, strict=True)
     )
-    fault_present = recovered_fault_is_present(task, report, truth)
+    fault_present = recovered_fault_is_present(
+        task, report, truth, robot_contact_paths=env.contact_robot_paths
+    )
     if not fault_present or position_error > 0.01:
         raise RuntimeError("Recorded prefix did not establish the intended physical recovery state")
     env.capture()

@@ -156,7 +156,11 @@ def _item(
     if category == "recovery" and extra.get("mechanism") == "placement":
         row["error_target_level"] = str(2 + repetition % 4)
     if category == "recovery" and extra.get("mechanism") == "interrupted_progress":
-        row["error_target_level"] = str(1 + repetition % 4)
+        row["error_target_level"] = (
+            str(1 + repetition % 4)
+            if extra.get("correction_origin") == "policy"
+            else row["cooperative_placement"]
+        )
     row.update(extra)
     return dict(row=row, targets=targets, instruction=instruction, **scene)
 
@@ -207,6 +211,7 @@ def build_declaration() -> dict:
     return {
         "collection_condition": CONDITION,
         "seed": 20261026,
+        "teacher_interruption": "premature_stabilizer_withdrawal_v2",
         "cases": cases,
         "initial_cases": initial,
         "training_episode_limit": 500,
