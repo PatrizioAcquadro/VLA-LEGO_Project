@@ -10,7 +10,7 @@ The initial 24 TRAIN plus eight calibration gate has passed, including all five 
 
 **Ten of the required thirty actual-policy-state corrections are admitted.** Five expose failure to resume or false completion after partial assembly, four expose released falls, and one exposes a held placement beyond its supporting footprint with lost stabilization. The teacher completes the original ordered, cooperative, released and stable tower after each error. Policy windows retain their real actions as negative context, with zero positive motor-imitation targets. These are explicitly conditional teacher-prefix starts; they do not establish autonomous acquisition, tower completion or learned recovery.
 
-All **33 failed collection attempts** remain preserved and excluded:
+All **34 failed collection attempts** remain preserved and excluded:
 
 | Failure class | Attempts | Meaning |
 |---|---:|---|
@@ -18,7 +18,7 @@ All **33 failed collection attempts** remain preserved and excluded:
 | Requested policy error not observed | 2 | Neither a useful empty close-and-lift nor a wrong-piece bilateral lift occurred; desired errors are not fabricated. |
 | Unsupported actual policy outcome | 9 | The model produced a real failure or false terminal, but that attempt's collector could not complete a valid correction. |
 | Temporal scoring refusal | 1 | The original scorer forgot established approach history during transient load-bearing unilateral contact. |
-| Setup | 4 | Indexing, startup timeout, incomplete declaration, and an infeasible whole-task stabilizer withdrawal before recording or policy commands. |
+| Setup | 5 | Indexing, startup timeout, incomplete declaration, and two infeasible whole-task stabilizer withdrawals before recording or policy commands. |
 
 Two additional recordings remain excluded separately: a nominal teacher pause without a distinct correction, and an episode with head contact despite a producer task pass. Preserve original outcomes, masks, denominators and raw recordings. Do not relabel failed full episodes as successful demonstrations or retry unchanged behavior for a favorable outcome.
 
@@ -40,7 +40,7 @@ A separate completed policy window applies 270 commands at four supported levels
 
 A new nominal fourth placement exposes a separate teacher defect: the placing jaws contact the wider supporting prism, increasing load to about ten newtons before the stack collapses. The 4,039-frame attempt remains excluded. [Foundations](foundations.md#tcp-control-and-single-block-reference) owns the geometry-aware grasp correction; its changed native attempt now completes the original cooperative tower. All 5,044 frames pass physical, causal/lossless reader, head-contact and visual admission, with no placing-jaw contact on the previously struck supporting prism. One ineffective candidate was interrupted after mesh readback, with its partial recording preserved separately and excluded from all quotas.
 
-The next contrasting instruction reaches five ordered, stable levels with functional cooperation, but the retired stabilizing jaw still touches the last cube. Its 4,912 frames remain excluded because complete release is required. The corrected planner and executor move the stabilizer farther outward before later pieces are added, preserving the task and evaluator. The changed native attempt completes its original cooperative tower with zero retired-jaw contact on the final cube and zero head contact. All 4,922 frames pass full causal/lossless reader, canonical-case and visual admission. The original failure remains excluded; this is a teacher-control repair, not learned improvement.
+The next contrasting instruction reaches five ordered, stable levels with functional cooperation, but the retired stabilizing jaw still touches the last cube. Its 4,912 frames remain excluded because complete release is required. The corrected planner and executor move the stabilizer farther outward before later pieces are added, preserving the task and evaluator. The changed native attempt completes its original cooperative tower with zero retired-jaw contact on the final cube and zero head contact. All 4,922 frames pass full causal/lossless reader, canonical-case and visual admission. The original failure remains excluded; this is a teacher-control repair, not learned improvement. A later nominal case refuses its right-hand withdrawal during whole-task planning, before any recorded frame. This separate setup failure is preserved. A new isolated nominal runtime adds the near-corridor rotation while retaining the same wide exit and all task criteria; its original-tower validation is pending. Unstarted cases remain reserved until the repair passes admission.
 
 Count verified observed mechanisms, not requested labels. The one documented reassignment of a never-started teacher scene preserves the target of fifteen TRAIN and four development examples per mechanism, with original declarations retained. All scenes, goals, families and splits remain fixed. Future cases use explicit ownership; a full case declaration is not permission to duplicate another collector's episodes.
 
