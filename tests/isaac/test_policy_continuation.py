@@ -457,4 +457,3 @@ def test_placement_failure_excludes_transport_pauses_and_supported_placements(be
         with pytest.raises(RuntimeError, match="did not establish"):
             intervention.placement(SimpleNamespace(env=env), case, task, 1, "left")
         assert not admitted
-
