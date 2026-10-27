@@ -9,7 +9,12 @@ from collections import deque
 from pathlib import Path
 
 from vla_lego.isaac.environment import TABLE_TOP
-from vla_lego.isaac.evaluation import CONTACT_ZERO_N, POSITION_TOLERANCE_M, _footprint_inside
+from vla_lego.isaac.evaluation import (
+    CONTACT_ZERO_N,
+    POSITION_TOLERANCE_M,
+    _corners,
+    _footprint_inside,
+)
 from vla_lego.pretrained.decisions import DECISION_NAMES, decode_decision
 from vla_lego.pretrained.transport import receive_message, send_message
 
@@ -504,6 +509,8 @@ class PolicyIntervention:
         descent, lateral = 0.0, 0.0
         unsupported_since = None
         below_support_since = None
+        outside_support_since = None
+        support_overhang = 0.0
         evidence = None
         recent = deque()
         released_quiet = 0
@@ -511,6 +518,7 @@ class PolicyIntervention:
         def observe(states):
             nonlocal max_z, descent, lateral, unsupported_since, evidence, released_quiet
             nonlocal below_support_since
+            nonlocal outside_support_since, support_overhang
             state = states[index]
             pose = state["block_pose_w"]
             recent.append((env.time, tuple(pose[:3])))
@@ -524,9 +532,25 @@ class PolicyIntervention:
                     below_support_since = env.time
             else:
                 below_support_since = None
+            support_corners = _corners(
+                task.targets[case.error_level - 1].dimensions_m,
+                states[indices[case.error_level - 1]]["block_pose_w"],
+            )
+            support_overhang = max(
+                max(
+                    min(c[a] for c in support_corners) - pose[a],
+                    pose[a] - max(c[a] for c in support_corners),
+                    0.0,
+                )
+                for a in (0, 1)
+            )
+            if gripping(state, side) and support_overhang >= 0.02:
+                if outside_support_since is None:
+                    outside_support_since = env.time
+            else:
+                outside_support_since = None
             if (
-                stabilizer_side is None
-                and state["robot_contact_force_n"] < CONTACT_ZERO_N
+                state["robot_contact_force_n"] < CONTACT_ZERO_N
                 and (
                     state["nonrobot_contact_force_n"] > CONTACT_ZERO_N
                     or any(f[2] > CONTACT_ZERO_N for f in state["block_contact_forces_n"])
@@ -535,7 +559,7 @@ class PolicyIntervention:
                 and max(descent, lateral) >= 0.02
             ):
                 try:
-                    prefix = released_prefix(task, states)
+                    prefix = released_prefix(task, states, supported_contacts=allowed)
                 except ValueError:
                     prefix = -1
                 if 1 <= prefix <= case.error_level:
@@ -598,7 +622,8 @@ class PolicyIntervention:
         if observed and observed.get("mode") == "released_failed_load_transfer":
             if (
                 source["executed_motor_commands"] < 1
-                or released_prefix(task, after) != observed["completed_levels"]
+                or released_prefix(task, after, supported_contacts=allowed)
+                != observed["completed_levels"]
             ):
                 raise RuntimeError("Released placement correction lost its supported prefix")
             source.update(physically_verified=True, error_basis="released_failed_load_transfer")
@@ -627,8 +652,8 @@ class PolicyIntervention:
         stabilizer_lost = stabilizer_side is not None and not any(
             gripping(after[i], stabilizer_side) for i in allowed
         )
-        # A held piece below the required support plane is a different failure
-        # from an above-stack stall. Wait for the original policy budget/terminal.
+        # Wait for the policy's own terminal/budget before correcting held pieces.
+        held_error = None
         if (
             source["executed_motor_commands"] > 0
             and below_support_since is not None
@@ -650,11 +675,38 @@ class PolicyIntervention:
                 "actual_lateral_motion_m": lateral,
                 "stabilizer_grasp_lost": stabilizer_lost,
             }
-            source.update(
-                physically_verified=True,
-                error_basis="held_below_required_support",
-                observed_error=observed,
+            held_error = "held_below_required_support", observed
+        # Edge contact can carry some load while the hand still holds an
+        # off-support piece. That is not a completed placement or an air stall.
+        elif (
+            source["executed_motor_commands"] > 0
+            and outside_support_since is not None
+            and env.time - outside_support_since >= 2
+            and max(descent, lateral) >= 0.02
+            and completed == case.error_level
+            and (
+                source["source_terminal_decision"] in ("complete", "abstain")
+                or (
+                    source["source_terminal_decision"] == "budget"
+                    and env.time - source["start_time_s"] >= 60
+                    and recent
+                    and env.time - recent[0][0] >= 5
+                    and recent_motion < 0.01
+                )
             )
+        ):
+            observed = {
+                "actual_support_overhang_m": support_overhang,
+                "outside_support_duration_s": env.time - outside_support_since,
+                "actual_descent_m": descent,
+                "actual_lateral_motion_m": lateral,
+                "recent_held_motion_m": recent_motion,
+                "stabilizer_grasp_lost": stabilizer_lost,
+            }
+            held_error = "held_outside_support_after_policy_stop", observed
+        if held_error is not None:
+            basis, observed = held_error
+            source.update(physically_verified=True, error_basis=basis, observed_error=observed)
             recorder.admit_policy_intervention(source)
             return {
                 "type": "placement",

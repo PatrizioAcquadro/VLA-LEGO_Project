@@ -300,9 +300,14 @@ def test_wrong_piece_intervention_requires_the_actual_incorrect_bilateral_lift(b
         "still_descending",
         "failed_transfer",
         "released_misplacement",
+        "released_stabilized_misplacement",
         "premature_completion_after_placement",
         "held_below_support",
         "brief_below_support",
+        "held_edge_stall",
+        "edge_transport",
+        "brief_edge_stall",
+        "centered_partial_contact",
     ],
 )
 def test_placement_failure_excludes_transport_pauses_and_supported_placements(behavior):
@@ -330,6 +335,10 @@ def test_placement_failure_excludes_transport_pauses_and_supported_placements(be
     states[1]["nonrobot_contact_force_n"] = 0
     states[1]["robot_contact_forces_n"][0][0] = 0.6
     states[1]["robot_contact_forces_n"][1][0] = 0.6
+    if behavior == "released_stabilized_misplacement":
+        states[0]["robot_contact_force_n"] = 1.2
+        states[0]["robot_contact_forces_n"][2][0] = 0.6
+        states[0]["robot_contact_forces_n"][3][0] = 0.6
     admitted = []
     env = SimpleNamespace(
         blocks=states,
@@ -357,14 +366,20 @@ def test_placement_failure_excludes_transport_pauses_and_supported_placements(be
         if behavior == "premature_completion_after_placement":
             states[1]["robot_contact_force_n"] = 0
             states[1]["robot_contact_forces_n"] = [[0.0] * 3 for _ in range(4)]
-        if behavior == "released_misplacement":
+        if behavior in ("released_misplacement", "released_stabilized_misplacement"):
             states[1]["block_pose_w"][2] = TABLE_TOP + task.targets[1].dimensions_m[2] / 2
             states[1]["robot_contact_force_n"] = 0
+            states[1]["robot_contact_forces_n"] = [[0.0] * 3 for _ in range(4)]
             states[1]["nonrobot_contact_force_n"] = 0.3
         env.time = 75
         if behavior == "held_below_support":
             states[1]["block_pose_w"][2] -= 0.08
             states[1]["block_pose_w"][0] += 0.06
+        if behavior in ("held_edge_stall", "edge_transport", "centered_partial_contact"):
+            states[1]["block_pose_w"][2] -= 0.06
+            states[1]["block_contact_forces_n"][0][2] = 0.3
+            if behavior != "centered_partial_contact":
+                states[1]["block_pose_w"][0] += 0.06
         stop_when(states)
         if behavior == "still_descending":
             states[1]["block_pose_w"][2] -= 0.02
@@ -375,8 +390,14 @@ def test_placement_failure_excludes_transport_pauses_and_supported_placements(be
         elif behavior == "brief_below_support":
             states[1]["block_pose_w"][2] -= 0.08
             states[1]["block_pose_w"][0] += 0.06
+        elif behavior == "edge_transport":
+            states[1]["block_pose_w"][0] += 0.02
+        elif behavior == "brief_edge_stall":
+            states[1]["block_pose_w"][2] -= 0.06
+            states[1]["block_pose_w"][0] += 0.06
+            states[1]["block_contact_forces_n"][0][2] = 0.3
         event = stop_when(states)
-        if behavior == "released_misplacement":
+        if behavior in ("released_misplacement", "released_stabilized_misplacement"):
             env.time += 0.05
             event = stop_when(states)
         return (
@@ -398,16 +419,25 @@ def test_placement_failure_excludes_transport_pauses_and_supported_placements(be
     if behavior in (
         "failed_transfer",
         "released_misplacement",
+        "released_stabilized_misplacement",
         "premature_completion_after_placement",
         "held_below_support",
+        "held_edge_stall",
     ):
-        event = intervention.placement(SimpleNamespace(env=env), case, task, 1, "left")
+        event = intervention.placement(
+            SimpleNamespace(env=env),
+            case,
+            task,
+            1,
+            "left",
+            stabilizer_side="right" if behavior == "released_stabilized_misplacement" else None,
+        )
         assert not event["teacher_induced"]
         if behavior == "premature_completion_after_placement":
             assert event["type"] == "interrupted_progress"
             assert event["completed_levels"] == 2
             assert event["recovery_mode"] == "rebuild_released_prefix"
-        elif behavior == "released_misplacement":
+        elif behavior in ("released_misplacement", "released_stabilized_misplacement"):
             assert event["recovery_mode"] == "rebuild_released_prefix"
             assert event["completed_levels"] == 1
         elif behavior == "held_below_support":
@@ -415,6 +445,11 @@ def test_placement_failure_excludes_transport_pauses_and_supported_placements(be
             assert event["completed_levels"] == 1
             assert event["height_gap_m"] < -0.02
             assert event["return_source_xy_m"] == list(task.placements[1].xy_m)
+        elif behavior == "held_edge_stall":
+            assert event["recovery_mode"] == "return_held_then_rebuild"
+            assert event["completed_levels"] == 1
+            assert event["actual_support_overhang_m"] >= 0.02
+            assert event["policy_source"]["error_basis"] == "held_outside_support_after_policy_stop"
         else:
             assert event["height_gap_m"] > 0.01
         assert len(admitted) == 1
@@ -422,3 +457,4 @@ def test_placement_failure_excludes_transport_pauses_and_supported_placements(be
         with pytest.raises(RuntimeError, match="did not establish"):
             intervention.placement(SimpleNamespace(env=env), case, task, 1, "left")
         assert not admitted
+
