@@ -457,3 +457,40 @@ def test_placement_failure_excludes_transport_pauses_and_supported_placements(be
         with pytest.raises(RuntimeError, match="did not establish"):
             intervention.placement(SimpleNamespace(env=env), case, task, 1, "left")
         assert not admitted
+
+
+def test_return_cannot_claim_to_move_a_released_piece_with_empty_jaws():
+    from types import SimpleNamespace
+
+    from vla_lego.isaac.campaign_faults import return_held_piece
+
+    task = initial_tower_task()
+    env = SimpleNamespace(
+        contact_robot_paths=[f"/left_WSG32_{jaw}_JAW_LINK" for jaw in ("NEGATIVE", "POSITIVE")],
+        task_truth=lambda i: {
+            "block_pose_w": [*task.placements[i].xy_m, 0.82, 0, 0, 0, 1],
+            "robot_contact_forces_n": [[0.0] * 3 for _ in range(2)],
+        },
+    )
+    with pytest.raises(RuntimeError, match="actual bilateral jaw contact"):
+        return_held_piece(
+            SimpleNamespace(env=env),
+            task,
+            {"object_index": 0, "side": "left", "return_source_xy_m": task.placements[0].xy_m},
+        )
+
+
+
+def test_rotated_grasp_return_places_the_piece_center_at_the_vacant_source():
+    from vla_lego.isaac.campaign_faults import _held_return_waypoints
+
+    block = [0.44, -0.40, 0.95, 0, 0, 0, 1]
+    tool = [0.49, -0.42, 0.96, 0, 0, 0, 1]
+    dimensions = [0.047, 0.047, 0.068]
+    waypoints = _held_return_waypoints(tool, block, dimensions, [0.30, -0.20], 1.0)
+    lower = waypoints[-1][1]
+    returned_center = np.array(lower) - (np.array(tool[:3]) - np.array(block[:3]))
+    assert returned_center[:2] == pytest.approx([0.30, -0.20])
+    assert returned_center[2] - dimensions[2] / 2 == pytest.approx(TABLE_TOP)
+    assert waypoints[0][1][:2] == tool[:2]
+    assert waypoints[1][1][:2] == pytest.approx(lower[:2])

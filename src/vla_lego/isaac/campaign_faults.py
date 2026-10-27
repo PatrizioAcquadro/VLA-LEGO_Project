@@ -50,6 +50,23 @@ def resting_yaw(pose, spec) -> float:
     return math.degrees(math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z)))
 
 
+def _held_return_waypoints(tool, block, dimensions, xy, obstacle_top):
+    """Keep the measured tool-to-piece offset when returning a rotated grasp."""
+    from vla_lego.isaac.evaluation import _corners
+
+    offset = [a - b for a, b in zip(tool[:3], block[:3], strict=True)]
+    bottom = min(c[2] for c in _corners(dimensions, block))
+    release_z = TABLE_TOP + block[2] - bottom + offset[2]
+    clear_z = max(tool[2], release_z + 0.12, 1.02, tool[2] + obstacle_top + 0.025 - bottom)
+    target_xy = [a + b for a, b in zip(xy, offset[:2], strict=True)]
+    return [
+        ("raise", [*tool[:2], clear_z]),
+        ("return", [*target_xy, clear_z]),
+        ("lower", [*target_xy, release_z]),
+    ]
+
+
+
 def recover_dropped(reference, task, index: int, side: str, yaw: float, *, replan=False) -> float:
     """Reacquire a block that has already fallen; this function never causes the fall."""
     env = reference.env
@@ -119,23 +136,26 @@ def return_held_piece(
                 "Held piece's return space is occupied; another correction is needed"
             )
     state = env.task_truth(index)
+    jaw_forces = [
+        math.hypot(*state["robot_contact_forces_n"][i])
+        for i, path in enumerate(env.contact_robot_paths)
+        if path.rsplit("/", 1)[-1]
+        in (f"{side}_WSG32_NEGATIVE_JAW_LINK", f"{side}_WSG32_POSITIVE_JAW_LINK")
+    ]
+    if len(jaw_forces) != 2 or min(jaw_forces) <= CONTACT_ZERO_N or sum(jaw_forces) <= 0.5:
+        raise RuntimeError("Returning a held piece requires actual bilateral jaw contact")
     tool = reference.ctrl.pose(side)[0].tolist()
     orientation = tool[3:]
-    offset = tool[2] - state["block_pose_w"][2]
-    bottom = min(c[2] for c in _corners(spec.dimensions_m, state["block_pose_w"]))
-    release_z = TABLE_TOP + state["block_pose_w"][2] - bottom + offset
     obstacle_top = max(
         c[2]
         for i, placement in enumerate(task.placements)
         if i != index
         for c in _corners(placement.spec.dimensions_m, env.task_truth(i)["block_pose_w"])
     )
-    clear_z = max(tool[2], release_z + 0.12, 1.02, tool[2] + obstacle_top + 0.025 - bottom)
-    for stage, xyz in (
-        ("raise", [*tool[:2], clear_z]),
-        ("return", [*xy, clear_z]),
-        ("lower", [*xy, release_z]),
-    ):
+    waypoints = _held_return_waypoints(
+        tool, state["block_pose_w"], spec.dimensions_m, xy, obstacle_top
+    )
+    for stage, xyz in waypoints:
         reference.move(
             stage_prefix + "_" + stage,
             side,
@@ -149,7 +169,7 @@ def return_held_piece(
     reference.move(
         stage_prefix + "_withdraw",
         side,
-        [*xy, clear_z],
+        waypoints[1][1],
         0,
         quaternion_xyzw=orientation,
         linear=True,
