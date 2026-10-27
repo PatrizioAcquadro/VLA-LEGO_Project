@@ -96,3 +96,33 @@ Inspect the `#SBATCH` account/partition/QoS/resource lines before submitting the
 | `validate_model.sh` | One GPU, native Qwen/VLA smoke |
 
 The simulation/model jobs write unique `outputs/*-${SLURM_JOB_ID}` directories and scheduler logs. Ensure these directories live on appropriate scratch storage for your checkout. Keep failed runs and scheduler exit status. No distributed training template is maintained. Future training belongs to [Phase 5](implementation_phases/phase-5-training.md), using the selected pretrained VLA; old toy-job results cannot qualify it.
+
+## Shared multi-GPU practice
+
+October 26, 2026. Guidance shared with SquadBot and the other robot-learning
+projects; this does not launch work or change this project's approved recipe.
+
+Use the existing PyTorch **DDP/torchrun/NCCL** stack and isolated application
+environment. Before a long run, measure the actual stage on one/two GPUs and
+consider four when batch, memory and timings justify it. Preserve effective global
+batch, episode/chunk semantics, masks, optimizer/sampler/RNG state and update
+budget; do not copy another project's batch or learning rates. Prefer a suitable
+single-node allocation and compare Gautschi H100 versus Gilbreth A100 using queue,
+staging and end-to-end throughput. Parallel independent approved runs can be
+better than extra ranks on a small-batch job. Report wall time and GPU-hours.
+
+For a separately authorized performance task, reuse PyTorch Profiler and existing
+logs; install TensorBoard only if a viewer is needed, in the project environment.
+Use Nsight Systems only for an identified unresolved bottleneck. Preserve the
+shared NVIDIA image and pinned CUDA/PyTorch stack. Do not add DeepSpeed, FSDP,
+Ray, compilation or new kernels without a measured requirement/benefit. Retain
+bounded distributed-gradient/resume validation after consequential changes.
+
+Respect workload ownership and GPU leases; do not stop other projects' jobs.
+GPU training does not qualify the native Isaac rendering path. No dependencies
+were installed, jobs submitted or trainer support claimed by this documentation
+change. The project's existing training implementation remains authoritative.
+
+References: [PyTorch DDP](https://docs.pytorch.org/docs/2.11/generated/torch.nn.parallel.DistributedDataParallel.html),
+[torchrun](https://docs.pytorch.org/docs/2.11/elastic/run.html),
+[Profiler](https://docs.pytorch.org/tutorials/recipes/recipes/profiler_recipe.html).

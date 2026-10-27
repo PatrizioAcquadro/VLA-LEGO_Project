@@ -2,6 +2,10 @@
 
 Keep only decisions that change interpretation or future development. Use Git for ordinary edits and commit history.
 
+## 2026-10-26 — Shared multi-GPU practice
+
+Record actual-stage scaling, isolated optional tooling and preservation of the project recipe/resume contract. No installations, jobs or trainer changes. [Compute guidance](cluster.md#shared-multi-gpu-practice).
+
 ## 2026-10-24 — Marker-free pilot delivery boundary
 
 - Replace marked/fixed destinations with continuous free bimanual construction sites; later placements track the actual base and physical evaluation accepts any valid location in the declared region.
