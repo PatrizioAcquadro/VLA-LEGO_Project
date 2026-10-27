@@ -67,13 +67,10 @@ def source_grasp_span(env, object_index: int, yaw_deg: float) -> float:
     return float(max(projected) - min(projected))
 
 
-def source_grasp_clearance(env, controller, side: str, object_index: int):
-    """Rank source approaches by open-jaw clearance from other visible pieces."""
-    import torch
-    from isaaclab.utils.math import matrix_from_quat, quat_apply, quat_apply_inverse
+def _jaw_geometry(env, controller, side: str):
+    """Native collision meshes expressed in the measured tool frame."""
+    from isaaclab.utils.math import quat_apply, quat_apply_inverse
     from pxr import Gf, Usd, UsdGeom, UsdPhysics
-
-    from vla_lego.isaac.evaluation import _corners
 
     cache = UsdGeom.XformCache()
     tcp = controller.pose(side)[0]
@@ -107,6 +104,30 @@ def source_grasp_clearance(env, controller, side: str, object_index: int):
             geometry.append((local, normals, edges))
     if not geometry:
         raise RuntimeError("Native jaw geometry unavailable")
+    return geometry
+
+
+def source_grasp_height(env, controller, side, orientation, object_height: float) -> float:
+    """Keep the distal jaw tips above the payload bottom at supported placement."""
+    from isaaclab.utils.math import quat_apply
+
+    geometry = _jaw_geometry(env, controller, side)
+    lowest = min(
+        float(quat_apply(orientation.expand(len(points), -1), points)[:, 2].min())
+        for points, _, _ in geometry
+    )
+    # The cooperative search may descend another 6 mm; native tracking admits 5 mm.
+    return max(0.06, -object_height / 2 - lowest + 0.006 + 0.005)
+
+
+def source_grasp_clearance(env, controller, side: str, object_index: int):
+    """Rank source approaches by open-jaw clearance from other visible pieces."""
+    import torch
+    from isaaclab.utils.math import matrix_from_quat, quat_apply
+
+    from vla_lego.isaac.evaluation import _corners
+
+    geometry = _jaw_geometry(env, controller, side)
     obstacles = []
     for index, placement in enumerate(env.placements):
         if index == object_index:

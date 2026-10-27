@@ -44,7 +44,9 @@ def test_site_selection_checks_the_last_level_without_changing_scene_or_goal(tmp
         if route[-3][2] > 1.12 and abs(route[-3][1]) > 0.10:
             raise RuntimeError("Native head collision on high cross-body reach")
 
-    reference = SimpleNamespace(env=SimpleNamespace(task_truth=truth), grasp_yaw=grasp)
+    reference = SimpleNamespace(
+        env=SimpleNamespace(task_truth=truth), grasp_yaw=grasp, grasp_height=lambda *a: 0.06
+    )
     selected, report = choose_build_site(reference, task, indices, roles, 3)
     assert selected == (0.4, 0.0)
     assert report["rejected"][0]["level"] == 5
@@ -82,9 +84,20 @@ def test_a_placeable_tower_site_still_requires_stabilizer_access(tmp_path, monke
 
     monkeypatch.setattr(stabilizer_planning, "plan_stabilizer", plan)
     reference = SimpleNamespace(
-        env=SimpleNamespace(task_truth=lambda i: states[i]), grasp_yaw=lambda *a: 0
+        env=SimpleNamespace(task_truth=lambda i: states[i]),
+        grasp_yaw=lambda *a: 0,
+        grasp_height=lambda *a: 0.06,
     )
     selected, report = choose_build_site(reference, task, indices, roles, 3)
     assert selected == (0.4, 0.0) and report["stabilizer_approach_and_withdrawal_admitted"]
     assert report["rejected"][0]["stage"] == "stabilizer"
     assert states == original and task.assembly_xy_m != selected
+
+
+def test_a_shallower_pinch_preserves_lift_and_placement_geometry():
+    target = BlockSpec("cube", "small", "green")
+    task = SimpleNamespace(targets=(target,) * 5)
+    route = pick_route(task, 3, [0.5, -0.3, 0.82], (0.4, 0), "right", 3, grasp_height=0.075)
+    assert route[4][2] - route[3][2] == pytest.approx(0.10)
+    assert route[-3][2] == pytest.approx(TABLE_TOP + 3 * 0.04 + 0.02 + 0.075)
+    assert all(p[2] >= route[-3][2] + 0.025 for p in route[5:-3])

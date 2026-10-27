@@ -129,6 +129,13 @@ class PhysicalReference:
                     failures.append(f"yaw={yaw:g}: {error}")
         raise RuntimeError(f"No reachable source grasp approach: {failures}")
 
+    def grasp_height(self, side: str, object_height: float, yaw_deg: float) -> float:
+        from vla_lego.isaac.clearance import source_grasp_height
+
+        return source_grasp_height(
+            self.env, self.ctrl, side, self.orientation(side, yaw_deg), object_height
+        )
+
     def orientation(self, side: str, yaw_deg: float):
         from isaaclab.utils.math import quat_mul
 

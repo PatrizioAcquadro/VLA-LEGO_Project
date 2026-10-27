@@ -629,7 +629,13 @@ def main() -> None:
                 if level == cooperative_level:
                     stabilizer_withdraw = engage_stabilizer()
                 block = env.task_truth(index)["block_pose_w"][:3]
+                grasp_height = (
+                    reference.grasp_height(side, target.dimensions_m[2], yaw)
+                    if pilot_case
+                    else 0.06
+                )
                 if pilot_case:
+                    report.setdefault("source_grasp_heights_m", {})[prefix] = grasp_height
                     if index in displaced_sources:
                         from vla_lego.isaac.campaign_faults import resting_yaw
 
@@ -641,7 +647,15 @@ def main() -> None:
                     yaw = reference.grasp_yaw(
                         side,
                         yaw,
-                        pick_route(task, level, block, build_xy, side, cooperative_level),
+                        pick_route(
+                            task,
+                            level,
+                            block,
+                            build_xy,
+                            side,
+                            cooperative_level,
+                            grasp_height=grasp_height,
+                        ),
                         object_index=index,
                     )
                 for stage, xyz in (
@@ -650,8 +664,8 @@ def main() -> None:
                         "source_high",
                         [min(block[0], 0.46) if pilot_case else block[0], block[1], 1.02],
                     ),
-                    ("approach", [block[0], block[1], block[2] + 0.10]),
-                    ("descend", [block[0], block[1], block[2] + 0.06]),
+                    ("approach", [block[0], block[1], block[2] + grasp_height + 0.04]),
+                    ("descend", [block[0], block[1], block[2] + grasp_height]),
                 ):
                     reference.move(
                         f"{prefix}_{stage}",
@@ -664,8 +678,8 @@ def main() -> None:
                         # A policy prefix may leave the jaws closed before the next pick.
                         reference.grip(f"{prefix}_open", side, None)
                 reference.grip(f"{prefix}_grip", side, target.dimensions_m[1])
-                release_z = bottom + target.dimensions_m[2] / 2 + 0.06
-                lift_z = block[2] + 0.16
+                release_z = bottom + target.dimensions_m[2] / 2 + grasp_height
+                lift_z = block[2] + grasp_height + 0.10
                 transit_z = release_z + 0.025
                 reference.move(
                     f"{prefix}_lift",
@@ -717,7 +731,7 @@ def main() -> None:
                         verify_support(level - 1, "actual policy drop")
                         yaw = recover_dropped(reference, task, index, side, yaw, replan=True)
                         block = report["fault"]["recovery_source_pose_w"][:3]
-                        lift_z = block[2] + 0.16
+                        lift_z = block[2] + grasp_height + 0.10
                     else:
                         report["fault"] = drop_and_recover(
                             reference, pilot_case, task, index, side, yaw

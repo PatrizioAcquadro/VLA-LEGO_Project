@@ -7,17 +7,18 @@ import math
 from vla_lego.isaac.environment import TABLE_TOP
 
 
-def pick_route(task, level, block, build_xy, side, cooperative_level):
+def pick_route(task, level, block, build_xy, side, cooperative_level, *, grasp_height=0.06):
     bottom = TABLE_TOP + sum(target.dimensions_m[2] for target in task.targets[:level])
     height = task.targets[level].dimensions_m[2]
-    release = bottom + height / 2 + 0.06
-    carry = max(block[2] + 0.16, release + 0.030)
+    release = bottom + height / 2 + grasp_height
+    lift = block[2] + grasp_height + 0.10
+    carry = max(lift, release + 0.030)
     return [
         [0.40, 0.40 if side == "left" else -0.40, 1.05],
         [min(block[0], 0.46), block[1], 1.02],
-        [block[0], block[1], block[2] + 0.10],
-        [block[0], block[1], block[2] + 0.06],
-        [block[0], block[1], block[2] + 0.16],
+        [block[0], block[1], block[2] + grasp_height + 0.04],
+        [block[0], block[1], block[2] + grasp_height],
+        [block[0], block[1], lift],
         [block[0], block[1], carry],
         *(
             [
@@ -27,7 +28,7 @@ def pick_route(task, level, block, build_xy, side, cooperative_level):
             if level >= cooperative_level
             else []
         ),
-        *([[*build_xy, block[2] + 0.16]] if release + 0.025 < block[2] + 0.16 else []),
+        *([[*build_xy, lift]] if release + 0.025 < lift else []),
         [*build_xy, release + 0.025],
         [*build_xy, release],
         [*build_xy, release + height / 2 + 0.025],
@@ -73,7 +74,17 @@ def choose_build_site(reference, task, indices, roles, cooperative_level):
                 reference.grasp_yaw(
                     side,
                     yaw + task.placements[index].yaw_deg,
-                    pick_route(task, level, block, xy, side, cooperative_level),
+                    pick_route(
+                        task,
+                        level,
+                        block,
+                        xy,
+                        side,
+                        cooperative_level,
+                        grasp_height=reference.grasp_height(
+                            side, task.targets[level].dimensions_m[2], yaw
+                        ),
+                    ),
                 )
             # Predict only nominal prefix geometry; never write those poses into simulation.
             states = [reference.env.task_truth(i) for i in range(len(task.placements))]
