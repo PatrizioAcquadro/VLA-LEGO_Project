@@ -942,9 +942,18 @@ def main() -> None:
                         linear=True,
                         linear_step_m=0.02,
                     )
-                reference.move(
-                    f"{prefix}_exit", side, [0.40, 0.40 if side == "left" else -0.40, 1.05], yaw
+                pending_progress_handoff = (
+                    policy_intervention is not None
+                    and pilot_case is not None
+                    and pilot_case.row["mechanism"] == "interrupted_progress"
+                    and level == pilot_case.error_level
+                    and "fault" not in report
                 )
+                # Hand over after release/clearance, without an artificial outward park.
+                if not pending_progress_handoff:
+                    reference.move(
+                        f"{prefix}_exit", side, [0.40, 0.40 if side == "left" else -0.40, 1.05], yaw
+                    )
                 if not pilot_case:
                     reference.park(side)
                 reference.wait(10, f"{prefix}_support_check")
