@@ -360,6 +360,7 @@ def main() -> None:
                 sample_cooperation,
                 event_settling=args.event_settling,
             )
+            report["teacher_rotation_residual_scale"] = reference.ctrl.rotation_scale
             if args.campaign_cases:
                 from isaaclab.utils.math import quat_from_matrix
 

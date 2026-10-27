@@ -8,7 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from vla_lego.isaac.control import ToolController
-from vla_lego.isaac.kinematics import ArmKinematics
+from vla_lego.isaac.kinematics import (
+    IK_POSITION_TOLERANCE_M,
+    IK_ROTATION_TOLERANCE_RAD,
+    ArmKinematics,
+)
 
 
 def _linear_profile(start, goal, *, period_s=0.05, peak_speed_m_s=0.08):
@@ -30,7 +34,10 @@ class PhysicalReference:
 
     def __init__(self, env: Any, trace, output_dir: Path, on_sample=None, *, event_settling=False):
         self.env, self.trace, self.output_dir, self.on_sample = env, trace, output_dir, on_sample
-        self.ctrl = ToolController(env)
+        # Realize the same position/rotation tradeoff admitted by the IK planner.
+        self.ctrl = ToolController(
+            env, rotation_scale=IK_POSITION_TOLERANCE_M / IK_ROTATION_TOLERANCE_RAD
+        )
         self.initial_orientations = {
             side: self.ctrl.pose(side)[0, 3:].clone() for side in ("left", "right")
         }

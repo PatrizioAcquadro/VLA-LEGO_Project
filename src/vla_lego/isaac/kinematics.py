@@ -8,6 +8,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+IK_POSITION_TOLERANCE_M = 0.003
+IK_ROTATION_TOLERANCE_RAD = 0.04
+
 
 def _bounded_dls_step(jacobian, error, damping, lower, upper):
     """Redistribute Cartesian motion when a joint reaches its step bound."""
@@ -165,7 +168,33 @@ class ArmKinematics:
             upper - lower
         )
         q[0] = current_q
-        for _ in range(iterations):
+        initial = q.clone()
+        position_tolerance = IK_POSITION_TOLERANCE_M
+        rotation_tolerance = IK_ROTATION_TOLERANCE_RAD
+        scales = (1.0,) if starts == 1 else (1.0, position_tolerance / rotation_tolerance)
+        for rotation_scale in scales:
+            # On failure, balance meters/radians by the existing acceptance bounds.
+            q = initial.clone()
+            task_scale = q.new_tensor([1, 1, 1, rotation_scale, rotation_scale, rotation_scale])
+            for _ in range(iterations):
+                tf, jac = self.forward(q)
+                pos, rot = compute_pose_error(
+                    tf[:, :3, 3],
+                    quat_from_matrix(tf[:, :3, :3]),
+                    pose[:3].expand(starts, -1),
+                    pose[3:].expand(starts, -1),
+                )
+                error = torch.cat((pos, rot), dim=-1)
+                if starts == 1 and bool((pos.norm(dim=-1) < 1e-6) & (rot.norm(dim=-1) < 1e-5)):
+                    break
+                dq = _bounded_dls_step(
+                    jac * task_scale[None, :, None],
+                    error * task_scale,
+                    0.02,
+                    (lower - q).clamp(min=-0.12),
+                    (upper - q).clamp(max=0.12),
+                )
+                q = (q + dq).clamp(lower, upper)
             tf, jac = self.forward(q)
             pos, rot = compute_pose_error(
                 tf[:, :3, 3],
@@ -173,31 +202,15 @@ class ArmKinematics:
                 pose[:3].expand(starts, -1),
                 pose[3:].expand(starts, -1),
             )
-            error = torch.cat((pos, rot), dim=-1)
-            if starts == 1 and bool((pos.norm(dim=-1) < 1e-6) & (rot.norm(dim=-1) < 1e-5)):
-                break
-            dq = _bounded_dls_step(
-                jac,
-                error,
-                0.02,
-                (lower - q).clamp(min=-0.12),
-                (upper - q).clamp(max=0.12),
+            valid = (pos.norm(dim=-1) < position_tolerance) & (
+                rot.norm(dim=-1) < rotation_tolerance
             )
-            q = (q + dq).clamp(lower, upper)
-        tf, _ = self.forward(q)
-        pos, rot = compute_pose_error(
-            tf[:, :3, 3],
-            quat_from_matrix(tf[:, :3, :3]),
-            pose[:3].expand(starts, -1),
-            pose[3:].expand(starts, -1),
+            if self.configuration_admission is not None:
+                valid &= self.configuration_admission(q)
+            cost = (q - current_q).square().sum(dim=-1).masked_fill(~valid, torch.inf)
+            if bool(valid.any()):
+                return q[int(cost.argmin())]
+        best = int((pos.norm(dim=-1) + rot.norm(dim=-1)).argmin())
+        raise RuntimeError(
+            f"No admissible IK solution: position={float(pos[best].norm()):.4f} m, rotation={float(rot[best].norm()):.4f} rad"
         )
-        valid = (pos.norm(dim=-1) < 0.003) & (rot.norm(dim=-1) < 0.04)
-        if self.configuration_admission is not None:
-            valid &= self.configuration_admission(q)
-        cost = (q - current_q).square().sum(dim=-1).masked_fill(~valid, torch.inf)
-        if not bool(valid.any()):
-            best = int((pos.norm(dim=-1) + rot.norm(dim=-1)).argmin())
-            raise RuntimeError(
-                f"No admissible IK solution: position={float(pos[best].norm()):.4f} m, rotation={float(rot[best].norm()):.4f} rad"
-            )
-        return q[int(cost.argmin())]

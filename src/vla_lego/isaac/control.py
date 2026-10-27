@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from vla_lego.isaac.environment import ARM_JOINTS, DT
@@ -25,12 +26,15 @@ class ToolController:
     Collision-aware path admission is not yet implemented.
     """
 
-    def __init__(self, env: Any):
+    def __init__(self, env: Any, *, rotation_scale: float = 1.0):
         import torch
         from ihmc_alex_isaaclab.robots.purdue_frames import author_alex_purdue_frames
         from pxr import Gf, UsdGeom
 
         self.env = env
+        if not math.isfinite(rotation_scale) or rotation_scale <= 0:
+            raise ValueError("Rotation residual scale must be finite and positive.")
+        self.rotation_scale = rotation_scale
         self.frames = {}
         paths = author_alex_purdue_frames(
             env.stage, "/World/envs/env_0/Robot", end_effector="wsg32_umi_v1"
@@ -139,7 +143,10 @@ class ToolController:
                 if not bool(torch.isfinite(velocity).all()):
                     raise ValueError("Tool velocity must be finite.")
                 error += period_s * velocity
-            dq = _bounded_dls_step(jac, error, 0.03, lower, upper)
+            task_scale = error.new_tensor([1, 1, 1, *([self.rotation_scale] * 3)])
+            dq = _bounded_dls_step(
+                jac * task_scale[None, :, None], error * task_scale, 0.03, lower, upper
+            )
             if postures is not None and side in postures:
                 posture = torch.as_tensor(
                     postures[side], device=self.env.target.device, dtype=self.env.target.dtype
