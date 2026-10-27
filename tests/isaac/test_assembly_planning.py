@@ -10,7 +10,7 @@ from vla_lego.isaac.campaign import load_campaign
 from vla_lego.isaac.campaign_design import build_declaration
 from vla_lego.isaac.catalog import BlockSpec
 from vla_lego.isaac.environment import TABLE_TOP
-from vla_lego.isaac.stabilizer_planning import stabilized_level
+from vla_lego.isaac.stabilizer_planning import stabilized_level, stabilizer_exit_route
 
 
 def test_stabilizer_braces_wider_support_beneath_a_tall_narrow_prism():
@@ -21,6 +21,18 @@ def test_stabilizer_braces_wider_support_beneath_a_tall_narrow_prism():
     task = SimpleNamespace(targets=(small, large, prism))
     assert stabilized_level(task, 3) == 1
     assert stabilized_level(SimpleNamespace(targets=(small, small, small)), 3) == 2
+
+
+@pytest.mark.parametrize("side, sign", [("left", 1), ("right", -1)])
+def test_stabilizer_rotation_keeps_the_wide_exit_and_cleared_height(side, sign):
+    orientation = [0.06, 0.06, -0.70, 0.70]
+    direct = stabilizer_exit_route([0.407, 0.107, 1.03], side, 1.096, orientation)
+    rotated = stabilizer_exit_route([0.407, 0.107, 1.03], side, 1.096, orientation, rotate=True)
+    assert direct[-1][1] == rotated[-1][1] == [0.407, sign * 0.40, 1.096]
+    assert all(xyz[2] == 1.096 for _, xyz, _ in rotated)
+    assert rotated[0][1] == rotated[1][1] == [0.407, sign * 0.20, 1.096]
+    assert rotated[0][2] == orientation
+    assert rotated[1][2] == rotated[2][2] == [0, 0, 0, 1]
 
 
 def test_site_selection_checks_the_last_level_without_changing_scene_or_goal(tmp_path, monkeypatch):

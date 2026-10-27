@@ -201,6 +201,7 @@ def main() -> None:
             )
         stabilizer_y = 0.20 if stabilizer_side == "left" else -0.20
         stabilizer_exit_y = 0.40 if stabilizer_side == "left" else -0.40
+        stabilizer_exit_path = None
         stabilizer_level = 0 if single_block or campaign_stop else cooperative_level - 1
         if pilot_case and not (single_block or campaign_stop):
             from vla_lego.isaac.stabilizer_planning import stabilized_level
@@ -414,7 +415,7 @@ def main() -> None:
 
             def engage_stabilizer():
                 nonlocal stabilizer_quaternion, stabilizer_clear_quaternion, stabilizer_clear_z
-                nonlocal stabilizer_grip_floor
+                nonlocal stabilizer_grip_floor, stabilizer_exit_path
                 state = env.task_truth(indices[stabilizer_level])
                 lower = state["block_pose_w"][:3]
                 nominal_width = task.targets[stabilizer_level].dimensions_m[1]
@@ -427,6 +428,13 @@ def main() -> None:
                     ("grasp", stabilizer_pose),
                 )
                 withdraw = [*stabilizer_pose[:2], stabilizer_pose[2] + 0.06]
+                stabilizer_exit_path = [
+                    (
+                        "exit",
+                        [withdraw[0], stabilizer_exit_y, stabilizer_clear_z],
+                        stabilizer_clear_quaternion,
+                    )
+                ]
                 if pilot_case:
                     from vla_lego.isaac.stabilizer_planning import plan_stabilizer
 
@@ -446,6 +454,7 @@ def main() -> None:
                         stabilizer_clear_quaternion,
                         stabilizer_clear_z,
                         withdraw,
+                        stabilizer_exit_path,
                     ) = selected
                     report["stabilizer_grasp_joint_travel_cost"] = selected_cost
                 for name, xyz in approach:
@@ -525,12 +534,13 @@ def main() -> None:
                     [*withdraw[:2], stabilizer_clear_z],
                     quaternion_xyzw=stabilizer_clear_quaternion,
                 )
-                reference.move(
-                    "fault_interrupted_coordination_exit",
-                    stabilizer_side,
-                    [withdraw[0], stabilizer_exit_y, stabilizer_clear_z],
-                    quaternion_xyzw=stabilizer_clear_quaternion,
-                )
+                for name, xyz, rotation in stabilizer_exit_path:
+                    reference.move(
+                        f"fault_interrupted_coordination_{name}",
+                        stabilizer_side,
+                        xyz,
+                        quaternion_xyzw=rotation,
+                    )
                 verify_support(cooperative_level - 1, "interrupted coordination")
                 if any(
                     evaluator._gripping(env.task_truth(i), stabilizer_side)
@@ -984,7 +994,7 @@ def main() -> None:
                         <= 1e-6
                     ):
                         raise RuntimeError("Lost physical support before stabilizer withdrawal")
-                    if stabilizer_withdraw is None:
+                    if stabilizer_withdraw is None or stabilizer_exit_path is None:
                         raise RuntimeError("Missing physical stabilizer setup.")
                     reference.hold_targets.pop(stabilizer_side, None)
                     reference.hold_postures.pop(stabilizer_side, None)
@@ -1003,12 +1013,13 @@ def main() -> None:
                         # Pitch up 20 degrees to keep the proximal wrist reachable.
                         quaternion_xyzw=stabilizer_clear_quaternion,
                     )
-                    reference.move(
-                        "stabilizer_exit",
-                        stabilizer_side,
-                        [stabilizer_withdraw[0], stabilizer_exit_y, stabilizer_clear_z],
-                        quaternion_xyzw=stabilizer_clear_quaternion,
-                    )
+                    for name, xyz, rotation in stabilizer_exit_path:
+                        reference.move(
+                            f"stabilizer_{name}",
+                            stabilizer_side,
+                            xyz,
+                            quaternion_xyzw=rotation,
+                        )
                     if not pilot_case:
                         reference.park(stabilizer_side)
                     verify_support(level, "stabilizer withdrawal")

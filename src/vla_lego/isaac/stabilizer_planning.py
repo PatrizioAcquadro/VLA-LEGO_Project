@@ -18,9 +18,25 @@ def stabilized_level(task, cooperative_level):
     return level
 
 
+def stabilizer_exit_route(retract, side, clear_z, orientation, *, rotate=False):
+    """Rotate in the near corridor only when the direct wide exit is unreachable."""
+    near_y = 0.20 if side == "left" else -0.20
+    exit_y = 0.40 if side == "left" else -0.40
+    if not rotate:
+        return [("exit", [retract[0], exit_y, clear_z], orientation)]
+    near = [retract[0], near_y, clear_z]
+    return [
+        ("near_exit", near, orientation),
+        ("exit_rotate", near, [0.0, 0, 0, 1.0]),
+        ("exit", [retract[0], exit_y, clear_z], [0.0, 0, 0, 1.0]),
+    ]
+
+
 def plan_stabilizer(reference, task, indices, cooperative_level, stabilizer_side, *, states=None):
     """No commands or state writes; actual contact execution remains the final authority."""
     from isaaclab.utils.math import quat_apply, quat_mul
+
+    from vla_lego.isaac.clearance import _jaw_geometry
 
     env = reference.env
     truth = env.task_truth if states is None else states.__getitem__
@@ -29,12 +45,13 @@ def plan_stabilizer(reference, task, indices, cooperative_level, stabilizer_side
     lower = state["block_pose_w"][:3]
     lower_height = task.targets[stabilizer_level].dimensions_m[2]
     stabilizer_y = 0.20 if stabilizer_side == "left" else -0.20
-    # Leave room for upper pieces added after cooperative placement.
-    exit_y = 0.40 if stabilizer_side == "left" else -0.40
     reference.admit_stabilizer_clearance(stabilizer_side)
+    jaw_geometry = _jaw_geometry(env, reference.ctrl, stabilizer_side)
+    tower_radius = max(math.hypot(*target.dimensions_m[:2]) / 2 for target in task.targets)
     _, joint_ids, _ = reference.ctrl.frames[stabilizer_side]
     selected = None
     selected_cost = math.inf
+    selected_rank = (True, math.inf)
     failures = []
     preferred_sign = -1 if stabilizer_side == "left" else 1
     angles = (
@@ -78,7 +95,6 @@ def plan_stabilizer(reference, task, indices, cooperative_level, stabilizer_side
                 env.target.new_tensor([0, math.sin(pitch), 0, math.cos(pitch)]),
             )
             finger = quat_apply(candidate, env.target.new_tensor([1.0, 0, 0])).tolist()
-            axis = quat_apply(candidate, env.target.new_tensor([0.0, 1, 0])).tolist()
             gap = projected_gap(yaw_deg)
             # Preserve the existing 3 mm TCP tracking allowance
             # on either side of the open 70 mm jaw aperture.
@@ -109,26 +125,24 @@ def plan_stabilizer(reference, task, indices, cooperative_level, stabilizer_side
                 travel = (seed - bounds[:, 0]) / (bounds[:, 1] - bounds[:, 0])
                 grasp_cost = float(-(travel * (1 - travel) + 1e-6).log().sum())
                 phase = "retract"
-                upper = truth(indices[cooperative_level])
-                upper_projection = [
-                    sum(v * a for v, a in zip(corner, axis, strict=True))
-                    for corner in _corners(
-                        task.targets[cooperative_level].dimensions_m,
-                        upper["block_pose_w"],
+                # Clear the actual jaw front and any upper piece before rising.
+                horizontal = math.hypot(*finger[:2])
+                direction = env.target.new_tensor(finger[:2]) / horizontal
+                front = max(
+                    float(
+                        (
+                            quat_apply(candidate.expand(len(points), -1), points)[:, :2] @ direction
+                        ).max()
                     )
+                    for points, _, _ in jaw_geometry
+                ) + sum((pose[i] - lower[i]) * float(direction[i]) for i in (0, 1))
+                # Keep the existing 3 mm allowance on each side of the geometry.
+                distance = max(0.0, (front + tower_radius + 0.006) / horizontal)
+                retract = [
+                    pose[0] - distance * finger[0],
+                    pose[1] - distance * finger[1],
+                    pose[2],
                 ]
-                # Do not lift open fingers around a wider upper piece.
-                # Retain the controller's 3 mm tracking allowance per side.
-                wide = max(upper_projection) - min(upper_projection) + 0.006 > 0.070
-                retract = (
-                    [
-                        pose[0] - 0.08 * finger[0],
-                        pose[1] - 0.08 * finger[1],
-                        pose[2],
-                    ]
-                    if wide
-                    else [pose[0], pose[1], pose[2] + 0.06]
-                )
                 for fraction in (0.25, 0.5, 0.75, 1.0):
                     xyz = [a + (b - a) * fraction for a, b in zip(pose, retract, strict=True)]
                     seed = reference.solvers[stabilizer_side].solve(
@@ -140,28 +154,36 @@ def plan_stabilizer(reference, task, indices, cooperative_level, stabilizer_side
                     + 0.06
                 )
                 retreat = None
-                for clear_pitch in (0, -20, 20):
-                    half = math.radians(clear_pitch) / 2
-                    rotation = quat_mul(
-                        candidate,
-                        env.target.new_tensor([0, math.sin(half), 0, math.cos(half)]),
-                    ).tolist()
-                    branch = seed
-                    try:
-                        for xyz in (
-                            [retract[0], retract[1], clear_z],
-                            [retract[0], exit_y, clear_z],
-                        ):
-                            branch = reference.solvers[stabilizer_side].solve(
-                                env.target.new_tensor([*xyz, *rotation]), branch
-                            )
-                        retreat = rotation
+                for rotate_exit in (False, True):
+                    for clear_pitch in (0, -20, 20):
+                        half = math.radians(clear_pitch) / 2
+                        rotation = quat_mul(
+                            candidate,
+                            env.target.new_tensor([0, math.sin(half), 0, math.cos(half)]),
+                        ).tolist()
+                        exit_path = stabilizer_exit_route(
+                            retract, stabilizer_side, clear_z, rotation, rotate=rotate_exit
+                        )
+                        branch = seed
+                        try:
+                            for xyz, quaternion in (
+                                ([*retract[:2], clear_z], rotation),
+                                *((xyz, q) for _, xyz, q in exit_path),
+                            ):
+                                branch = reference.solvers[stabilizer_side].solve(
+                                    env.target.new_tensor([*xyz, *quaternion]), branch
+                                )
+                            retreat = rotation
+                            break
+                        except RuntimeError:
+                            continue
+                    if retreat is not None:
                         break
-                    except RuntimeError:
-                        continue
                 if retreat is None:
                     raise RuntimeError("No collision-free withdrawal orientation")
-                if grasp_cost < selected_cost:
+                rank = (rotate_exit, grasp_cost)
+                if rank < selected_rank:
+                    selected_rank = rank
                     selected_cost = grasp_cost
                     selected = (
                         path,
@@ -171,6 +193,7 @@ def plan_stabilizer(reference, task, indices, cooperative_level, stabilizer_side
                         retreat,
                         clear_z,
                         retract,
+                        exit_path,
                     )
             except RuntimeError as error:
                 failures.append(
