@@ -200,6 +200,7 @@ def main() -> None:
                 roles[cooperative_level][0],
             )
         stabilizer_y = 0.20 if stabilizer_side == "left" else -0.20
+        stabilizer_exit_y = 0.40 if stabilizer_side == "left" else -0.40
         stabilizer_level = 0 if single_block or campaign_stop else cooperative_level - 1
         if pilot_case and not (single_block or campaign_stop):
             from vla_lego.isaac.stabilizer_planning import stabilized_level
@@ -527,7 +528,7 @@ def main() -> None:
                 reference.move(
                     "fault_interrupted_coordination_exit",
                     stabilizer_side,
-                    [withdraw[0], stabilizer_y, stabilizer_clear_z],
+                    [withdraw[0], stabilizer_exit_y, stabilizer_clear_z],
                     quaternion_xyzw=stabilizer_clear_quaternion,
                 )
                 verify_support(cooperative_level - 1, "interrupted coordination")
@@ -1005,7 +1006,7 @@ def main() -> None:
                     reference.move(
                         "stabilizer_exit",
                         stabilizer_side,
-                        [stabilizer_withdraw[0], stabilizer_y, stabilizer_clear_z],
+                        [stabilizer_withdraw[0], stabilizer_exit_y, stabilizer_clear_z],
                         quaternion_xyzw=stabilizer_clear_quaternion,
                     )
                     if not pilot_case:

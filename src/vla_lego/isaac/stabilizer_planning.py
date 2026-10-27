@@ -29,6 +29,8 @@ def plan_stabilizer(reference, task, indices, cooperative_level, stabilizer_side
     lower = state["block_pose_w"][:3]
     lower_height = task.targets[stabilizer_level].dimensions_m[2]
     stabilizer_y = 0.20 if stabilizer_side == "left" else -0.20
+    # Leave room for upper pieces added after cooperative placement.
+    exit_y = 0.40 if stabilizer_side == "left" else -0.40
     reference.admit_stabilizer_clearance(stabilizer_side)
     _, joint_ids, _ = reference.ctrl.frames[stabilizer_side]
     selected = None
@@ -148,7 +150,7 @@ def plan_stabilizer(reference, task, indices, cooperative_level, stabilizer_side
                     try:
                         for xyz in (
                             [retract[0], retract[1], clear_z],
-                            [retract[0], stabilizer_y, clear_z],
+                            [retract[0], exit_y, clear_z],
                         ):
                             branch = reference.solvers[stabilizer_side].solve(
                                 env.target.new_tensor([*xyz, *rotation]), branch
