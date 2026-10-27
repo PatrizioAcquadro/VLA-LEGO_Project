@@ -6,20 +6,20 @@ A verified **224-episode storage snapshot** is on the campaign corpus in Gilbret
 
 After the initial data gate, two native Blackwell collectors completed four additional single-block episodes that pass physical, reader and visual admission. Observed aggregate throughput was 6.70 recorded frames/s versus 4.67 frames/s in earlier single-collector runs, with about 13.2 GiB sampled peak GPU memory. This cross-case engineering measurement supports two bounded collectors; it is not a controlled hardware speed benchmark or policy qualification. Actual-policy correction collection uses the same bounded slots and leases, preserving separate setup, physical and behavioral outcomes.
 
-## Shared workstation admission
+## Dedicated workstation assignment — October 27, 2026
 
-The local RTX 4090 and Blackwell are shared with AlexDoor-XAS and SquadBot-AV. A persistent reservation and the same device lease govern admission for every queued successor and restart; free memory or an idle device does not cancel another project's window. Transfer ownership explicitly after the active episode and cleanup finish. Time limits cannot interrupt a healthy episode or silently reclaim its reservation.
+The user assigns **Blackwell exclusively to this VLA-LEGO campaign and the local RTX 4090 to AlexDoor-XAS**, including each project's new bulk recordings and checkpoints. Run this campaign's simulation, inference and training on Blackwell. Existing cluster archives remain preserved; do not create further Purdue GPU jobs or corpus mirrors under this assignment. The source checkout, scheduler and compact reports may remain local.
 
-Blackwell collection additionally respects its reserved slots under the shared device lease. Existing workloads drain before a slot changes owner, and a waiting successor cannot capture a slot reserved for another project. Keep unrelated workloads protected. Current windows and handoffs belong to the local execution records, not a fixed schedule in this wiki. These resource agreements change neither the scientific scope nor dataset, optimization or allocation budgets.
+Drain the already-running local episode and verify its saved outcome before retiring the local dispatcher. Transfer only never-started cases to the bounded Blackwell lanes. The existing healthy Blackwell collectors keep their leases; do not add a third concurrent lane or interrupt unrelated workloads. Persistent project ownership replaces timed cross-project turns: no return requests, expiry-based reclaim or ordinary scheduling messages. The existing heartbeat checks every fifteen minutes and ends promptly when only background waiting remains.
 
 ## Planned resource roles
 
 | Resource | Intended role | Boundary |
 |---|---|---|
-| Local RTX 4090, 24 GB | Interactive development, visual simulation, small experiments and profiling | Larger VLA adaptation depends on measured fit; do not assume full fine-tuning fits. |
+| Local RTX 4090, 24 GB | Assigned to AlexDoor-XAS | No new VLA workloads or bulk data after the current episode drains. |
 | Blackwell workstation, about 96 GB | Broader rendered collection, training and larger offline teachers | RTX PRO 6000 Blackwell Max-Q; current rendered two-collector measurement is reported above. Availability and new workloads still require measurement. |
-| Gautschi | H100 training; RTX-capable L40-class nodes for rendering when available | Partition visibility is not a guaranteed allocation; select the actual available GPU and compatible runtime. |
-| Gilbreth | A100/H100 training; compatible A10 nodes for rendering | Access, account limits, memory and allocation must match the job. |
+| Gautschi | Potential future resource, outside the current assignment | Further use requires a changed resource instruction. |
+| Gilbreth | Preserve the existing verified archive and historical runs | No new campaign jobs or corpus mirrors under the current Blackwell-only instruction. |
 | Robot Orin | All final VLA inference together with sensing, logging and robot communication | Qualify concurrent load on the real system; the NUC retains low-level control. |
 
 The planning inspection found the local 4090 and approximately 96 GB Blackwell device, Gautschi H100/L40 partitions and Gilbreth A10/A100/H100 partitions. Hardware/access observations alone do not qualify a workload; the campaign measurement above covers current rendered collection. [Gautschi](https://docs.rcac.purdue.edu/userguides/gautschi/overview/) and [Gilbreth](https://docs.rcac.purdue.edu/userguides/gilbreth/overview/) documentation describe system resources; actual allocations govern use.
