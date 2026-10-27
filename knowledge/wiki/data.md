@@ -142,6 +142,12 @@ Local delivery files: `delivery-report.md`, `visual-review.md`, `spatial-coverag
 
 The explicit marker-free revision supersedes all marked-area and fixed-destination requirements in that proposal. The main corpus contains 60 freshly executed marker-free episodes; changing an old rendering does not create a new episode. The previous marked corpus is preserved separately under `outputs/pilot-collection-20261023` (35 attempts: 22 passed, 11 failed, 2 interrupted at the transition), contributing zero to the new quota. The new collection root is `outputs/pilot-markerfree-20261023`.
 
+**Storage update, October 27, 2026:** both collections' complete `attempts/` trees
+were verified on Blackwell before their local copies were removed. Indices,
+reports and sources remain local; all original outcomes and membership remain
+unchanged. [Historical pilot storage](cluster.md#historical-pilot-recordings--october-27-2026)
+owns the destinations, reader access and restoration instructions.
+
 The teacher selects continuous free tabletop space relative to the loose inventory, without a marker or a destination cue in the image/instruction. After the first release, subsequent placements track the actual base. The evaluator uses the shared workspace and physical outcomes rather than distance to the teacher point. Both hands must release and withdraw, with the unchanged two-second support/stability dwell. Native checks at several positions precede full collection; code/kinematic tests alone do not establish spatial coverage. Scene derivatives retain their original family and split. Position distributions and collection yield include actual outcomes and failures.
 
 The October 23 collection assignment is governed by the approved local specification `outputs/pilot-planning-20261023/pilot-proposal.md` and exact `pilot-cases.csv`. Its fixed usable-episode targets are 30 nominal / 15 recovery / 5 stop for training and 6 / 3 / 1 for development. Families T1–T5 and all descendants stay in training; D1–D2 and descendants stay in development. The former seven-object tower seed is auxiliary evidence and does not fill this eight-object pilot.

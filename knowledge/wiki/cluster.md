@@ -1,5 +1,42 @@
 # Compute and containers
 
+## Historical pilot recordings — October 27, 2026
+
+Both historical pilot `attempts/` trees now reside on **Blackwell**. Their local
+copies were removed one batch at a time after complete file/path, size, SHA-256,
+permission, nanosecond modification-time, named-ownership and extended-attribute
+comparison, unchanged-source checks and fresh process audits. All failed and
+interrupted attempts are preserved; scientific outcomes and admission are unchanged.
+
+| Collection | Blackwell destination | Preserved files |
+|---|---|---:|
+| Marker-free pilot | `/home/pacquadr/projects/vla-lego/outputs/pilot-markerfree-20261023/attempts` | 529,151 |
+| Previous marked corpus | `/home/pacquadr/projects/vla-lego/outputs/pilot-collection-20261023/attempts` | 89,773 |
+
+Existing remote copies supplied 270,586 identical files; only 348,338 missing
+files were transferred. No content conflicts or remote-only entries were found.
+All 618,924 destination files were read completely for the final hashes. The
+native reader also accessed all 60 admitted marker-free episodes (333,373 frames),
+and metadata/image reads passed for all 35 previous marked attempts. No simulation
+or training was started, and healthy AlexDoor/local and VLA/Blackwell jobs were
+preserved. Removed allocation was **333.82 GiB**; filesystem measurements immediately
+around the two removals showed **333.79 GiB** reclaimed while other jobs continued writing.
+
+Code, indices, sources, reports, visual-review copies, checkpoints and all other
+collections remain local. The five marker-free reader indices were also copied
+to the remote collection root and SHA-256 verified against the retained originals.
+For historical `PilotTrainingData`, `recorded_scenario` or `pilot_audit` access, run
+on Blackwell using its collection root. These filesystem readers cannot consume
+an SSH URL; restore required attempts explicitly before a future local read.
+Original absolute paths in historical reports remain provenance. Do not restart
+historical local collection/sync scripts against the retired local trees.
+
+Local manifests, process audits, per-batch removal receipts and restore commands
+are retained in `outputs/pilot-storage-migration-20261027/`; each collection root
+has an `ATTEMPTS-ON-BLACKWELL.md` pointer. No external dependent symlinks or active
+readers needed relocation. Named owner `pacquadr` maps local UID/GID 1002 to
+Blackwell UID/GID 1001; permission bits are unchanged.
+
 ## Expanded campaign storage — October 26, 2026
 
 A verified **224-episode storage snapshot** is on the campaign corpus in Gilbreth scratch: 14,483 files and 181,230,681,851 bytes, with file sizes and SHA-256 checked against Blackwell. This is the preserved archive from before the Blackwell-only instruction; subsequent admitted episodes remain on Blackwell. Original recordings and failed attempts remain on Blackwell. The mechanism-coverage revision is canonical in the transferred corpus; original and coordination declarations remain preserved. Storage preparation does not establish the complete 620-episode corpus or training readiness. [Data](data.md#expanded-alex003-campaign--october-26-2026) owns admission and learning gates.
