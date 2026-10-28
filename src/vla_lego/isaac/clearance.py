@@ -120,7 +120,9 @@ def source_grasp_height(env, controller, side, orientation, object_height: float
     return max(0.06, -object_height / 2 - lowest + 0.006 + 0.005)
 
 
-def source_grasp_clearance(env, controller, side: str, object_index: int):
+def source_grasp_clearance(
+    env, controller, side: str, object_index: int | None, *, other_hand: bool = False
+):
     """Rank source approaches by open-jaw clearance from other visible pieces."""
     import torch
     from isaaclab.utils.math import matrix_from_quat, quat_apply
@@ -133,23 +135,29 @@ def source_grasp_clearance(env, controller, side: str, object_index: int):
         if index == object_index:
             continue
         pose = env.task_truth(index)["block_pose_w"]
+        axes = matrix_from_quat(env.target.new_tensor(pose[3:])).T
         obstacles.append(
-            (
-                env.target.new_tensor(_corners(placement.spec.dimensions_m, pose)),
-                matrix_from_quat(env.target.new_tensor(pose[3:])).T,
-            )
+            (env.target.new_tensor(_corners(placement.spec.dimensions_m, pose)), axes, axes)
         )
+    if other_hand:
+        opposite = "right" if side == "left" else "left"
+        pose = controller.pose(opposite)[0]
+        rotation = matrix_from_quat(pose[3:])
+        for points, normals, edges in _jaw_geometry(env, controller, opposite):
+            obstacles.append(
+                (points @ rotation.T + pose[:3], normals @ rotation.T, edges @ rotation.T)
+            )
 
     def clear(pose):
         rotation = matrix_from_quat(pose[3:])
         distance = float("inf")
         for points, normals, edges in geometry:
             world = quat_apply(pose[3:].expand(len(points), -1), points) + pose[:3]
-            for obstacle_points, obstacle_axes in obstacles:
+            for obstacle_points, obstacle_axes, obstacle_edges in obstacles:
                 crossing = _unit_axes(
                     (edges @ rotation.T)[:, None, :]
-                    .expand(-1, 3, -1)
-                    .cross(obstacle_axes[None].expand(len(edges), -1, -1), dim=-1)
+                    .expand(-1, len(obstacle_edges), -1)
+                    .cross(obstacle_edges[None].expand(len(edges), -1, -1), dim=-1)
                     .reshape(-1, 3)
                 )
                 axes = torch.cat((rotation.T, normals @ rotation.T, crossing))[None]
@@ -164,6 +172,34 @@ def source_grasp_clearance(env, controller, side: str, object_index: int):
         return distance
 
     return clear
+
+
+def admit_empty_hand_path(env, controller, solver, side: str, goal):
+    """Preflight every park target against native arms, pieces and the other jaws."""
+    import math
+
+    import torch
+    from isaaclab.utils.math import quat_from_matrix
+
+    _, ids, _ = controller.frames[side]
+    start = env.robot.data.joint_pos.torch[0, ids]
+    if bool(((goal < solver.bounds[:, 0]) | (goal > solver.bounds[:, 1])).any()):
+        raise RuntimeError("Empty-hand park exceeds native joint limits")
+    ticks = max(1, math.ceil(float((goal - start).abs().max()) / 0.025))
+    path = torch.lerp(
+        start[None], goal[None], torch.linspace(0, 1, ticks + 1, device=start.device)[:, None]
+    )
+    if not bool(arm_clearance(env, solver, side)(path).all()):
+        raise RuntimeError("Empty-hand park intersects native arm, head or table geometry")
+    clear = source_grasp_clearance(env, controller, side, None, other_hand=True)
+    transforms, _ = solver.forward(path)
+    minimum = float("inf")
+    for transform in transforms:
+        pose = torch.cat((transform[:3, 3], quat_from_matrix(transform[:3, :3])))
+        minimum = min(minimum, clear(pose))
+        if minimum <= 0:
+            raise RuntimeError("Empty-hand park intersects a piece or the other jaws")
+    return minimum
 
 
 def arm_clearance(env, solver, side: str):

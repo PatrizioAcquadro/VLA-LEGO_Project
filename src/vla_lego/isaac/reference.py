@@ -237,14 +237,21 @@ class PhysicalReference:
         else:
             self.wait(40, stage + "_settle")
 
-    def park(self, side: str) -> None:
+    def park(self, side: str, *, check_clearance: bool = False) -> float | None:
+        goal = self.env.target.new_tensor(
+            [0.8, 0.35 if side == "left" else -0.35, 0.0, -1.8, 0.0, 0.0, 0.0]
+        )
+        clearance = None
+        if check_clearance:
+            from vla_lego.isaac.clearance import admit_empty_hand_path
+
+            clearance = admit_empty_hand_path(self.env, self.ctrl, self.solvers[side], side, goal)
         self.joint_move(
             side + "_park",
             side,
-            self.env.target.new_tensor(
-                [0.8, 0.35 if side == "left" else -0.35, 0.0, -1.8, 0.0, 0.0, 0.0]
-            ),
+            goal,
         )
+        return clearance
 
     def _refine(self, stage: str, side: str, desired, *, ticks: int = 200, posture=None) -> dict:
         feedback = {}

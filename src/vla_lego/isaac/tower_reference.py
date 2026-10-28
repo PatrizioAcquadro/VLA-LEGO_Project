@@ -632,6 +632,13 @@ def main() -> None:
                             return_wrong_piece(reference, task, report["fault"])
                         for hand in ("left", "right"):
                             reference.grip("pick_correction_open", hand, None)
+                        idle_hand = "right" if side == "left" else "left"
+                        report["policy_hand_retirement"] = {
+                            "side": idle_hand,
+                            "minimum_predicted_jaw_clearance_m": reference.park(
+                                idle_hand, check_clearance=True
+                            ),
+                        }
                     else:
                         from vla_lego.isaac.pilot_faults import pick_fault
 

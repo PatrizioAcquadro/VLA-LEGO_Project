@@ -90,3 +90,39 @@ def test_loaded_orientation_replanning_requires_admission_before_any_motion(admi
             assert plan["nominal_first_waypoint_refusal"] == "Pose admission refused"
             assert torch.equal(attempts[0][:3], attempts[1][:3])
             assert torch.equal(attempts[1][3:], pose[3:])
+
+
+@pytest.mark.parametrize("safe", [True, False])
+def test_checked_park_refuses_before_motion_when_native_path_is_obstructed(monkeypatch, safe):
+    from types import SimpleNamespace
+
+    from vla_lego.isaac import clearance
+    from vla_lego.isaac.reference import PhysicalReference
+
+    reference = PhysicalReference.__new__(PhysicalReference)
+    reference.env = SimpleNamespace(target=torch.zeros((1, 7)))
+    reference.ctrl = object()
+    reference.solvers = {"right": object()}
+    calls = []
+
+    def admit(env, controller, solver, side, goal):
+        assert (env, controller, solver, side) == (
+            reference.env,
+            reference.ctrl,
+            reference.solvers["right"],
+            "right",
+        )
+        calls.append("preflight")
+        if not safe:
+            raise RuntimeError("Other jaw obstructs park")
+        return 0.012
+
+    monkeypatch.setattr(clearance, "admit_empty_hand_path", admit)
+    reference.joint_move = lambda stage, side, goal: calls.append("motion")
+    if safe:
+        assert reference.park("right", check_clearance=True) == 0.012
+        assert calls == ["preflight", "motion"]
+    else:
+        with pytest.raises(RuntimeError, match="Other jaw obstructs park"):
+            reference.park("right", check_clearance=True)
+        assert calls == ["preflight"]
