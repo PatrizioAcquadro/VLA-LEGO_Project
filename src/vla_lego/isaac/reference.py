@@ -129,6 +129,24 @@ class PhysicalReference:
                     failures.append(f"yaw={yaw:g}: {error}")
         raise RuntimeError(f"No reachable source grasp approach: {failures}")
 
+    def lift_orientation(self, side: str, xyz: list[float], yaw_deg: float):
+        """Keep an admitted loaded grasp when its nominal first lift pose is unreachable."""
+        pose = self.ctrl.pose(side)[0]
+        first, _ = next(_linear_profile(pose[:3].tolist(), xyz))
+        _, ids, _ = self.ctrl.frames[side]
+        seed = self.env.robot.data.joint_pos.torch[0, ids]
+        nominal = self.orientation(side, yaw_deg).tolist()
+        try:
+            self.solvers[side].solve(self.env.target.new_tensor([*first, *nominal]), seed)
+        except RuntimeError as error:
+            measured = pose[3:].tolist()
+            self.solvers[side].solve(self.env.target.new_tensor([*first, *measured]), seed)
+            return {
+                "quaternion_xyzw": measured,
+                "nominal_first_waypoint_refusal": str(error),
+            }
+        return None
+
     def grasp_height(self, side: str, object_height: float, yaw_deg: float) -> float:
         from vla_lego.isaac.clearance import source_grasp_height
 

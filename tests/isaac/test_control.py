@@ -1,5 +1,6 @@
 """Isolated redundant-control geometry, not native robot qualification."""
 
+import pytest
 import torch
 
 from vla_lego.isaac.control import _posture_step
@@ -46,3 +47,46 @@ def test_linear_profile_preserves_line_and_bounds_speed_with_zero_end_velocity()
     assert velocity[-1].abs().max() == 0
     assert velocity.norm(dim=1).max() <= 0.080001
     assert torch.linalg.cross(points - start, (goal - start).expand_as(points)).abs().max() < 1e-6
+
+
+@pytest.mark.parametrize("admission", ["nominal", "measured", "neither"])
+def test_loaded_orientation_replanning_requires_admission_before_any_motion(admission):
+    from types import SimpleNamespace
+
+    from vla_lego.isaac.reference import PhysicalReference
+
+    nominal = torch.tensor([0.0, -0.70710678, 0.0, -0.70710678])
+    pose = torch.tensor([0.52, 0.4, 0.89, -0.0035, -0.6916, -0.0042, -0.7223])
+    attempts = []
+
+    def solve(goal, seed):
+        attempts.append(goal.clone())
+        if admission == "neither" or (admission == "measured" and len(attempts) == 1):
+            raise RuntimeError("Pose admission refused")
+        return seed
+
+    reference = PhysicalReference.__new__(PhysicalReference)
+    reference.env = SimpleNamespace(
+        target=torch.zeros((1, 7)),
+        robot=SimpleNamespace(
+            data=SimpleNamespace(joint_pos=SimpleNamespace(torch=torch.zeros(1, 7)))
+        ),
+    )
+    reference.ctrl = SimpleNamespace(
+        pose=lambda side: pose[None], frames={"left": (None, list(range(7)), None)}
+    )
+    reference.solvers = {"left": SimpleNamespace(solve=solve)}
+    reference.orientation = lambda side, yaw: nominal
+    if admission == "neither":
+        with pytest.raises(RuntimeError, match="admission refused"):
+            reference.lift_orientation("left", [0.52, 0.4, 0.99], 0)
+        assert len(attempts) == 2
+    else:
+        plan = reference.lift_orientation("left", [0.52, 0.4, 0.99], 0)
+        if admission == "nominal":
+            assert plan is None and len(attempts) == 1
+        else:
+            assert plan["quaternion_xyzw"] == pose[3:].tolist()
+            assert plan["nominal_first_waypoint_refusal"] == "Pose admission refused"
+            assert torch.equal(attempts[0][:3], attempts[1][:3])
+            assert torch.equal(attempts[1][3:], pose[3:])

@@ -692,16 +692,23 @@ def main() -> None:
                 release_z = bottom + target.dimensions_m[2] / 2 + grasp_height
                 lift_z = block[2] + grasp_height + 0.10
                 transit_z = release_z + 0.025
+                lift_xyz = [block[0], block[1], lift_z]
+                lift_plan = reference.lift_orientation(side, lift_xyz, yaw) if pilot_case else None
+                if lift_plan:
+                    report.setdefault("loaded_lift_replans", {})[prefix] = lift_plan
                 reference.move(
                     f"{prefix}_lift",
                     side,
-                    [block[0], block[1], lift_z],
+                    lift_xyz,
                     yaw,
+                    quaternion_xyzw=lift_plan["quaternion_xyzw"] if lift_plan else None,
                     linear=pilot_case is not None,
                     linear_step_m=0.02,
                 )
                 if env.task_truth(index)["block_pose_w"][2] < block[2] + 0.07:
                     raise RuntimeError(f"No verified contact-only lift at {prefix}")
+                if lift_plan:
+                    reference.move(f"{prefix}_lift_align", side, lift_xyz, yaw)
                 if (
                     args.campaign_cases
                     and pilot_case
