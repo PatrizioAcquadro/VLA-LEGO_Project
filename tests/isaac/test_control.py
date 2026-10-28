@@ -92,8 +92,10 @@ def test_loaded_orientation_replanning_requires_admission_before_any_motion(admi
             assert torch.equal(attempts[1][3:], pose[3:])
 
 
-@pytest.mark.parametrize("safe", [True, False])
-def test_checked_park_refuses_before_motion_when_native_path_is_obstructed(monkeypatch, safe):
+@pytest.mark.parametrize("safe,waypoints", [(True, 1), (True, 2), (False, 2)])
+def test_checked_park_refuses_before_motion_when_native_path_is_obstructed(
+    monkeypatch, safe, waypoints
+):
     from types import SimpleNamespace
 
     from vla_lego.isaac import clearance
@@ -104,8 +106,9 @@ def test_checked_park_refuses_before_motion_when_native_path_is_obstructed(monke
     reference.ctrl = object()
     reference.solvers = {"right": object()}
     calls = []
+    moved = []
 
-    def admit(env, controller, solver, side, goal):
+    def plan(env, controller, solver, side, goal):
         assert (env, controller, solver, side) == (
             reference.env,
             reference.ctrl,
@@ -115,13 +118,21 @@ def test_checked_park_refuses_before_motion_when_native_path_is_obstructed(monke
         calls.append("preflight")
         if not safe:
             raise RuntimeError("Other jaw obstructs park")
-        return 0.012
+        return ([goal / 2, goal] if waypoints == 2 else [goal]), 0.012
 
-    monkeypatch.setattr(clearance, "admit_empty_hand_path", admit)
-    reference.joint_move = lambda stage, side, goal: calls.append("motion")
+    monkeypatch.setattr(clearance, "plan_empty_hand_path", plan)
+
+    def move(stage, side, goal):
+        calls.append("motion")
+        moved.append(goal)
+
+    reference.joint_move = move
     if safe:
         assert reference.park("right", check_clearance=True) == 0.012
-        assert calls == ["preflight", "motion"]
+        assert calls == ["preflight"] + ["motion"] * waypoints
+        assert len(moved) == waypoints
+        if waypoints == 2:
+            assert torch.equal(moved[0], moved[1] / 2)
     else:
         with pytest.raises(RuntimeError, match="Other jaw obstructs park"):
             reference.park("right", check_clearance=True)

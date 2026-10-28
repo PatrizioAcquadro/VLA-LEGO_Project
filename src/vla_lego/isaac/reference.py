@@ -242,15 +242,16 @@ class PhysicalReference:
             [0.8, 0.35 if side == "left" else -0.35, 0.0, -1.8, 0.0, 0.0, 0.0]
         )
         clearance = None
+        goals = [goal]
         if check_clearance:
-            from vla_lego.isaac.clearance import admit_empty_hand_path
+            from vla_lego.isaac.clearance import plan_empty_hand_path
 
-            clearance = admit_empty_hand_path(self.env, self.ctrl, self.solvers[side], side, goal)
-        self.joint_move(
-            side + "_park",
-            side,
-            goal,
-        )
+            goals, clearance = plan_empty_hand_path(
+                self.env, self.ctrl, self.solvers[side], side, goal
+            )
+        for i, target in enumerate(goals):
+            stage = side + "_park" + ("_clearance" if i < len(goals) - 1 else "")
+            self.joint_move(stage, side, target)
         return clearance
 
     def _refine(self, stage: str, side: str, desired, *, ticks: int = 200, posture=None) -> dict:

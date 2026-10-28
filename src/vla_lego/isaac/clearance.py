@@ -174,7 +174,7 @@ def source_grasp_clearance(
     return clear
 
 
-def admit_empty_hand_path(env, controller, solver, side: str, goal):
+def admit_empty_hand_path(env, controller, solver, side: str, goal, *, start=None):
     """Preflight every park target against native arms, pieces and the other jaws."""
     import math
 
@@ -182,7 +182,8 @@ def admit_empty_hand_path(env, controller, solver, side: str, goal):
     from isaaclab.utils.math import quat_from_matrix
 
     _, ids, _ = controller.frames[side]
-    start = env.robot.data.joint_pos.torch[0, ids]
+    if start is None:
+        start = env.robot.data.joint_pos.torch[0, ids]
     if bool(((goal < solver.bounds[:, 0]) | (goal > solver.bounds[:, 1])).any()):
         raise RuntimeError("Empty-hand park exceeds native joint limits")
     ticks = max(1, math.ceil(float((goal - start).abs().max()) / 0.025))
@@ -200,6 +201,44 @@ def admit_empty_hand_path(env, controller, solver, side: str, goal):
         if minimum <= 0:
             raise RuntimeError("Empty-hand park intersects a piece or the other jaws")
     return minimum
+
+
+def plan_empty_hand_path(env, controller, solver, side: str, goal):
+    """Admit the whole retirement before moving, including a rearward fallback."""
+    import torch
+    from isaaclab.utils.math import quat_from_matrix
+
+    try:
+        return [goal], admit_empty_hand_path(env, controller, solver, side, goal)
+    except RuntimeError:
+        if bool(((goal < solver.bounds[:, 0]) | (goal > solver.bounds[:, 1])).any()):
+            raise
+
+    _, ids, _ = controller.frames[side]
+    start = env.robot.data.joint_pos.torch[0, ids].clone()
+    pose = controller.pose(side)[0].clone()
+    pose[0] -= 0.08
+    native = arm_clearance(env, solver, side)
+    clear = source_grasp_clearance(env, controller, side, None, other_hand=True)
+
+    def admissible(configurations):
+        valid = native(configurations)
+        transforms, _ = solver.forward(configurations)
+        for i in valid.nonzero().flatten().tolist():
+            transform = transforms[i]
+            tool = torch.cat((transform[:3, 3], quat_from_matrix(transform[:3, :3])))
+            valid[i] = clear(tool) > 0
+        return valid
+
+    previous = solver.configuration_admission
+    solver.configuration_admission = admissible
+    try:
+        waypoint = solver.solve(pose, start)
+    finally:
+        solver.configuration_admission = previous
+    first = admit_empty_hand_path(env, controller, solver, side, waypoint)
+    second = admit_empty_hand_path(env, controller, solver, side, goal, start=waypoint)
+    return [waypoint, goal], min(first, second)
 
 
 def arm_clearance(env, solver, side: str):
