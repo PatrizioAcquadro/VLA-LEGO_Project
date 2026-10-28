@@ -51,7 +51,7 @@ def plan_stabilizer(reference, task, indices, cooperative_level, stabilizer_side
     _, joint_ids, _ = reference.ctrl.frames[stabilizer_side]
     selected = None
     selected_cost = math.inf
-    selected_rank = (True, math.inf)
+    selected_rank = (True, True, math.inf)
     failures = []
     preferred_sign = -1 if stabilizer_side == "left" else 1
     angles = (
@@ -86,7 +86,7 @@ def plan_stabilizer(reference, task, indices, cooperative_level, stabilizer_side
         )
     )
     approach_high_z = max(1.02, stack_top + 0.06)
-    profiles = ((0, 0.045),) if lower_height < 0.05 else ((0, 0.045), (10, 0.060))
+    profiles = ((0, 0.045),) if lower_height < 0.05 else ((0, 0.045), (10, 0.060), (30, 0.060))
     for yaw_deg in angles:
         for pitch_deg, reach in profiles:
             yaw, pitch = math.radians(yaw_deg) / 2, math.radians(pitch_deg) / 2
@@ -181,7 +181,7 @@ def plan_stabilizer(reference, task, indices, cooperative_level, stabilizer_side
                         break
                 if retreat is None:
                     raise RuntimeError("No collision-free withdrawal orientation")
-                rank = (rotate_exit, grasp_cost)
+                rank = (pitch_deg == 30, rotate_exit, grasp_cost)
                 if rank < selected_rank:
                     selected_rank = rank
                     selected_cost = grasp_cost
