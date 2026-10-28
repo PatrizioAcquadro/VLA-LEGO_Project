@@ -480,7 +480,6 @@ def test_return_cannot_claim_to_move_a_released_piece_with_empty_jaws():
         )
 
 
-
 def test_rotated_grasp_return_places_the_piece_center_at_the_vacant_source():
     from vla_lego.isaac.campaign_faults import _held_return_waypoints
 
@@ -517,8 +516,9 @@ def test_rotated_grasp_return_places_the_piece_center_at_the_vacant_source():
         (63.5, 1270, "unchanged", "physical_intervention", False),
     ],
 )
-def test_pick_window_interruption_preserves_the_requested_missed_grasp_label(
-    duration, commands, behavior, terminal, accepted
+@pytest.mark.parametrize("mechanism", ["missed_grasp", "wrong_piece"])
+def test_pick_window_interruption_preserves_the_requested_mechanism(
+    duration, commands, behavior, terminal, accepted, mechanism
 ):
     from copy import deepcopy
     from types import SimpleNamespace
@@ -541,6 +541,11 @@ def test_pick_window_interruption_preserves_the_requested_missed_grasp_label(
     admitted = []
     env = SimpleNamespace(
         blocks=states,
+        contact_robot_paths=[
+            f"/{side}_WSG32_{jaw}_JAW_LINK"
+            for side in ("left", "right")
+            for jaw in ("NEGATIVE", "POSITIVE")
+        ],
         task_truth=lambda i: deepcopy(states[i]),
         time=10,
         recorder=SimpleNamespace(admit_policy_intervention=admitted.append),
@@ -555,7 +560,7 @@ def test_pick_window_interruption_preserves_the_requested_missed_grasp_label(
         env=env, ctrl=SimpleNamespace(pose=lambda side: np.array([[0.4, 0.4, 1.05]]))
     )
     case = SimpleNamespace(
-        row={"correction_origin": "policy", "mechanism": "missed_grasp", "partition": "train"},
+        row={"correction_origin": "policy", "mechanism": mechanism, "partition": "train"},
         error_level=1,
         cooperative_level=3,
     )
@@ -592,10 +597,10 @@ def test_pick_window_interruption_preserves_the_requested_missed_grasp_label(
 
     intervention._window = window
     if accepted:
-        event = intervention.missed_grasp(reference, case, task, 1)
+        event = getattr(intervention, mechanism)(reference, case, task, 1)
         assert event["type"] == "interrupted_progress"
         assert event["policy_source"]["observed_mechanism"] == "interrupted_progress"
-        assert event["policy_source"]["requested_mechanism"] == "missed_grasp"
+        assert event["policy_source"]["requested_mechanism"] == mechanism
         assert event["completed_levels"] == 1 and len(admitted) == 1
         assert event["policy_source"]["source_terminal_decision"] == terminal
         assert event["policy_source"]["error_basis"] == (
@@ -606,5 +611,5 @@ def test_pick_window_interruption_preserves_the_requested_missed_grasp_label(
         assert not event["teacher_induced"]
     else:
         with pytest.raises((ValueError, RuntimeError)):
-            intervention.missed_grasp(reference, case, task, 1)
+            getattr(intervention, mechanism)(reference, case, task, 1)
         assert not admitted

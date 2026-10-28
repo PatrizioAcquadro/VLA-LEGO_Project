@@ -207,6 +207,46 @@ class PolicyIntervention:
         }
         return source, before, after, acquired_next
 
+    def _pick_interruption(self, reference, case, task, source, after, *, acquired, progressed):
+        """Preserve a real incomplete interruption independently of the requested error."""
+        env, recorder = reference.env, reference.env.recorder
+        if (
+            not source.get("observed_error")
+            and source["executed_motor_commands"] > 0
+            and (
+                source.get("source_terminal_decision") in ("complete", "abstain")
+                or (
+                    source.get("source_terminal_decision") == "budget"
+                    and env.time - source["start_time_s"] >= 60
+                )
+            )
+            and not acquired
+            and not progressed
+            and released_prefix(task, after) == case.error_level
+        ):
+            source.update(
+                physically_verified=True,
+                requested_mechanism=case.row["mechanism"],
+                observed_mechanism="interrupted_progress",
+                completed_levels_before=case.error_level,
+                completed_levels_at_intervention=case.error_level,
+                error_basis=(
+                    "no_acquisition_or_ordered_progress_for_at_least60s"
+                    if source["source_terminal_decision"] == "budget"
+                    else "premature_terminal_on_supported_incomplete_task"
+                ),
+            )
+            recorder.admit_policy_intervention(source)
+            return {
+                "type": "interrupted_progress",
+                "teacher_induced": False,
+                "physically_verified": True,
+                "completed_levels": case.error_level,
+                "error_end_s": env.time,
+                "policy_source": source,
+            }
+        return None
+
     def missed_grasp(self, reference, case, task, index, *, ticks=1800):
         """Observe an empty lift or actual incomplete-task interruption without inducing it."""
         env, recorder = reference.env, reference.env.recorder
@@ -269,41 +309,11 @@ class PolicyIntervention:
             return None
 
         source, _, after, _ = self._window(reference, task, index, ticks=ticks, stop_when=observe)
-        if (
-            not source.get("observed_error")
-            and source["executed_motor_commands"] > 0
-            and (
-                source.get("source_terminal_decision") in ("complete", "abstain")
-                or (
-                    source.get("source_terminal_decision") == "budget"
-                    and env.time - source["start_time_s"] >= 60
-                )
-            )
-            and not acquired
-            and not progressed
-            and released_prefix(task, after) == case.error_level
-        ):
-            source.update(
-                physically_verified=True,
-                requested_mechanism="missed_grasp",
-                observed_mechanism="interrupted_progress",
-                completed_levels_before=case.error_level,
-                completed_levels_at_intervention=case.error_level,
-                error_basis=(
-                    "no_acquisition_or_ordered_progress_for_at_least60s"
-                    if source["source_terminal_decision"] == "budget"
-                    else "premature_terminal_on_supported_incomplete_task"
-                ),
-            )
-            recorder.admit_policy_intervention(source)
-            return {
-                "type": "interrupted_progress",
-                "teacher_induced": False,
-                "physically_verified": True,
-                "completed_levels": case.error_level,
-                "error_end_s": env.time,
-                "policy_source": source,
-            }
+        interruption = self._pick_interruption(
+            reference, case, task, source, after, acquired=acquired, progressed=progressed
+        )
+        if interruption is not None:
+            return interruption
         if (
             source["executed_motor_commands"] < 1
             or not source.get("observed_error")
@@ -398,7 +408,10 @@ class PolicyIntervention:
         if any(len(ids) != 2 for ids in jaws.values()):
             raise ValueError("Wrong-piece detection requires both actual named jaws")
 
+        acquired, progressed = False, False
+
         def observe(states):
+            nonlocal acquired, progressed
             for i, state in enumerate(states):
                 if (
                     task.placements[i].spec == task.placements[index].spec
@@ -417,10 +430,24 @@ class PolicyIntervention:
                             "return_source_xy_m": initial[i]["block_pose_w"][:2],
                             "lift_m": state["block_pose_w"][2] - initial[i]["block_pose_w"][2],
                         }
+            try:
+                progressed |= released_prefix(task, states) > case.error_level
+            except ValueError:
+                pass
+            acquired |= any(
+                state["robot_contact_force_n"] > 0.5
+                and state["block_pose_w"][2] - initial[i]["block_pose_w"][2] >= 0.07
+                for i, state in enumerate(states)
+            )
             return None
 
         source, _, after, _ = self._window(reference, task, index, ticks=ticks, stop_when=observe)
         error = source.get("observed_error")
+        interruption = self._pick_interruption(
+            reference, case, task, source, after, acquired=acquired, progressed=progressed
+        )
+        if interruption is not None:
+            return interruption
         if (
             source["executed_motor_commands"] < 1
             or not error

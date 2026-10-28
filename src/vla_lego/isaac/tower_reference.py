@@ -626,7 +626,7 @@ def main() -> None:
                             reference, pilot_case, task, index, ticks=args.policy_window_ticks
                         )
                         report["correction_source"] = recorder.correction_source
-                        if pilot_case.row["mechanism"] == "wrong_piece":
+                        if report["fault"]["type"] == "wrong_piece":
                             from vla_lego.isaac.campaign_faults import return_wrong_piece
 
                             return_wrong_piece(reference, task, report["fault"])
