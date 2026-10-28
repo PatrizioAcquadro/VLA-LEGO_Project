@@ -208,7 +208,7 @@ class PolicyIntervention:
         return source, before, after, acquired_next
 
     def missed_grasp(self, reference, case, task, index, *, ticks=1800):
-        """Intervene after a measured empty close-and-lift, not mere inaction."""
+        """Observe an empty lift or actual incomplete-task interruption without inducing it."""
         env, recorder = reference.env, reference.env.recorder
         if (
             case.row["correction_origin"] != "policy"
@@ -223,10 +223,15 @@ class PolicyIntervention:
             raise ValueError("Missed-grasp window lacks its supported nominal prefix")
         attempts = {}
         acquired = False
+        progressed = False
         width = task.placements[index].spec.dimensions_m[1]
 
         def observe(states):
-            nonlocal acquired
+            nonlocal acquired, progressed
+            try:
+                progressed |= released_prefix(task, states) > case.error_level
+            except ValueError:
+                pass  # A held or unsupported piece cannot establish ordered progress.
             # An actual low closed jaw followed by an empty 7 cm lift is consequential.
             # Waiting, harmless tracking error and a successful lift are not misses.
             acquired |= any(
@@ -264,6 +269,41 @@ class PolicyIntervention:
             return None
 
         source, _, after, _ = self._window(reference, task, index, ticks=ticks, stop_when=observe)
+        if (
+            not source.get("observed_error")
+            and source["executed_motor_commands"] > 0
+            and (
+                source.get("source_terminal_decision") in ("complete", "abstain")
+                or (
+                    source.get("source_terminal_decision") == "budget"
+                    and env.time - source["start_time_s"] >= 60
+                )
+            )
+            and not acquired
+            and not progressed
+            and released_prefix(task, after) == case.error_level
+        ):
+            source.update(
+                physically_verified=True,
+                requested_mechanism="missed_grasp",
+                observed_mechanism="interrupted_progress",
+                completed_levels_before=case.error_level,
+                completed_levels_at_intervention=case.error_level,
+                error_basis=(
+                    "no_acquisition_or_ordered_progress_for_at_least60s"
+                    if source["source_terminal_decision"] == "budget"
+                    else "premature_terminal_on_supported_incomplete_task"
+                ),
+            )
+            recorder.admit_policy_intervention(source)
+            return {
+                "type": "interrupted_progress",
+                "teacher_induced": False,
+                "physically_verified": True,
+                "completed_levels": case.error_level,
+                "error_end_s": env.time,
+                "policy_source": source,
+            }
         if (
             source["executed_motor_commands"] < 1
             or not source.get("observed_error")

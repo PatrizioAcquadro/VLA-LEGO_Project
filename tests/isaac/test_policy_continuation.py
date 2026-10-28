@@ -494,3 +494,117 @@ def test_rotated_grasp_return_places_the_piece_center_at_the_vacant_source():
     assert returned_center[2] - dimensions[2] / 2 == pytest.approx(TABLE_TOP)
     assert waypoints[0][1][:2] == tool[:2]
     assert waypoints[1][1][:2] == pytest.approx(lower[:2])
+
+
+@pytest.mark.parametrize(
+    "duration,commands,behavior,terminal,accepted",
+    [
+        (90, 1800, "unchanged", "budget", True),
+        (60, 1200, "unchanged", "budget", True),
+        (59.95, 1199, "unchanged", "budget", False),
+        (90, 0, "unchanged", "budget", False),
+        (90, 1800, "acquired_then_returned", "budget", False),
+        (90, 1800, "progressed_then_lost", "budget", False),
+        (90, 1800, "held_at_end", "budget", False),
+        (63.5, 1270, "unchanged", "complete", True),
+        (0.05, 1, "unchanged", "complete", True),
+        (0.05, 1, "unchanged", "abstain", True),
+        (0, 0, "unchanged", "complete", False),
+        (0, 0, "unchanged", "abstain", False),
+        (63.5, 1270, "held_at_end", "complete", False),
+        (63.5, 1270, "acquired_then_returned", "complete", False),
+        (63.5, 1270, "progressed_then_lost", "complete", False),
+        (63.5, 1270, "unchanged", "physical_intervention", False),
+    ],
+)
+def test_pick_window_interruption_preserves_the_requested_missed_grasp_label(
+    duration, commands, behavior, terminal, accepted
+):
+    from copy import deepcopy
+    from types import SimpleNamespace
+
+    from vla_lego.isaac.policy_continuation import PolicyIntervention
+
+    task = initial_tower_task()
+    states = [
+        {
+            "block_pose_w": [*p.xy_m, TABLE_TOP + p.spec.dimensions_m[2] / 2, 0, 0, 0, 1],
+            "block_velocity_w": [0.0] * 6,
+            "robot_contact_force_n": 0.0,
+            "nonrobot_contact_force_n": 0.3,
+            "block_contact_forces_n": [[0.0] * 3 for _ in task.placements],
+        }
+        for p in task.placements
+    ]
+    states[0]["block_pose_w"][:2] = list(task.assembly_xy_m)
+    initial = deepcopy(states)
+    admitted = []
+    env = SimpleNamespace(
+        blocks=states,
+        task_truth=lambda i: deepcopy(states[i]),
+        time=10,
+        recorder=SimpleNamespace(admit_policy_intervention=admitted.append),
+        robot=SimpleNamespace(
+            data=SimpleNamespace(
+                joint_names=["left_WSG32_JAW_OPENING", "right_WSG32_JAW_OPENING"],
+                joint_pos=SimpleNamespace(torch=np.array([[0.034, 0.034]])),
+            )
+        ),
+    )
+    reference = SimpleNamespace(
+        env=env, ctrl=SimpleNamespace(pose=lambda side: np.array([[0.4, 0.4, 1.05]]))
+    )
+    case = SimpleNamespace(
+        row={"correction_origin": "policy", "mechanism": "missed_grasp", "partition": "train"},
+        error_level=1,
+        cooperative_level=3,
+    )
+    intervention = PolicyIntervention.__new__(PolicyIntervention)
+
+    def window(*args, stop_when, **kwargs):
+        assert stop_when(states) is None
+        if behavior == "acquired_then_returned":
+            states[1]["block_pose_w"][2] += 0.08
+            states[1]["robot_contact_force_n"] = 1
+            assert stop_when(states) is None
+        elif behavior == "progressed_then_lost":
+            states[1]["block_pose_w"][:2] = list(task.assembly_xy_m)
+            states[1]["block_pose_w"][2] += task.targets[0].dimensions_m[2]
+            states[1]["nonrobot_contact_force_n"] = 0
+            states[1]["block_contact_forces_n"][0][2] = 0.3
+            assert stop_when(states) is None
+        states[:] = deepcopy(initial)
+        if behavior == "held_at_end":
+            states[1]["robot_contact_force_n"] = 1
+        assert stop_when(states) is None
+        env.time = 10 + duration
+        return (
+            {
+                "executed_motor_commands": commands,
+                "observed_error": None,
+                "source_terminal_decision": terminal,
+                "start_time_s": 10,
+            },
+            initial,
+            states,
+            False,
+        )
+
+    intervention._window = window
+    if accepted:
+        event = intervention.missed_grasp(reference, case, task, 1)
+        assert event["type"] == "interrupted_progress"
+        assert event["policy_source"]["observed_mechanism"] == "interrupted_progress"
+        assert event["policy_source"]["requested_mechanism"] == "missed_grasp"
+        assert event["completed_levels"] == 1 and len(admitted) == 1
+        assert event["policy_source"]["source_terminal_decision"] == terminal
+        assert event["policy_source"]["error_basis"] == (
+            "no_acquisition_or_ordered_progress_for_at_least60s"
+            if terminal == "budget"
+            else "premature_terminal_on_supported_incomplete_task"
+        )
+        assert not event["teacher_induced"]
+    else:
+        with pytest.raises((ValueError, RuntimeError)):
+            intervention.missed_grasp(reference, case, task, 1)
+        assert not admitted
