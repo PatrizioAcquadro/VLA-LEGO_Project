@@ -803,6 +803,8 @@ def main() -> None:
                             linear_step_m=0.02,
                         )
                 if pilot_case:
+                    if level:
+                        build_xy = tuple(env.task_truth(indices[level - 1])["block_pose_w"][:2])
                     reference.move(
                         f"{prefix}_transport_high",
                         side,
