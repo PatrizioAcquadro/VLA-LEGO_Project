@@ -967,7 +967,16 @@ def main() -> None:
                 reference.move(
                     f"{prefix}_retreat",
                     side,
-                    [*build_xy, retreat_z],
+                    [
+                        build_xy[0],
+                        build_xy[1]
+                        + (
+                            (0.15 if side == "left" else -0.15)
+                            if pilot_case and level == len(task.targets) - 1
+                            else 0
+                        ),
+                        retreat_z,
+                    ],
                     yaw,
                     linear=pilot_case is not None,
                 )

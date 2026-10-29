@@ -32,7 +32,12 @@ def pick_route(task, level, block, build_xy, side, cooperative_level, *, grasp_h
         *([[*build_xy, lift]] if release + 0.025 < lift else []),
         [*build_xy, release + 0.025],
         [*build_xy, release],
-        [*build_xy, retreat],
+        [
+            build_xy[0],
+            build_xy[1]
+            + ((0.15 if side == "left" else -0.15) if level == len(task.targets) - 1 else 0),
+            retreat,
+        ],
         [
             build_xy[0],
             build_xy[1] + (0.15 if side == "left" else -0.15),
