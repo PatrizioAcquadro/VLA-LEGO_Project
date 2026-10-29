@@ -114,16 +114,16 @@ class PhysicalReference:
                     for step, xyz in enumerate(waypoints):
                         points = (
                             [xyz]
-                            if step < 3
+                            if step < 2
                             else [point for point, _ in _linear_profile(waypoints[step - 1], xyz)]
                         )
                         for point in points:
-                            seed = self.solvers[side].solve(
-                                self.env.target.new_tensor(
-                                    [*point, *self.orientation(side, yaw).tolist()]
-                                ),
-                                seed,
+                            pose = self.env.target.new_tensor(
+                                [*point, *self.orientation(side, yaw).tolist()]
                             )
+                            if clear is not None and step in (2, 3) and clear(pose) <= 0:
+                                raise RuntimeError("Open jaws intersect along the source approach")
+                            seed = self.solvers[side].solve(pose, seed)
                     return yaw
                 except RuntimeError as error:
                     failures.append(f"yaw={yaw:g}: {error}")

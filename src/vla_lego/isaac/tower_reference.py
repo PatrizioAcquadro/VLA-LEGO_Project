@@ -680,7 +680,7 @@ def main() -> None:
                     ("edge", [0.40, 0.40 if side == "left" else -0.40, 1.05]),
                     (
                         "source_high",
-                        [min(block[0], 0.46) if pilot_case else block[0], block[1], 1.02],
+                        [block[0], block[1], 1.02],
                     ),
                     ("approach", [block[0], block[1], block[2] + grasp_height + 0.04]),
                     ("descend", [block[0], block[1], block[2] + grasp_height]),
@@ -690,7 +690,7 @@ def main() -> None:
                         side,
                         xyz,
                         yaw,
-                        linear=pilot_case is not None and stage == "descend",
+                        linear=pilot_case is not None and stage in ("approach", "descend"),
                     )
                     if stage == "source_high":
                         # A policy prefix may leave the jaws closed before the next pick.
