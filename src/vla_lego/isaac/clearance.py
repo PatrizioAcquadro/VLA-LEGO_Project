@@ -241,6 +241,43 @@ def plan_empty_hand_path(env, controller, solver, side: str, goal):
     return [waypoint, goal], min(first, second)
 
 
+def plan_released_retreat(env, controller, solver, side: str, goal):
+    """Check the whole released-hand route before moving, with a vertical fallback."""
+    import torch
+    from isaaclab.utils.math import quat_from_matrix
+
+    from vla_lego.isaac.reference import _linear_profile
+
+    _, ids, _ = controller.frames[side]
+    start = controller.pose(side)[0, :3].tolist()
+    initial = env.robot.data.joint_pos.torch[0, ids].clone()
+    clear = source_grasp_clearance(env, controller, side, None, other_hand=True)
+    xyz, rotation = list(goal[:3]), list(goal[3:])
+    routes = ([xyz], [[start[0], start[1], xyz[2]], xyz])
+    failures = []
+    for route in routes:
+        seed, current = initial.clone(), start
+        try:
+            for waypoint in route:
+                for point, _ in _linear_profile(current, waypoint):
+                    pose = env.target.new_tensor([*point, *rotation])
+                    if clear(pose) <= 0:
+                        raise RuntimeError("Released retreat intersects a piece or the other jaws")
+                    seed = solver.solve(pose, seed)
+                    transforms, _ = solver.forward(seed[None])
+                    transform = transforms[0]
+                    actual = torch.cat((transform[:3, 3], quat_from_matrix(transform[:3, :3])))
+                    if clear(actual) <= 0:
+                        raise RuntimeError("Solved retreat intersects a piece or the other jaws")
+                current = waypoint
+            return route
+        except torch.cuda.OutOfMemoryError:
+            raise
+        except RuntimeError as error:
+            failures.append(str(error))
+    raise RuntimeError("No admissible released-hand retreat: " + "; ".join(failures))
+
+
 def arm_clearance(env, solver, side: str):
     """Use separating face planes, retaining physical simulation as final authority."""
     import itertools

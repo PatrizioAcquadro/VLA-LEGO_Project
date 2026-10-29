@@ -964,22 +964,34 @@ def main() -> None:
                 retreat_z = release_z + target.dimensions_m[2] / 2 + 0.025
                 if pilot_case:
                     retreat_z = max(retreat_z, 1.02)
-                reference.move(
-                    f"{prefix}_retreat",
-                    side,
-                    [
-                        build_xy[0],
-                        build_xy[1]
-                        + (
-                            (0.15 if side == "left" else -0.15)
-                            if pilot_case and level == len(task.targets) - 1
-                            else 0
-                        ),
-                        retreat_z,
-                    ],
-                    yaw,
-                    linear=pilot_case is not None,
-                )
+                retreat = [*build_xy, retreat_z]
+                if pilot_case and level == len(task.targets) - 1:
+                    from vla_lego.isaac.clearance import plan_released_retreat
+
+                    retreat[1] += 0.15 if side == "left" else -0.15
+                    route = plan_released_retreat(
+                        env,
+                        reference.ctrl,
+                        reference.solvers[side],
+                        side,
+                        [*retreat, *reference.orientation(side, yaw).tolist()],
+                    )
+                    for step, waypoint in enumerate(route):
+                        reference.move(
+                            (
+                                f"{prefix}_retreat"
+                                if step == len(route) - 1
+                                else f"{prefix}_retreat_vertical"
+                            ),
+                            side,
+                            waypoint,
+                            yaw,
+                            linear=True,
+                        )
+                else:
+                    reference.move(
+                        f"{prefix}_retreat", side, retreat, yaw, linear=pilot_case is not None
+                    )
                 if pilot_case:
                     # Clear the released stack before a joint-space return can dip.
                     reference.move(
