@@ -962,6 +962,8 @@ def main() -> None:
                 reference.wait(5 if args.event_settling else 20, f"{prefix}_supported_hold")
                 reference.grip(f"{prefix}_release", side, None)
                 retreat_z = release_z + target.dimensions_m[2] / 2 + 0.025
+                if pilot_case:
+                    retreat_z = max(retreat_z, 1.02)
                 reference.move(
                     f"{prefix}_retreat",
                     side,

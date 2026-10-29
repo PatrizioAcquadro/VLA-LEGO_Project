@@ -13,6 +13,7 @@ def pick_route(task, level, block, build_xy, side, cooperative_level, *, grasp_h
     release = bottom + height / 2 + grasp_height
     lift = block[2] + grasp_height + 0.10
     carry = max(lift, release + 0.030)
+    retreat = max(release + height / 2 + 0.025, 1.02)
     return [
         [0.40, 0.40 if side == "left" else -0.40, 1.05],
         [block[0], block[1], 1.02],
@@ -31,11 +32,11 @@ def pick_route(task, level, block, build_xy, side, cooperative_level, *, grasp_h
         *([[*build_xy, lift]] if release + 0.025 < lift else []),
         [*build_xy, release + 0.025],
         [*build_xy, release],
-        [*build_xy, release + height / 2 + 0.025],
+        [*build_xy, retreat],
         [
             build_xy[0],
             build_xy[1] + (0.15 if side == "left" else -0.15),
-            release + height / 2 + 0.025,
+            retreat,
         ],
     ]
 
