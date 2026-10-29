@@ -581,13 +581,59 @@ class PolicyIntervention:
         evidence = None
         recent = deque()
         released_quiet = 0
+        progress_levels, progress_since = None, None
+        progress_poses = {}
+        progress_supported_s = 0.0
+        progress_previous_time, progress_previous_supported = None, False
+        remaining_acquired = False
 
         def observe(states):
             nonlocal max_z, descent, lateral, unsupported_since, evidence, released_quiet
             nonlocal below_support_since
             nonlocal outside_support_since, support_overhang
+            nonlocal progress_levels, progress_since, remaining_acquired
+            nonlocal progress_poses, progress_supported_s
+            nonlocal progress_previous_time, progress_previous_supported
             state = states[index]
             pose = state["block_pose_w"]
+            # A supported placement can receive incidental single-jaw contact
+            # while the opposite hand continues stabilizing the lower layer.
+            try:
+                supported = released_prefix(task, states, supported_contacts=(*allowed, index))
+            except ValueError:
+                supported = None
+            if any(gripping(state, hand) for hand in ("left", "right")):
+                supported = None
+            moved = any(
+                math.dist(states[i]["block_pose_w"][:3], xyz) >= 0.02
+                for i, xyz in progress_poses.items()
+            )
+            new_level = (
+                supported is not None
+                and supported > case.error_level
+                and supported != len(progress_poses)
+            )
+            if moved or new_level:
+                progress_poses, progress_since = {}, None
+                progress_supported_s, progress_previous_supported = 0.0, False
+            if not progress_poses and supported is not None and supported > case.error_level:
+                progress_poses = {
+                    i: tuple(states[i]["block_pose_w"][:3]) for i in indices[:supported]
+                }
+                progress_since = env.time
+            valid_progress = supported is not None and supported == len(progress_poses)
+            # Brief tracking/contact excursions pause evidence, rather than
+            # erase it. Consequential 2 cm motion still starts a new interval.
+            if valid_progress and progress_previous_supported:
+                progress_supported_s += env.time - progress_previous_time
+            progress_levels = supported
+            progress_previous_time, progress_previous_supported = env.time, valid_progress
+            for next_index in indices[case.error_level + 1 :]:
+                remaining_acquired |= (
+                    states[next_index]["block_pose_w"][2] - initial[next_index]["block_pose_w"][2]
+                    >= 0.07
+                    and states[next_index]["robot_contact_force_n"] > 0.5
+                )
             recent.append((env.time, tuple(pose[:3])))
             while len(recent) > 1 and recent[1][0] <= env.time - 5:
                 recent.popleft()
@@ -663,17 +709,48 @@ class PolicyIntervention:
             return None  # Normal transport pauses are not early failure interventions.
 
         source, _, after, _ = self._window(reference, task, index, ticks=ticks, stop_when=observe)
-        if source["source_terminal_decision"] in ("complete", "abstain"):
+        recent_motion = (
+            math.sqrt(
+                sum(
+                    (max(p[axis] for _, p in recent) - min(p[axis] for _, p in recent)) ** 2
+                    for axis in range(3)
+                )
+            )
+            if recent
+            else math.inf
+        )
+        stalled_after_placement = (
+            source["source_terminal_decision"] == "budget"
+            and progress_levels is not None
+            and case.error_level < progress_levels < 5
+            and progress_since is not None
+            and progress_supported_s >= 60
+            and not remaining_acquired
+            and recent
+            and env.time - recent[0][0] >= 5
+            and recent_motion < 0.01
+        )
+        if source["source_terminal_decision"] in ("complete", "abstain") or stalled_after_placement:
             try:
-                completed = released_prefix(task, after)
+                # Match the observer's supported single-jaw contact convention.
+                completed = released_prefix(task, after, supported_contacts=(*allowed, index))
             except ValueError:
                 completed = -1
-            if source["executed_motor_commands"] > 0 and case.error_level < completed < 5:
+            if (
+                source["executed_motor_commands"] > 0
+                and case.error_level < completed < 5
+                and not any(gripping(after[index], hand) for hand in ("left", "right"))
+            ):
                 source.update(
                     physically_verified=True,
-                    error_basis="premature_terminal_after_actual_placement",
+                    error_basis=(
+                        "no_resume_after_supported_placement_for_at_least60s"
+                        if stalled_after_placement
+                        else "premature_terminal_after_actual_placement"
+                    ),
                     observed_mechanism="interrupted_progress",
                     completed_levels_at_intervention=completed,
+                    supported_progress_duration_s=progress_supported_s,
                 )
                 recorder.admit_policy_intervention(source)
                 return {
@@ -705,16 +782,6 @@ class PolicyIntervention:
                 "policy_source": source,
                 **observed,
             }
-        recent_motion = (
-            math.sqrt(
-                sum(
-                    (max(p[axis] for _, p in recent) - min(p[axis] for _, p in recent)) ** 2
-                    for axis in range(3)
-                )
-            )
-            if recent
-            else math.inf
-        )
         completed = released_prefix(task, after, held_index=index, supported_contacts=allowed)
         stabilizer_lost = stabilizer_side is not None and not any(
             gripping(after[i], stabilizer_side) for i in allowed

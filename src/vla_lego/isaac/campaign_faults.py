@@ -66,7 +66,6 @@ def _held_return_waypoints(tool, block, dimensions, xy, obstacle_top):
     ]
 
 
-
 def recover_dropped(reference, task, index: int, side: str, yaw: float, *, replan=False) -> float:
     """Reacquire a block that has already fallen; this function never causes the fall."""
     env = reference.env
