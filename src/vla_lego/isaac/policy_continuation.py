@@ -473,10 +473,12 @@ class PolicyIntervention:
             case.row["correction_origin"] != "policy"
             or case.row["mechanism"] != "slip_drop"
             or case.row["partition"] != "train"
-            or not 0 <= case.error_level < case.cooperative_level
+            or not 1 <= case.error_level < case.cooperative_level
             or ticks < 1
         ):
-            raise ValueError("This drop handoff precedes active bimanual stabilization")
+            raise ValueError(
+                "Drop handoff requires an existing prefix before bimanual stabilization"
+            )
         held = env.task_truth(index)
         height = task.placements[index].spec.dimensions_m[2]
         if (
@@ -497,8 +499,13 @@ class PolicyIntervention:
                 and math.hypot(*state["block_velocity_w"][:3]) < 0.02
                 and 0.25 <= state["block_pose_w"][0] <= 0.55
                 and abs(state["block_pose_w"][1]) < 0.5
-                and released_prefix(task, states) == case.error_level
             ):
+                try:
+                    if released_prefix(task, states) != case.error_level:
+                        return None
+                except ValueError:
+                    # Keep observing until every piece permits a released handoff.
+                    return None
                 return {"error_basis": "actual_released_fall", "fall_m": fall}
             return None
 
