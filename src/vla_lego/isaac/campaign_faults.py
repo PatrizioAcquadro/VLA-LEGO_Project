@@ -50,6 +50,18 @@ def resting_yaw(pose, spec) -> float:
     return math.degrees(math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z)))
 
 
+def upright_turn(pose) -> tuple[list[float], float]:
+    """Shortest world rotation of a prism's long axis onto either vertical direction."""
+    x, y, z, w = pose[3:]
+    long_axis = (2 * (x * z + w * y), 2 * (y * z - w * x), 1 - 2 * (x * x + y * y))
+    sign = 1 if long_axis[2] >= 0 else -1
+    axis = [sign * long_axis[1], -sign * long_axis[0], 0.0]
+    length = math.hypot(*axis)
+    if length < 1e-8:
+        return [0.0, 0.0, 1.0], 0.0
+    return [v / length for v in axis], math.atan2(length, abs(long_axis[2]))
+
+
 def _held_return_waypoints(tool, block, dimensions, xy, obstacle_top):
     """Keep the measured tool-to-piece offset when returning a rotated grasp."""
     from vla_lego.isaac.evaluation import _corners
@@ -64,6 +76,208 @@ def _held_return_waypoints(tool, block, dimensions, xy, obstacle_top):
         ("return", [*target_xy, clear_z]),
         ("lower", [*target_xy, release_z]),
     ]
+
+
+def _upright_plan(reference, task, index, side, tool, held, return_xy):
+    """Check the quarter-turn, supported upright tilt and table return before moving."""
+    import torch
+    from isaaclab.utils.math import (
+        matrix_from_quat,
+        quat_apply,
+        quat_apply_inverse,
+        quat_conjugate,
+        quat_mul,
+    )
+
+    from vla_lego.isaac.clearance import (
+        _separation_distance,
+        _unit_axes,
+        source_grasp_clearance,
+    )
+    from vla_lego.isaac.evaluation import _corners
+
+    env = reference.env
+    spec = task.placements[index].spec
+    center = tool.new_tensor(held[:3])
+    offset = tool[:3] - center
+    axis, angle = upright_turn(held)
+    _, ids, _ = reference.ctrl.frames[side]
+    obstacles = [
+        _corners(p.spec.dimensions_m, env.task_truth(i)["block_pose_w"])
+        for i, p in enumerate(task.placements)
+        if i != index
+    ]
+    obstacle_top = max(c[2] for corners in obstacles for c in corners)
+    obstacle_boxes = [
+        (
+            tool.new_tensor(corners),
+            matrix_from_quat(tool.new_tensor(env.task_truth(i)["block_pose_w"][3:])).T,
+        )
+        for i, corners in zip(
+            (i for i in range(len(task.placements)) if i != index), obstacles, strict=True
+        )
+    ]
+    relative_corners = quat_apply_inverse(
+        tool[3:].expand(8, -1), tool.new_tensor(_corners(spec.dimensions_m, held)) - tool[:3]
+    )
+    relative_orientation = quat_mul(quat_conjugate(tool[3:]), tool.new_tensor(held[3:]))
+    jaw_clear = source_grasp_clearance(env, reference.ctrl, side, index)
+    failures = []
+    # A low outer work area permits the wrist turn that the high source carry cannot.
+    centers = [[0.45, 0.35 if side == "left" else -0.35, TABLE_TOP + 0.15]]
+    for xyz in centers:
+        work = tool.new_tensor(xyz)
+        for yaw_sign, sign in ((-1, 1),):
+            yaw_half = yaw_sign * math.pi / 4
+            yaw_turn = tool.new_tensor([0.0, 0.0, math.sin(yaw_half), math.cos(yaw_half)])
+            spun_held = [*work.tolist(), *quat_mul(yaw_turn, tool.new_tensor(held[3:])).tolist()]
+            axis, angle = upright_turn(spun_held)
+            turn_angle = max(0.0, angle - math.radians(20))
+            seed = env.robot.data.joint_pos.torch[0, ids]
+            poses = []
+            try:
+                count = max(1, math.ceil(float((work - center).norm()) / 0.02))
+                for step in range(1, count + 1):
+                    poses.append(torch.cat((tool[:3] + (work - center) * step / count, tool[3:])))
+                for yaw_step in range(1, 10):
+                    half_yaw = yaw_sign * math.radians(10 * yaw_step) / 2
+                    partial_yaw = tool.new_tensor(
+                        [0.0, 0.0, math.sin(half_yaw), math.cos(half_yaw)]
+                    )
+                    poses.append(
+                        torch.cat(
+                            (
+                                work + quat_apply(partial_yaw, offset),
+                                quat_mul(partial_yaw, tool[3:]),
+                            )
+                        )
+                    )
+                turn = yaw_turn
+                for step in range(1, math.ceil(turn_angle / math.radians(10)) + 1):
+                    half = min(step * math.radians(10), turn_angle) / 2
+                    turn = tool.new_tensor(
+                        [*(sign * a * math.sin(half) for a in axis), math.cos(half)]
+                    )
+                    turn = quat_mul(turn, yaw_turn)
+                    poses.append(
+                        torch.cat((work + quat_apply(turn, offset), quat_mul(turn, tool[3:])))
+                    )
+                rotated = [*work.tolist(), *quat_mul(turn, tool.new_tensor(held[3:])).tolist()]
+                returned = _held_return_waypoints(
+                    poses[-1].tolist(), rotated, spec.dimensions_m, return_xy, obstacle_top
+                )
+                checked = list(poses)
+                start = poses[-1][:3]
+                for _, point in returned:
+                    goal = tool.new_tensor(point)
+                    count = max(1, math.ceil(float((goal - start).norm()) / 0.02))
+                    checked.extend(
+                        torch.cat((start + (goal - start) * step / count, poses[-1][3:]))
+                        for step in range(1, count + 1)
+                    )
+                    start = goal
+                for pose in checked:
+                    if jaw_clear(pose) <= 0:
+                        raise RuntimeError("Uprighting route intersects another piece")
+                    corners = quat_apply(pose[3:].expand(8, -1), relative_corners) + pose[:3]
+                    if float(corners[:, 2].min()) < TABLE_TOP - 1e-6:
+                        raise RuntimeError("Uprighting payload intersects the table")
+                    axes = matrix_from_quat(quat_mul(pose[3:], relative_orientation)).T
+                    for other_corners, other_axes in obstacle_boxes:
+                        crossing = _unit_axes(
+                            torch.linalg.cross(
+                                axes[:, None].expand(-1, 3, -1),
+                                other_axes[None].expand(3, -1, -1),
+                                dim=-1,
+                            ).reshape(-1, 3)
+                        )
+                        directions = torch.cat((axes, crossing))[None]
+                        if (
+                            float(
+                                _separation_distance(
+                                    corners[None], directions, other_corners, other_axes
+                                )
+                            )
+                            <= 0
+                        ):
+                            raise RuntimeError("Uprighting payload intersects another piece")
+                    seed = reference.solvers[side].solve(pose, seed)
+                return [pose.tolist() for pose in poses]
+            except torch.cuda.OutOfMemoryError:
+                raise
+            except RuntimeError as error:
+                failures.append(f"center={xyz}, pre_yaw={yaw_sign * 90}, direction={sign}: {error}")
+    raise RuntimeError(f"No admitted upright-and-return route: {failures}")
+
+
+def upright_released_prism(reference, task, index: int, side: str) -> None:
+    """Physically stand a fallen prism at its vacant source before another assembly pick."""
+    from vla_lego.isaac.clearance import source_grasp_span
+    from vla_lego.isaac.evaluation import CONTACT_ZERO_N, _corners
+
+    env, spec = reference.env, task.placements[index].spec
+    state = env.task_truth(index)
+    if spec.shape != "prism":
+        return
+    axis, angle = upright_turn(state["block_pose_w"])
+    if angle <= math.radians(15):
+        return
+    support = state["nonrobot_contact_force_n"] + sum(
+        max(force[2], 0.0) for force in state["block_contact_forces_n"]
+    )
+    if (
+        state["robot_contact_force_n"] >= CONTACT_ZERO_N
+        or support <= CONTACT_ZERO_N
+        or math.hypot(*state["block_velocity_w"][:3]) >= 0.02
+    ):
+        raise RuntimeError("Uprighting requires a released, settled prism with physical support")
+    source = state["block_pose_w"][:3]
+    obstacle_top = max(
+        c[2]
+        for i, placement in enumerate(task.placements)
+        if i != index
+        for c in _corners(placement.spec.dimensions_m, env.task_truth(i)["block_pose_w"])
+    )
+    # Clearance includes the complete rotating payload, not just its current bottom.
+    clear_z = max(source[2] + 0.16, obstacle_top + math.hypot(*spec.dimensions_m) / 2 + 0.085)
+    return_xy = list(task.placements[index].xy_m)
+    waypoints = [
+        [0.40, 0.40 if side == "left" else -0.40, clear_z],
+        [min(source[0], 0.46), source[1], clear_z],
+        [source[0], source[1], source[2] + 0.10],
+        [source[0], source[1], source[2] + 0.06],
+        [source[0], source[1], clear_z],
+        [*return_xy, clear_z],
+    ]
+    preferred = math.degrees(math.atan2(-axis[0], axis[1]))
+    yaw = reference.grasp_yaw(side, preferred, waypoints, object_index=index)
+    span = source_grasp_span(env, index, yaw)
+    reference.grip("upright_open", side, None)
+    for stage, point in zip(
+        ("edge", "source_high", "approach", "descend"), waypoints[:4], strict=True
+    ):
+        reference.move("upright_" + stage, side, point, yaw, linear=stage == "descend")
+    reference.grip("upright_grip", side, span)
+    reference.move("upright_lift", side, waypoints[4], yaw, linear=True, linear_step_m=0.02)
+    if env.task_truth(index)["block_pose_w"][2] - source[2] < 0.07:
+        raise RuntimeError("Uprighting failed physical re-acquisition")
+    reference.move("upright_return_high", side, waypoints[5], yaw, linear=True)
+    held = env.task_truth(index)["block_pose_w"]
+    tool = reference.ctrl.pose(side)[0].clone()
+    poses = _upright_plan(reference, task, index, side, tool, held, return_xy)
+    for step, pose in enumerate(poses):
+        reference.move(f"upright_turn_{step}", side, pose[:3], quaternion_xyzw=pose[3:])
+    # A held tilt may settle upright only within its rectangular tipping basin.
+    _, residual_tilt = upright_turn(env.task_truth(index)["block_pose_w"])
+    if residual_tilt >= math.atan(min(spec.dimensions_m[:2]) / spec.dimensions_m[2]):
+        raise RuntimeError("Held prism is outside its upright settling basin")
+    return_held_piece(
+        reference,
+        task,
+        {"object_index": index, "side": side, "return_source_xy_m": return_xy},
+        stage_prefix="upright_return",
+    )
+    resting_yaw(env.task_truth(index)["block_pose_w"], spec)
 
 
 def recover_dropped(reference, task, index: int, side: str, yaw: float, *, replan=False) -> float:

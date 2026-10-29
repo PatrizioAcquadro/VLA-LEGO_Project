@@ -644,6 +644,10 @@ def main() -> None:
 
                         report["fault"] = pick_fault(reference, pilot_case, task, index)
                     verify_support(level - 1, "pick fault correction")
+                if index in displaced_sources:
+                    from vla_lego.isaac.campaign_faults import upright_released_prism
+
+                    upright_released_prism(reference, task, index, side)
                 if level == cooperative_level:
                     stabilizer_withdraw = engage_stabilizer()
                 block = env.task_truth(index)["block_pose_w"][:3]
