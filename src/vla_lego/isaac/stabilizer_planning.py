@@ -205,3 +205,43 @@ def plan_stabilizer(reference, task, indices, cooperative_level, stabilizer_side
                     }
                 )
     return selected, selected_cost, failures
+
+
+def plan_released_rotation(reference, side, quaternion_xyzw):
+    """Preflight small wrist turns at the measured position after jaw release."""
+    import torch
+    from isaaclab.utils.math import quat_from_matrix
+
+    from vla_lego.isaac.clearance import arm_clearance, source_grasp_clearance
+
+    env = reference.env
+    solver = reference.solvers[side]
+    _, ids, _ = reference.ctrl.frames[side]
+    measured = reference.ctrl.pose(side)[0].clone()
+    endpoint = measured.new_tensor(quaternion_xyzw)
+    endpoint = endpoint / endpoint.norm()
+    if float(endpoint @ measured[3:]) < 0:
+        endpoint = -endpoint
+    seed = env.robot.data.joint_pos.torch[0, ids].clone()
+    native = arm_clearance(env, solver, side)
+    clear = source_grasp_clearance(env, reference.ctrl, side, None, other_hand=True)
+    poses = []
+    for step in range(1, 9):
+        rotation = torch.lerp(measured[3:], endpoint, step / 8)
+        rotation = rotation / rotation.norm()
+        pose = torch.cat((measured[:3], rotation))
+        goal = solver.solve(pose, seed)
+        ticks = max(1, math.ceil(float((goal - seed).abs().max()) / 0.025))
+        path = torch.lerp(
+            seed[None], goal[None], torch.linspace(0, 1, ticks + 1, device=seed.device)[:, None]
+        )
+        if not bool(native(path).all()):
+            raise RuntimeError("Released rotation intersects arm, head or table geometry")
+        transforms, _ = solver.forward(path)
+        for transform in transforms:
+            actual = torch.cat((transform[:3, 3], quat_from_matrix(transform[:3, :3])))
+            if clear(actual) <= 0:
+                raise RuntimeError("Released rotation intersects a piece or the other jaws")
+        poses.append(pose.tolist())
+        seed = goal
+    return poses

@@ -1057,12 +1057,24 @@ def main() -> None:
                         quaternion_xyzw=stabilizer_clear_quaternion,
                     )
                     for name, xyz, rotation in stabilizer_exit_path:
-                        reference.move(
-                            f"stabilizer_{name}",
-                            stabilizer_side,
-                            xyz,
-                            quaternion_xyzw=rotation,
-                        )
+                        if name == "exit_rotate":
+                            from vla_lego.isaac.stabilizer_planning import plan_released_rotation
+
+                            poses = plan_released_rotation(reference, stabilizer_side, rotation)
+                            for step, pose in enumerate(poses, 1):
+                                reference.move(
+                                    f"stabilizer_exit_rotate_{step}",
+                                    stabilizer_side,
+                                    pose[:3],
+                                    quaternion_xyzw=pose[3:],
+                                )
+                        else:
+                            reference.move(
+                                f"stabilizer_{name}",
+                                stabilizer_side,
+                                xyz,
+                                quaternion_xyzw=rotation,
+                            )
                     if not pilot_case:
                         reference.park(stabilizer_side)
                     verify_support(level, "stabilizer withdrawal")
