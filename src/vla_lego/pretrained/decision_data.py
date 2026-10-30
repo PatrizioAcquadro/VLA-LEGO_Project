@@ -79,6 +79,33 @@ class DecisionSequence:
         return [self.frames[index]["observation_time_s"] for index in self.indices]
 
 
+def single_block_completion_labels(directory: Path, case: CollectionCase, frames: list[dict]):
+    """Recover legacy terminal annotation gaps from current, already observed physics."""
+    from vla_lego.isaac.pick_evaluation import PickPlaceEvaluator
+    from vla_lego.isaac.task import SingleBlockTask
+
+    task = case.task()
+    if not isinstance(task, SingleBlockTask):
+        raise ValueError("Physical single-block labels require their original instruction")
+    labels = [0]  # The first observation has no preceding recorded tool/physics sample.
+    with (directory.parent / "trace.jsonl").open() as stream:
+        first = json.loads(next(stream))
+        evaluator = PickPlaceEvaluator(task, first["robot"]["robot_contact_paths"])
+        for index, observation in enumerate(frames[1:], 1):
+            trace = first if index == 1 else json.loads(next(stream))
+            if abs(trace["time_s"] - observation["observation_time_s"]) > 1e-6:
+                raise ValueError("Decision labels require past-command physics at observation time")
+            evaluator.update(
+                trace["time_s"],
+                trace["blocks"],
+                tool_positions={side: trace["tools"][side][:3] for side in ("left", "right")},
+            )
+            labels.append(int(evaluator.result()["passed"]))
+    if labels[-1] != 1:
+        raise ValueError("Original observations do not establish physical single-block completion")
+    return labels
+
+
 def episode_sequences(root: Path, entry: dict, case: CollectionCase) -> list[DecisionSequence]:
     """Offline outcome labels stay out of the feature/input construction path."""
     directory = (root / entry["recording"]).resolve()
@@ -111,6 +138,13 @@ def episode_sequences(root: Path, entry: dict, case: CollectionCase) -> list[Dec
     )
     if sequence.labels[-1] != (2 if metadata.get("verified_stop") else 1):
         raise ValueError("Verified decision sequence lacks its actual terminal label")
+    if case.category == "single_block":
+        onset = next(i for i, label in enumerate(sequence.labels) if label == 1)
+        if sequence.times[-1] - sequence.times[onset] < 0.5:
+            # Early captures wrote "complete" only at the final verification stage.
+            # Replay the unchanged physical evaluator; never repeat a final image.
+            labels = single_block_completion_labels(directory, case, frames)
+            sequence = replace(sequence, labels=[labels[i] for i in indices])
     if metadata.get("verified_stop"):
         from vla_lego.isaac.campaign_faults import stop_evidence
 

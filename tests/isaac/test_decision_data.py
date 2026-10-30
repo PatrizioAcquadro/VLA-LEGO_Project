@@ -127,3 +127,108 @@ def test_safe_impossibility_depends_on_present_support_not_teacher_clock(tmp_pat
     assert stop_evidence(case.task(), case, states)["passed"]
     states[0]["robot_contact_force_n"] = 1.0
     assert not stop_evidence(case.task(), case, states)["passed"]
+
+
+def short_single_recording(tmp_path):
+    from vla_lego.isaac.environment import TABLE_TOP
+
+    path = tmp_path / "cases.json"
+    path.write_text(json.dumps(build_declaration()))
+    case = load_campaign(path)[0]
+    directory = tmp_path / "recording"
+    directory.mkdir()
+    frames = [
+        {
+            "frame": i,
+            "observation_time_s": i / 20,
+            "image_time_s": i / 20,
+            "task_decision": "complete" if i == 60 else "continue",
+        }
+        for i in range(61)
+    ]
+    metadata = {
+        "frames": len(frames),
+        "collection_case": case.row,
+        "generation_family": case.row["family"],
+        "verified_success": True,
+        "privileged_policy_inputs": False,
+        "instruction": case.task().instruction,
+    }
+    (directory / "episode.json").write_text(json.dumps(metadata))
+    (directory / "frames.jsonl").write_text("".join(json.dumps(f) + "\n" for f in frames))
+    task = case.task()
+    target = next(i for i, p in enumerate(task.placements) if p.spec == task.targets[0])
+    traces = []
+    for tick in range(len(frames)):
+        held = tick in (1, 2) or tick == 60
+        blocks = []
+        for i, placement in enumerate(task.placements):
+            xy = task.assembly_xy_m if i == target and tick >= 2 else placement.xy_m
+            z = (
+                TABLE_TOP
+                + placement.spec.dimensions_m[2] / 2
+                + (0.1 if i == target and held else 0)
+            )
+            blocks.append(
+                {
+                    "block_pose_w": [*xy, z, 0, 0, 0, 1],
+                    "block_velocity_w": [0.0] * 6,
+                    "robot_contact_forces_n": [
+                        [0, 0, 0.6 if i == target and held and j < 2 else 0] for j in range(4)
+                    ],
+                    "robot_contact_force_n": 1.2 if i == target and held else 0.0,
+                    "nonrobot_contact_force_n": 0.0 if i == target and held else 0.2,
+                }
+            )
+        traces.append(
+            {
+                "time_s": (tick + 1) / 20,
+                "blocks": blocks,
+                "tools": {"left": [0.1, 0.6, 1.1], "right": [0.1, -0.6, 1.1]},
+                "robot": {
+                    "robot_contact_paths": [
+                        f"/{side}_WSG32_{jaw}_JAW_LINK"
+                        for side in ("left", "right")
+                        for jaw in ("NEGATIVE", "POSITIVE")
+                    ]
+                },
+            }
+        )
+    trace = tmp_path / "trace.jsonl"
+    trace.write_text("".join(json.dumps(row) + "\n" for row in traces))
+    entry = {
+        "recording": "recording",
+        "case": case.name,
+        "family": case.row["family"],
+        "partition": "train",
+        "admitted": True,
+    }
+    return case, directory, frames, trace, traces, entry
+
+
+def test_short_single_labels_use_current_physical_dwell_without_future_or_raw_rewrite(tmp_path):
+    case, directory, frames, trace, traces, entry = short_single_recording(tmp_path)
+    raw = (directory / "frames.jsonl").read_bytes()
+    original, negative = episode_sequences(tmp_path, entry, case)
+    positive_times = [
+        t for t, label in zip(original.times, original.labels, strict=True) if label == 1
+    ]
+    assert positive_times and positive_times[0] >= 2.2
+    assert positive_times[-1] - positive_times[0] >= 0.5
+    assert original.labels[-1] == 1  # The unobserved next command holds the piece again.
+    assert negative.family == original.family and set(negative.labels) == {0}
+    assert (directory / "frames.jsonl").read_bytes() == raw
+    traces[0]["time_s"] += 0.05
+    trace.write_text("".join(json.dumps(row) + "\n" for row in traces))
+    with pytest.raises(ValueError, match="observation time"):
+        episode_sequences(tmp_path, entry, case)
+
+
+def test_short_single_final_held_state_cannot_become_a_completion_label(tmp_path):
+    from vla_lego.pretrained.decision_data import single_block_completion_labels
+
+    case, directory, frames, trace, traces, _entry = short_single_recording(tmp_path)
+    traces[-2]["blocks"] = traces[-1]["blocks"]
+    trace.write_text("".join(json.dumps(row) + "\n" for row in traces))
+    with pytest.raises(ValueError, match="do not establish"):
+        single_block_completion_labels(directory, case, frames)

@@ -39,7 +39,10 @@ def main():
         "sources": entries,
         "decision_hz": 2,
         "history_s": 3,
-        "labels": "current physical outcomes; stop justification never waits for a scripted clock",
+        "labels": (
+            "current physical outcomes; short legacy single-block terminals use past-aligned "
+            "physical replay; stop justification never waits for a scripted clock"
+        ),
     }
     args.output.mkdir(parents=True, exist_ok=True)
     protocol_path = args.output / "protocol.json"
