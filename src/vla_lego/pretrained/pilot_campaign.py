@@ -136,11 +136,23 @@ def save_checkpoint(policy, preprocessor, postprocessor, optimizer, scheduler, d
 
 def prune_checkpoints(root: Path, best_step: int, *, resume_checkpoint: Path | None = None) -> None:
     """Retain milestones, recent states and the source still mapped by this process."""
+    physical = root / "physical-best"
+    if physical.exists() and not physical.is_symlink():
+        raise ValueError("Physical best must be an explicit checkpoint link")
+    retained = physical.resolve(strict=True) if physical.is_symlink() else None
+    if retained is not None and (
+        retained.parent != root.resolve()
+        or not retained.name.isdigit()
+        or not (retained / "state.json").is_file()
+    ):
+        raise ValueError("Physical best must identify a complete checkpoint in this campaign")
     complete = sorted(
         path for path in root.iterdir() if path.name.isdigit() and (path / "state.json").exists()
     )
     keep = {path.name for path in complete[-2:]}
     for path in complete:
+        if retained is not None and path.resolve() == retained:
+            continue
         if resume_checkpoint is not None and path.resolve() == resume_checkpoint.resolve():
             continue
         step = int(path.name)

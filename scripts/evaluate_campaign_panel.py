@@ -182,6 +182,14 @@ def main() -> None:
                     and json.loads(args.write_control_gate.read_text()) != gate
                 ):
                     raise ValueError("Preserve the existing control review")
+                if gate["passed"]:
+                    retained = args.checkpoint.resolve().parent / "physical-best"
+                    if retained.exists() and not retained.is_symlink():
+                        raise ValueError("Preserve the incompatible physical-best artifact")
+                    if not retained.is_symlink():
+                        retained.symlink_to(
+                            args.checkpoint.resolve().name, target_is_directory=True
+                        )
                 write_json(args.write_control_gate, gate)
 
 

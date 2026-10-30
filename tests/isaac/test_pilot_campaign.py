@@ -99,3 +99,34 @@ def test_pruning_retains_the_loaded_resume_source_after_latest_moves(tmp_path):
         "007000",
         "latest",
     }
+
+
+def test_pruning_preserves_physical_best_when_later_offline_selection_differs(tmp_path):
+    for step in (0, 20000, 35000, 45000, 50000, 55000, 60000):
+        checkpoint = tmp_path / f"{step:06d}"
+        checkpoint.mkdir()
+        (checkpoint / "state.json").write_text("{}")
+    (tmp_path / "physical-best").symlink_to("035000")
+    prune_checkpoints(tmp_path, 45000, resume_checkpoint=tmp_path / "050000")
+    assert (tmp_path / "035000/state.json").is_file()
+    assert (tmp_path / "physical-best").resolve() == tmp_path / "035000"
+    assert (tmp_path / "045000/state.json").is_file()
+    assert (tmp_path / "050000/state.json").is_file()
+
+
+def test_pruning_rejects_foreign_physical_pointer_before_deleting_anything(tmp_path):
+    import pytest
+
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    for step in (35000, 55000, 60000):
+        checkpoint = checkpoints / str(step)
+        checkpoint.mkdir()
+        (checkpoint / "state.json").write_text("{}")
+    foreign = tmp_path / "foreign"
+    foreign.mkdir()
+    (foreign / "state.json").write_text("{}")
+    (checkpoints / "physical-best").symlink_to(foreign)
+    with pytest.raises(ValueError, match="complete checkpoint"):
+        prune_checkpoints(checkpoints, 55000)
+    assert (checkpoints / "35000/state.json").is_file()
