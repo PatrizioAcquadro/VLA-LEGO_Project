@@ -4,7 +4,7 @@
 
 Turn the selected pretrained VLA and initial Phase 4 corpus into an autonomous assembly candidate, then improve it through actual rollout errors and targeted corrections.
 
-The expanded 620-episode corpus and 30 actual-policy corrections are admitted. The separate temporal classifier has completed its bounded 20k updates but failed calibration; confirmation predictions remain unexposed. An independent 20k motor positive-control worker now starts on Blackwell. The failed decision objective, actual ten-case physical control and final comparison remain open; [Models](../models.md#expanded-corpus-learning-assignment--october-26-2026) owns the current learning results and limits.
+The expanded 620-episode corpus and 30 actual-policy corrections are admitted. The separate temporal classifier has completed its bounded 20k updates but failed calibration; confirmation predictions remain unexposed. An independent 20k motor positive control now has verified native Blackwell CUDA optimization, with its first 60 updates and finite nonzero gradients. The failed decision objective, actual ten-case physical control and final comparison remain open; [Models](../models.md#expanded-corpus-learning-assignment--october-26-2026) owns the current learning results and limits.
 
 ## Design choices
 
