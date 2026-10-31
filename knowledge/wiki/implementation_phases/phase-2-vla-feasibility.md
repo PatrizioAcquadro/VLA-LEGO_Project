@@ -6,7 +6,7 @@ Select one robot-pretrained VLA, its Alex003 interface and a demonstrated Orin e
 
 ## Design choices
 
-GR00T N1.7 is the leading candidate; SmolVLA is the compact alternative. Compare π0.5 and LingBot-VLA 2.0 technically, without requiring all four integrations. Follow the [selection rule](../models.md#selection-and-readiness): qualify the leading candidate first and exercise alternatives when a limitation justifies it.
+GR00T N1.7 is the leading candidate; SmolVLA is the compact alternative. Compare π0.5 and LingBot-VLA 2.0 technically, without requiring all four integrations. Follow the [selection rule](../models.md#planned-pretrained-vla-selection): qualify the leading candidate first and exercise alternatives when a limitation justifies it.
 
 All online learned processing used by the deployed policy runs on Orin alongside sensing and communication. Existing low-level control remains on the robot controller. The documented host-stack mismatch and WSG32 hardware interface are early feasibility questions, not deferred transfer details.
 

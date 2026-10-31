@@ -36,11 +36,3 @@ These are lightweight, easily separable gravity blocks, without studs, sockets, 
 The shared Alex measurements record about 70 mm fully open inner finger spacing. This is a geometric reference, not usable clearance for every approach or an established safe grasp envelope. Confirm actual fingertips, orientation and access. Treat print material, wall/infill settings and contact calibration as a consistent initial manufacturing choice before adding variation.
 
 The two seed STLs have now been imported unchanged from upstream commit `59bebe7e`, with the source license and [asset provenance](../../src/vla_lego/isaac/assets/blocks/PROVENANCE.md). Both are exactly 12-triangle centered cuboids in meters; native Isaac uses analytically identical primitives. `vla_lego.isaac.catalog` crosses both geometries, scales 0.8/1.0 and all six colors (24 combinations). The provisional effective bulk density gives 25 g for a 40 mm cube and about 58.7 g for the large prism; these are assumptions, not printed measurements. No physical print or contact calibration is claimed. The earlier optional printing reference is replaced by this catalog; its unverified training terms are not a dependency.
-
-## Existing MuJoCo behavior
-
-Current code uses three provisional cuboids: 40 × 40 × 40 mm / 20 g, 60 × 30 × 30 mm / 18 g, and 90 × 30 × 30 mm / 25 g. Uniform-cuboid inertia, friction 0.6 and the current table geometry are uncalibrated defaults, not the new printing specification.
-
-The existing tower goal orders pieces by footprint, not by a language instruction. The triangle goal is three separate planar locations. Seeded reset and support/release evaluation exist; robot assembly does not.
-
-The current evaluator uses position tolerance of 10% of the shortest dimension, 5° yaw tolerance, speed bounds of 0.01 m/s and 0.1 rad/s, and six samples over a 0.25 s dwell. These are legacy provisional tolerances, not automatically the future physical acceptance criteria. [Simulation workflows](simulation.md) describe that implementation.

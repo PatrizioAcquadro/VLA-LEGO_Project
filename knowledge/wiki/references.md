@@ -27,6 +27,6 @@ Resolve sources against the actual release used during implementation. Use the s
 
 ## Historical design references
 
-[EO-1](https://arxiv.org/abs/2508.21112), [Qwen3.5-4B](https://huggingface.co/Qwen/Qwen3.5-4B) and [Flow Matching](https://arxiv.org/abs/2210.02747) explain the retained custom model. The [current legacy contracts](contracts.md#existing-mujoco-and-qwen-contract) preserve its noise-to-data convention and dimensions. Custom interleaving, EO-1 replication and LIBERO are not dependencies of the new roadmap.
+[EO-1](https://arxiv.org/abs/2508.21112), [Qwen3.5-4B](https://huggingface.co/Qwen/Qwen3.5-4B) and [Flow Matching](https://arxiv.org/abs/2210.02747) explain the retired custom model. The [fixed v1 baseline](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/tree/v1.0.0) preserves its contracts, noise-to-data convention and dimensions. Custom interleaving, EO-1 replication and LIBERO are not dependencies of the new roadmap.
 
 The [original website roadmap](https://websitepresentation.vercel.app/roadmap), calendar and 22 subphases are superseded. [History](history.md) provides source retrieval and consequential negative results; the website was not edited.

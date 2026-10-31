@@ -1,1 +1,1 @@
-"""Robot-pretrained policy integration, independent of the legacy Qwen runtime."""
+"""Robot-pretrained policy learning and inference for Alex003."""

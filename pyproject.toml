@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vla-lego"
-version = "0.1.0"
+version = "2.0.0.dev0"
 description = "Vision-Language-Action Components for Lightweight Brick Assembly"
 readme = "README.md"
 license = {text = "MIT"}

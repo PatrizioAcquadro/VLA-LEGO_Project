@@ -2,7 +2,7 @@
 
 ## Planned robot and ownership
 
-The native foundation uses the shared [Alex asset repository](https://github.com/PatrizioAcquadro/purdue-alex-assets), available locally at `/home/pacquadr/Desktop/Alex`. Revision `9ac4bd4` provides `ihmc_alex_isaaclab`, including the fixed-base Purdue WSG32/UMI profile, pedestal and head ZED integration. Its documented target is Isaac Sim 6.0.1 / Isaac Lab release/3.0.0-beta2; [native integration and single-block reference evidence](foundations.md) are verified on Blackwell, while the complete cooperative task remains under development.
+The native foundation uses the shared [Alex asset repository](https://github.com/PatrizioAcquadro/purdue-alex-assets), available locally at `/home/pacquadr/Desktop/Alex`. Revision `9ac4bd4` provides `ihmc_alex_isaaclab`, including the fixed-base Purdue WSG32/UMI profile, pedestal and head ZED integration. The [native environment](cluster.md#native-environments) has executed contact-based reference collection and learned-policy evaluation on Blackwell. Teacher evidence and negative learned outcomes remain distinct.
 
 | Element | Design and boundary |
 |---|---|
@@ -37,10 +37,8 @@ Online learned perception/planning used by the policy runs on Orin, including an
 
 Camera capture, model replanning and actuator command rates are separate. The chosen observation/action representation and timing are defined in [contracts](contracts.md); model and onboard constraints in [models](models.md).
 
-## Existing implementation and migration
+## Maintained implementation
 
-The current `src/vla_lego` package contains MuJoCo scene loading/control/cameras/bricks, Qwen and flow-matching components, standalone losses, optional tracking and packaged configuration. Repository utilities and scheduler/container templates are separate from the distributable runtime. See [development](development.md) for the actual layout and [simulation](simulation.md) for working diagnostics.
+`vla_lego.isaac` contains task scenes, bounded control, teachers, recordings, replay and physical evaluators. `vla_lego.pretrained` contains admitted-data readers, SmolVLA motor learning, separate temporal decisions and inference transport. [Development](development.md) owns package/check instructions; [Isaac operations](foundations.md) owns native launch and review.
 
-Existing model smoke connects rendered observations to untrained predictions without executing them. There is no collector, trainer or learned closed loop. Existing package and behavioral evidence applies only to that path.
-
-[Phase 0](implementation_phases/phase-0-foundation.md) establishes ownership and staged retirement; [Phase 8](implementation_phases/phase-8-consolidation.md) completes it. Preserve [legacy robot provenance](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/blob/v1.0.0/src/vla_lego/sim/assets/robots/alex/PROVENANCE.md) until those assets and their consumers retire, retaining attribution for any reused content. Do not duplicate shared Alex assets to create another authority.
+MuJoCo, copied Alex V1/EZGripper assets, Qwen and optional tracking are retired from main. The fixed [v1.0.0 baseline](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/tree/v1.0.0) preserves those sources and attribution. Shared Alex assets and the retained block assets keep their own provenance. [Phase 0](implementation_phases/phase-0-foundation.md) owns the software foundation; [Phase 8](implementation_phases/phase-8-consolidation.md) still requires the qualified-system handoff.

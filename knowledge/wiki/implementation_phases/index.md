@@ -2,7 +2,7 @@
 
 Build an **ordered five-block tower with Alex003**, selecting the requested colors and sizes among distractors and coordinating both arms. Establish the capability in Isaac Sim/Lab, then on the Purdue robot with VLA inference entirely on its Jetson AGX Orin. The canonical [task](../bricks.md), [interfaces](../contracts.md), [data strategy](../data.md) and [qualification criteria](../validation.md#assembly-qualification-targets) define the shared requirements.
 
-This roadmap replaces the original 22 subphases. Phase 0 and the minimum single-block grasp/release scene have native GPU evidence; complete Phases 1–6 remain in development or pending, as recorded in [status](../status.md). Existing MuJoCo/Qwen components are a migration baseline. There is no fixed calendar or guaranteed cluster allocation.
+This roadmap replaces the original 22 subphases. The native foundation, cooperative teacher corpus and bounded negative learning campaign have executed evidence; learned assembly and qualification remain unmet, as recorded in [status](../status.md). MuJoCo/Qwen are retired from main and recoverable through v1.0.0. There is no fixed calendar or guaranteed cluster allocation.
 
 | Phase | Intended result | Depends on |
 |---|---|---|

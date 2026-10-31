@@ -1,57 +1,39 @@
 # Development
 
-This guide describes the retained MuJoCo/Qwen package. Isaac/Alex integration and the selected pretrained VLA require the separate environments planned in [Phase 0](implementation_phases/phase-0-foundation.md) and [compute](cluster.md#planned-resource-roles). Existing installation commands do not provision the future stack.
+## Environments and installation
 
-## Environment
-
-Use Python 3.10 or newer and a dedicated environment. The validated host uses Python 3.10; the locally tested Docker image uses Python 3.12. GPU models require a compatible NVIDIA driver/PyTorch CUDA runtime. Current dependency ranges and optional groups are defined only in [pyproject.toml](../../pyproject.toml).
+The portable package supports Python 3.10+. Create a dedicated environment and install from the repository root:
 
 ```bash
-python3.10 -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
 python -m pip install -e '.[dev]'
-python scripts/validate_configs.py
 ```
 
-Install `.[sim]` for simulation only, `.[vlm]` for model components, `.[tracking]` for optional W&B, or `.[ci,sim]` for the CPU software/physics suite. `dev` includes these and pre-commit. A host missing Python's venv/ensurepip support needs the matching OS venv package. In this audit the existing Python 3.10 user stack was reused through `--without-pip --system-site-packages`; that is an environment workaround, not an isolated dependency installation.
-
-HF cache convention: `HF_HOME` is the Hugging Face root; `HF_HUB_CACHE` is its `hub` directory. Both are optional. Put large outputs and weights outside Git; `outputs/`, datasets, checkpoints, caches and local assistant state are ignored.
+Core dependencies are NumPy, Pillow and PyTorch. `ci` provides checks/build tools, `reporting` provides the Matplotlib dependency already used by offline reports, and `dev` includes both plus pre-commit. Dependency declarations live in [pyproject.toml](../../pyproject.toml). The validated native stacks use PyTorch 2.10 for Isaac and 2.11 for LeRobot; installing the core package does not provision either application stack. [Compute](cluster.md) owns their revisions and separation.
 
 ## Checks
 
 ```bash
 make check
-MUJOCO_GL=egl python -m pytest tests -q
-python scripts/check_install.py
+make test
+make package
 ```
 
-`make check` runs Ruff, Black, mypy, documentation links and all maintained config combinations. The full test command includes GPU tests when CUDA and VLM dependencies are present; skipped GPU tests are not GPU evidence. CPU-only CI explicitly excludes GPU/slow tests. OSMesa is its separate GPU-less renderer. Use real GPU access for meaningful model workloads; diagnose a permission/runtime issue instead of silently switching to CPU.
+`make check` runs Ruff, Black, mypy and local Markdown-link checks. Set `PYTHON=.venv/bin/python` when the environment is not activated. In a sandbox that blocks formatter workers, run the same check with host access; `BLACK_NUM_WORKERS=1` limits formatting parallelism.
 
-The package check builds an sdist, builds its wheel, installs it in a temporary environment and executes outside the checkout. It reuses caller runtime dependencies but asserts that project modules come from the installed wheel. It compares the complete wheel inventory against `src/` and validates packaged scenes/configs, brick physics, asset linting/export and all five CLI registrations. Docker separately exercises fresh dependency resolution.
+The maintained suite protects recording masks, train/development separation, control/planning constraints, task decisions, evaluation accounting, checkpoint retention and offline reporting. Small doubles isolate these contracts; they do not establish physical execution or model behavior. FFmpeg is required for the lossless RGB roundtrip test; an unavailable codec is reported as a skip. Meaningful model/renderer checks use the actual GPU and compatible native environment.
 
-## Change discipline
+The package check builds an sdist, builds its wheel, installs outside the checkout and compares the complete runtime/asset inventory against `src/`. It checks installed imports, block geometry, licenses, task construction and maintained module help. It reuses caller runtime dependencies and does not claim fresh dependency resolution or native simulation qualification.
 
-For substantial work, use a local ignored `TODO.md` checklist linked to one phase specification; do not commit completed agent-task checklists. Preserve pre-existing changes and work on the explicitly requested branch. Create small local commits after coherent validated changes; remote publication, history rewriting and branch/worktree deletion require separate authorization. Earlier cleanup permissions are historical.
+## Layout and changes
 
-Keep one canonical topic page and high-level phase plans containing objectives, choices, conceptual activities, outputs and advancement conditions. Commands and software checks belong in operating guides, not phase plans. Record ordinary implementation history in Git. Remove obsolete consumers when their replacement is operational, preserving consequential findings and required provenance.
+`src/vla_lego/isaac` owns the task runtime; `pretrained` owns policy/data integration. Native modules are loaded after Isaac AppLauncher. Scripts contain launch/report/check utilities; tests remain under `tests/isaac`. All application imports use the `vla_lego` namespace.
 
-Retain tests that protect maintained behavior: native simulation, contracts, support/stability, camera alignment, masks, gradients, processor metadata and package contents. Small model doubles are useful for isolated sequence/mask regressions; they do not replace native GPU integration. Remove tests that merely mirror constants or support retired placeholder behavior.
+Use an ignored local `TODO.md` checklist for substantial work. Preserve pre-existing changes and stage only owned changes. Commit coherent validated milestones; push or history rewriting requires authorization. Keep raw data, weights, environments, caches, credentials and assistant state out of Git.
 
-Do not add a new dependency, abstraction or broad rewrite without a concrete consumer. Update the canonical topic and affected phase when a contract changes. Keep inline comments brief. Optional local `AGENTS.md` is ignored; it is not part of the distributable project.
+Retain tests for maintained behavior and important regressions. Remove exclusive tests with a retired capability; avoid test-only production switches, speculative abstractions and duplicate documentation. Keep one canonical page per topic and update the affected phase. Comments should explain units, frames, safety meaning or non-obvious behavior briefly.
 
-## CI and publication
+## CI
 
-The [workflow](../../.github/workflows/ci-cd.yml) defines required lint/format/docs, typing, software/OSMesa simulation, config/import smoke and installed-wheel jobs. Its final success gate checks all of them. CI runs on branch pushes and PRs targeting main. Publishing is gated separately to main, tags or manual dispatch.
-
-Existing publication behavior remains: qualifying main changes/manual dispatch/tags can build and publish the dependency container; tags can produce an Apptainer artifact and GitHub release. This task has performed none of those remote actions. Local validation does not establish publication or a green hosted run.
-
-## Source layout
-
-Install the package in editable mode before running tests or scripts. When updating an old checkout, remove obsolete generated root-level `vla_lego.egg-info` before reinstalling; current metadata belongs under `src/`. All runtime imports begin with `vla_lego`; generic top-level `sim`, `models`, `tracking` and `configs` packages have been removed. Hydra uses `initialize_config_module(config_module="vla_lego.configs")`, and assets resolve through `vla_lego.sim.asset_loader`. CLI names remain unchanged.
-
-Tests are grouped under `tests/sim`, `tests/models` and `tests/tracking`, with shared setup in `tests/conftest.py` and package/config checks at the test root. Pytest uses importlib mode, so test collection does not make application code importable from the repository root. Development utilities live in `scripts/`; SLURM operations remain in `infra/gilbreth`. Use `make test` and `make package` for the full suite and installed-wheel probe.
-
-## Root files
-
-The tracked root contains only `README.md`, `LICENSE`, `pyproject.toml`, `Makefile`, `.gitignore` and `.pre-commit-config.yaml`. These are conventional entry points for readers, Python packaging, developer commands and Git/pre-commit tooling. Container definitions live under `infra/containers`; canonical contribution/setup instructions live here. Python compatibility is declared in `pyproject.toml`, so an unused patch-specific `.python-version` is unnecessary. Environment variables are documented beside their actual workflows; there is no automatically loaded `.env` template. Local `AGENTS.md` and `TODO.md` remain ignored.
+The [workflow](../../.github/workflows/ci-cd.yml) runs lint/docs, typing, software contracts and installed-wheel checks, with a final `CI Success` gate. Hosted CPU jobs do not qualify Isaac rendering or pretrained GPU execution. Container publication, Apptainer builds and release jobs belonged to the retired v1 stack and are removed. Hosted status is verified against the actual pushed commit in [GitHub Actions](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/actions/workflows/ci-cd.yml).

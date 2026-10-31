@@ -4,7 +4,7 @@
 
 Turn the selected pretrained VLA and initial Phase 4 corpus into an autonomous assembly candidate, then improve it through actual rollout errors and targeted corrections.
 
-The expanded 620-episode corpus and 30 actual-policy corrections are admitted. The separate temporal classifier completes 20k updates but fails calibration. The independent motor positive control completes 20k updates on native Blackwell CUDA; its ten-case unassisted physical panel finishes 0/10 integrated successes, failing the 8/10 advancement target. Both learning targets remain failed. Bounded diagnosis finds no demonstrated integration defect justifying an unchanged rerun, so motor learning stops at 20k without a full-task extension and leaves 80k of the ceiling unused. The final paired comparison is complete and interpreted: historical reference 0/20 and current policy 0/20, with all forty attempts executed once and no unavailable outcomes. Confirmation is exposed only for frozen final validation, not further model or threshold selection. The negative campaign is delivered, without a qualified physical-best candidate or Phase 5 advancement; [Models](../models.md#expanded-corpus-learning-assignment--october-26-2026) owns the results and limits. Phase 6 qualification is not claimed.
+The bounded expanded-corpus campaign is complete with negative control/decision and final comparison results. [Models](../models.md#expanded-corpus-learning-assignment--october-26-2026) owns those outcomes; advancement remains unmet.
 
 ## Design choices
 

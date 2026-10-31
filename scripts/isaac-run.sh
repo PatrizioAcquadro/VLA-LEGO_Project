@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Keep simulation dependencies separate from the legacy Qwen/training venv.
+# Launch native Isaac with shared Alex assets and this task's source.
 set -euo pipefail
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 : "${ISAAC_SIM_DIR:?Set ISAAC_SIM_DIR to the Isaac Sim installation}"

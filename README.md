@@ -1,98 +1,43 @@
-# Lightweight Brick Assembly VLA
+# Alex003 Bimanual Assembly VLA
 
-**Research software for vision-language-action learning on the Alex robot.**
+Research software for an ordered five-block tower built by Purdue Alex003, with both arms cooperating and a vision-language-action policy selecting the requested pieces among distractors. The development path uses Isaac Sim/Lab and SmolVLA, then targets inference entirely on the robot's Jetson AGX Orin.
 
-[![CI](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/actions/workflows/ci-cd.yml) [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](pyproject.toml) [![License: MIT](https://img.shields.io/badge/License-MIT-2E7D32)](LICENSE)
+[![CI](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/actions/workflows/ci-cd.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-2E7D32)](LICENSE)
 
-[Documentation](knowledge/wiki/index.md) · [Project status](knowledge/wiki/status.md) · [Implementation plans](knowledge/wiki/implementation_phases/index.md) · [Validation](knowledge/wiki/validation.md)
+[Project status](knowledge/wiki/status.md) · [Documentation](knowledge/wiki/index.md) · [Roadmap](knowledge/wiki/implementation_phases/index.md) · [Validation](knowledge/wiki/validation.md)
 
-The target is an ordered five-block tower built by **Alex003**, selecting the requested colors and sizes among distractors with genuine cooperation between both arms. The new roadmap uses Isaac Sim/Lab and a robot-pretrained VLA, then transfers to Purdue Alex with inference entirely on the onboard Jetson AGX Orin.
+## Current capability
 
-**Current stage:** the native Isaac/Alex003 teacher has produced the complete marker-free **50 training + 10 development episode pilot**, with physical cooperation, corrections and stops. The [data handoff](knowledge/wiki/data.md#approved-5010-collection-milestone) documents local recordings, coverage and preserved failures. No assembly policy was trained in this assignment; collection has stopped pending a new instruction. The MuJoCo/Qwen baseline below remains available during migration. See [status](knowledge/wiki/status.md) and [native operations](knowledge/wiki/foundations.md).
+The contact-based Isaac teacher has produced an admitted simulation corpus of **620 episodes / 2,528,001 frames**, including **30 corrections from actual policy states**. Sensor/action recordings, error masks, family partitions and failed attempts are retained. Shared Alex assets supply the WSG32/UMI grippers and head ZED; this repository owns task scenes, control, teachers, data and policy integration.
 
-| Alex in MuJoCo | Lightweight-brick tower |
-|:---:|:---:|
-| ![Alex upper body and two EZGrippers in the MuJoCo scene](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/blob/v1.0.0/knowledge/media/alex-mujoco.png) | ![Three lightweight cuboids stacked on the simulation table](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/blob/v1.0.0/knowledge/media/brick-tower.png) |
+The completed learning campaign is a **negative result**: the separate decision classifier fails calibration, the 20k-update motor control scores **0/10**, and the final comparison scores **0/20 for both the current candidate and historical reference**. All forty comparison attempts executed once. Teacher demonstrations and isolated learned motor components do not establish autonomous cooperative assembly. Orin timing, physical transfer and final qualification remain open.
 
-*Actual frames from `vla-demo`. The tower is initialized in its target layout for a physics diagnostic; it is not assembled by the robot.*
-
-## What is included
-
-| Component | Maintained capabilities |
+| Maintained component | Purpose |
 |---|---|
-| **Simulation** | Alex upper body, two EZGrippers, configurable bricks, seeded resets, tower and planar triangle goals, support and stability evaluation. |
-| **Robot interfaces** | 17-D actions, 52-D state and four synchronized camera views. See the [contracts](knowledge/wiki/contracts.md). |
-| **Model components** | Qwen3.5-4B processing, state/action projectors, flow matching and 16-step action chunks. See [models and limitations](knowledge/wiki/models.md). |
-| **Development tools** | Diagnostic CLIs, packaged assets/configuration, subsystem tests, installed-wheel checks, containers and GitHub Actions. |
+| `vla_lego.isaac` | Scene/control adapters, contact-based teachers, recording, replay and independent task evaluation |
+| `vla_lego.pretrained` | Admitted-data readers, TRAIN-only normalization, SmolVLA motor learning, temporal decisions and inference |
+| `scripts/` | Native launcher, bounded policy/panel execution, offline reports and development checks |
+| `knowledge/wiki/` | Canonical operating guides, contracts, evidence and nine development phases |
 
-Here, “bricks” means lightweight pieces intended for 3D printing and gravity assembly. The [new print catalog](knowledge/wiki/bricks.md#printable-catalog) uses RGB-Objects; current MuJoCo cuboids and contact defaults remain provisional. Real LEGO connections are a [later extension](knowledge/wiki/implementation_phases/phase-8-consolidation.md). The repository and package names, `VLA-LEGO_Project` and `vla-lego`, are retained for continuity.
+## Development setup
 
-## Quick start
-
-Use **Python 3.10+**. The headless example below targets **Linux with an NVIDIA GPU and EGL**. See [development setup](knowledge/wiki/development.md) for dependency groups and [simulation workflows](knowledge/wiki/simulation.md) for viewer and rendering options.
+Use Python 3.10+ in a dedicated environment:
 
 ```bash
-git clone https://github.com/PatrizioAcquadro/VLA-LEGO_Project.git
-cd VLA-LEGO_Project
-
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e '.[sim]'
-
-vla-lint-assets
-MUJOCO_GL=egl vla-demo --scenario all --output-dir outputs/demo-001
-```
-
-The demo writes short MP4 clips, PNG frames and `report.json` for scripted robot motion and prearranged brick goals. Use a new output directory for each run. It does not download model weights or execute model predictions.
-
-For native model checks, install the `vlm` extra and follow the [CUDA model validation workflow](knowledge/wiki/models.md#validate-and-profile). No trained brick-action checkpoint is included.
-
-## Develop and validate
-
-With the environment above activated:
-
-```bash
 python -m pip install -e '.[dev]'
-make check                  # Lint, formatting, typing, docs and configuration
-MUJOCO_GL=egl make test      # Full suite, including native GPU model checks
-make package                # Build and verify an installed wheel
+make check
+make test
+make package
 ```
 
-The full suite needs CUDA, VLM dependencies and pretrained weights for its native model tests. GPU-less CI uses an explicit CPU/OSMesa path. Report skipped tests separately from passed checks. [Validation evidence](knowledge/wiki/validation.md) records tested configurations, results and outstanding qualification work.
+This installs the portable software and reporting tools. Native simulation additionally needs the compatible Isaac/Alex environment; policy execution needs the separate LeRobot environment. See [development](knowledge/wiki/development.md), [native operations](knowledge/wiki/foundations.md) and [compute](knowledge/wiki/cluster.md) for their boundaries.
 
-Keep changes focused and migrate interfaces with their consumers. The [contracts](knowledge/wiki/contracts.md) distinguish current tensors from the planned Alex003 interface. Contribution practices and container/cluster instructions live in [development](knowledge/wiki/development.md) and [operations](knowledge/wiki/cluster.md).
+Raw recordings, weights, caches and diagnostic outputs are intentionally outside Git. The [data guide](knowledge/wiki/data.md) identifies their canonical location and admission rules; cloning this repository does not download the corpus or models.
 
-## Repository structure
+## Project boundary
 
-```text
-src/vla_lego/
-├── sim/                MuJoCo, robot control, cameras, bricks and assets
-├── models/             Qwen backbone, action head and losses
-├── tracking/           Experiment metrics and optional W&B integration
-└── configs/            Packaged Hydra configuration
-tests/                  Simulation, model, tracking and package regressions
-scripts/                Diagnostics and development utilities
-infra/                  Containers and Gilbreth scheduler setup
-knowledge/              Canonical guides, plans and presentation media
-.github/workflows/      Automated checks and gated publication
-```
+Completion requires the qualified five-block system in simulation and on Purdue Alex with onboard inference. LEGO connections and additional structures are optional later work. MuJoCo/Qwen, its five CLI commands and its deployment infrastructure are retired from `main`; the immutable [v1.0.0 release](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/tree/v1.0.0) preserves that baseline and its attribution. `main` contains unreleased v2 development.
 
-Install the package before running scripts or tests. Runtime imports use the single `vla_lego` namespace; configuration and simulation assets ship with the package. See [architecture](knowledge/wiki/architecture.md) for module ownership and execution boundaries.
-
-## Development roadmap
-
-The [new nine phases, 0–8](knowledge/wiki/implementation_phases/index.md), replace the original subphase sequence. They cover:
-
-1. Establish shared Alex003 assets and an Isaac scene while retiring obsolete paths in stages.
-2. Qualify a pretrained VLA's Orin execution path and produce a physically valid teacher pilot before mass collection.
-3. Expand nominal and recovery data, fine-tune, and collect corrections to actual policy errors.
-4. Qualify simulated assembly, measure physical transfer, then adapt with targeted real data and evaluate separately.
-
-The phase plans define completion gates and dependencies. This collection assignment stops at pilot delivery; later work requires a new instruction. The [data specification](knowledge/wiki/data.md) defines the pilot and future data strategy; the [decision log](knowledge/wiki/log.md) records consequential scope changes.
-
-## License and attribution
-
-Project code is available under the [MIT license](LICENSE). Robot asset sources, upstream terms and modifications are documented in [asset provenance](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/blob/v1.0.0/src/vla_lego/sim/assets/robots/alex/PROVENANCE.md). Pretrained models retain their upstream licenses; model and research sources are listed in [references](knowledge/wiki/references.md).
-
-For reproducible bugs or scoped proposals, [open an issue](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/issues) with the relevant command, environment and observed behavior.
+Project code is MIT licensed. Imported block assets retain their [source license and provenance](src/vla_lego/isaac/assets/blocks/PROVENANCE.md); shared robot assets remain owned by the [Alex repository](https://github.com/PatrizioAcquadro/purdue-alex-assets).

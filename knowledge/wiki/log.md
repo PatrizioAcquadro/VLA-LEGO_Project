@@ -1,42 +1,19 @@
 # Decision log
 
-Keep only decisions that change interpretation or future development. Use Git for ordinary edits and commit history.
+Keep decisions that affect interpretation or future development. Git owns ordinary implementation history; topic pages own operating details.
 
-## 2026-10-26 — Shared multi-GPU practice
+## 2026-10-31 — Essential v2 software boundary
 
-Record actual-stage scaling, isolated optional tooling and preservation of the project recipe/resume contract. No installations, jobs or trainer changes. [Compute guidance](cluster.md#shared-multi-gpu-practice).
+Retire MuJoCo/Qwen, tracking and their exclusive CLI/configuration/deployment stack from main after auditing consumers. Preserve v1.0.0, scientific evidence and historical readers/inference. Maintain only the 16-motor/separate-decision learning path; old producer/launcher code is recoverable in Git. [Development](development.md) and [history](history.md) own the resulting software/retrieval boundaries.
 
-## 2026-10-24 — Marker-free pilot delivery boundary
+## 2026-10-31 — Negative campaign and frozen confirmation
 
-- Replace marked/fixed destinations with continuous free bimanual construction sites; later placements track the actual base and physical evaluation accepts any valid location in the declared region.
-- Preserve the previous marked corpus separately and rerun every approved case without markers, retaining scene families and derivatives in their original splits.
-- Deliver the completed 50+10 corpus and stop. Training, expansion, hardware execution and automatic roadmap progression require a new assignment; [data](data.md#approved-5010-collection-milestone) owns measured outcomes.
+The complete corpus and bounded learning campaign are delivered, but failed decision calibration/control do not permit full-task extension or qualification. Final confirmation is exposed; models and thresholds remain frozen, and future development needs independent evaluation cases. [Models](models.md) owns counts and interpretation.
 
-## 2026-10-23 — Alex003 bimanual assembly roadmap
+## 2026-10-26 — Separate decisions and measured scaling
 
-- Replace the old 22 subphases with nine outcome-driven phases: cooperative five-block tower in Isaac, then Purdue Alex003 with VLA inference entirely on Orin. This supersedes the earlier model and phase-planning direction below.
-- Reuse shared Alex003, WSG32/UMI and head ZED assets. Design hardware-faithful interfaces rather than retaining Alex V1 tensor dimensions, mandatory four views or a fixed chunk. Keep legacy code until replacements work.
-- Prefer robot-pretrained GR00T N1.7 with SmolVLA as compact alternative. Resolve Orin stack and physical WSG32 feasibility before large-scale collection.
-- Make public-data selection, nominal/recovery/stop coverage and policy-driven corrections central. Use RGB-Objects for printable geometry; measure the prints. Real adaptation follows a separately measured transfer baseline.
-- Prioritize reliable task performance over mandatory benchmark replication or paper studies. The revision changes documentation only, with local commits and no push or execution of future phases.
-- Close the current project with the qualified five-block system and repeatable handoff. Further structures/insertion/LEGO are optional; the model–pilot handoff and ownership of measured design decisions are explicit prerequisites for scaling.
+Keep task completion/abstention outside the 16 motor coordinates, with causal sensor history and independently calibrated terminal calls. Preserve motor recipe, update accounting and checkpoint/resume semantics. Additional GPUs require measured useful throughput and ownership; [contracts](contracts.md) and [compute](cluster.md#shared-multi-gpu-practice) own the details.
 
-## 2026-10-23 — Earlier maintained scope and task change
+## 2026-10-23/24 — Task, ownership and marker-free data
 
-- Start with lightweight variable-size bricks and gravity-based pick/place/stack tasks. Defer real LEGO studs, press-fit and retention to a separate extension.
-- Retire synthetic training/evaluation and their exclusive consumers. Build the next trainer around real robot demonstrations and the maintained Qwen/VLA components.
-- Consolidate presentation diagnostics into `vla-demo`; label prearranged layouts and untrained model outputs explicitly.
-- Make the wiki and all 22 reconciled phase plans canonical. Preserve important failed/skipped historical outcomes and asset provenance; recover ordinary old drafts through Git.
-- Keep assistant guidance local and ignored. Work remains on the requested feature branch with local commits; no remote integration or publication is part of this audit.
-
-## 2026-10-23 — Source layout and feature-branch publication
-
-- Consolidate runtime code, Hydra configuration and assets under `src/vla_lego`; keep CLI names and simulation/model contracts unchanged.
-- Group tests by subsystem and keep repository utilities in `scripts/`. Use installed-package imports and verify the wheel inventory against `src/`.
-- Run CI on feature-branch pushes. Publishing remains separately gated. The user authorized pushing the requested feature branch; main integration is still outside scope.
-
-## 2026-10-23 — Essential root and main-only development
-
-- After the user’s merge, keep main as the only branch. Preserve all removed branch histories in a local verified bundle, including the unmerged README badge commit from the old CI test branch.
-- Keep six conventional root files; move container definitions into `infra/containers` with a Dockerfile-specific context allowlist. Remove duplicate root guides, environment examples and an unused Python patch-version pin.
-- Keep agent TODO checklists local and ignored, with durable development plans in the nine canonical phase pages.
+Target an ordered cooperative five-block tower in Isaac, then Purdue Alex with all learned online inference on Orin. Shared WSG32/UMI/ZED assets belong to Alex. Use robot-pretrained policies, grouped task data and physically verified corrections; distinguish teacher, learned and qualified evidence. Continuous free construction sites replace visible markers/fixed destinations. Human preparation between attempts is allowed; assistance during an autonomous attempt is counted. [Roadmap](implementation_phases/index.md), [data](data.md) and [validation](validation.md) define completion. Further structures/insertion/LEGO remain optional follow-on scope.

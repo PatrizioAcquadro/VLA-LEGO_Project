@@ -1,32 +1,39 @@
 # Historical findings and retired work
 
-Ordinary code, plans and run-specific instructions are retained by Git. The earlier cleanup's source baseline is `c8e0bcd36550d740801dc0bb33b2fc19e5e8a0de`; historical paths below can be read with `git show REV:path` without restoring obsolete code into the active tree.
+Ordinary source, plans and run instructions remain in Git. `v1.0.0` fixes commit `445536818b399f456a38aea16e788c3d94da59de`; it preserves the retired MuJoCo/Alex V1/EZGripper, Qwen, Hydra, tracking, five CLI commands and deployment infrastructure. Main is unreleased v2 development. No source history or released tag was rewritten by the v2 cleanup.
 
 ## Consequential findings
 
-| Historical source at baseline | Finding to preserve | Current interpretation |
-|---|---|---|
-| `docs/phase1.1-assessment.md` | March 3 assessment called the seven robot integration sections complete; initially used two views. | The legacy MuJoCo camera contract later became four views. Neither that contract nor a completion label qualifies Alex003 hardware. |
-| `docs/kinematics-validation-report.md` | Self-consistency, symmetry, workspace and joint-axis checks passed. Independent SDK FK was skipped because the original full-inertia encoding failed to load. | Keep the skipped comparison open; self-consistency is not independent parity. |
-| `docs/contact-tuning-notes.md`, `docs/press-fit-spec.md` | Pure contact retained about 0.06 N/stud against an original 0.3 N/stud target. Thresholds were later relaxed; hybrid retention added a weld/spec proxy. | Original material-faithful retention was not demonstrated. Proxy success is distinct. Neither result qualifies real LEGO or current bricks. |
-| `docs/phase3.1-gpu-validation.md`, `docs/phase3.1-3.2-report.md` | RTX 4090 backbone/head component checks and memory observations; A100 characterization remained pending. | Historical measurements only. Old dependency/config descriptions, training feasibility estimates and Phase 3.3 references are superseded by current plans. |
-| Former random dataset/Transformer/trainer/evaluator and cluster jobs | Infrastructure exercised synthetic tensors and toy checkpoints. | Retired because it did not train or evaluate the maintained VLA on a real task. Its multi-GPU results do not qualify a future VLA trainer. |
+| Earlier evidence | Finding and continuing interpretation |
+|---|---|
+| MuJoCo kinematics | Self-consistency/symmetry checks passed; independent SDK FK parity was unavailable because the original inertia encoding failed to load. Self-consistency is not independent validation. |
+| LEGO contact experiments | Pure contact retained about 0.06 N/stud against the original 0.3 N/stud target. Later weld/spec proxies did not establish material-faithful retention or current physical LEGO capability. |
+| Synthetic trainer/evaluator | Toy tensors and checkpoints exercised infrastructure, not maintained task learning. Their multi-GPU results do not qualify the SmolVLA trainer. |
+| Qwen/model/package checks | Historical component GPU and installed-package evidence remains tied to its original revision; it does not qualify Isaac/Alex003, Orin or the current task. |
+| Ninth native tower reference | Exact replay preserved the original velocity-gate failure; explicit functional displacement reassessment passed while retaining the negative original. Small solver microvelocities are distinct from physical drift. |
+| Frozen collection repairs | Whole-original physical/data/image proof admits only the exact exercised runtime. Component-only, unexercised or over-quota variants remain separate. |
 
-Robot extraction sources and transformations remain fully tracked in [asset provenance](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/blob/v1.0.0/src/vla_lego/sim/assets/robots/alex/PROVENANCE.md). They have a continuing scientific and maintenance purpose.
+Legacy robot attribution remains at `v1.0.0:src/vla_lego/sim/assets/robots/alex/PROVENANCE.md`. Retained RGB-Objects attribution remains [beside the active block assets](../../src/vla_lego/isaac/assets/blocks/PROVENANCE.md). Raw/native evidence and producer snapshots are preserved outside Git; [compute](cluster.md) identifies storage.
 
-## Completed repository cleanup
+## Earlier learning results
 
-The earlier cleanup retired synthetic training/evaluation and LEGO retention mechanisms, consolidated diagnostics, and moved the maintained runtime into one installable namespace. Its source-layout, package and container results remain in [validation](validation.md); consequential decisions remain in the [log](log.md).
+| Experiment | Preserved outcome |
+|---|---|
+| 50+10 marker-free pilot, step zero versus selected 70k | Both fail all ten development cases: six nominal, three conditional recovery and one stop. All twenty attempts executed once; trained false abstention/completion remain failures. Lower offline error did not become task success. |
+| Correction cohort, iteration-02 | Four-case reviews at 5k/15k/30k remain task failures. A 5k wrong-order red-prism lift and a 30k correct first-cube lift/drop are component evidence, not assembly. |
+| Jaw overlap, iteration-03 | The frozen 30k candidate improves one TRAIN correct-piece hold to 9.74 cm/3.3 s before dropping it. No placement/tower; held-out first-piece acquisition remains absent. |
+| Paired-instruction cohort, iteration-04 | At 15k one TRAIN case autonomously picks, carries and releases the first requested piece, then falsely declares the whole tower complete. No task promotion. The 30k review loses acquisition; all four remain failed. |
+| Expanded campaign | Current 20k and historical i04-15k each score 0/20. [Models](models.md#expanded-corpus-learning-assignment--october-26-2026) owns this final result and comparison limits. |
 
-The completed implementation specification is recoverable at `445536818b399f456a38aea16e788c3d94da59de:knowledge/repository-cleanup.md`. Its former branch/publication permissions and phase numbering are historical, not instructions for future work. Ordinary cleanup chronology is kept in Git rather than duplicated in the active wiki.
+The original pilot panel used two development families and one seed each; these small panels do not establish population rates or Phase 6 generalization. Conditional teacher progress and unsupported initial blocks are not learned placements. Detailed sources remain in `outputs/pilot-training-20261024/report.md` and the `outputs/policy-repair-20261025/iteration-*` reports, observations, traces, videos and checkpoint archives.
 
-## Recovering original plans
+## Retrieving retired source
 
 ```bash
-git show c8e0bcd36550d740801dc0bb33b2fc19e5e8a0de:docs/roadmap/phase1.2.md
-git show c8e0bcd36550d740801dc0bb33b2fc19e5e8a0de:docs/roadmap/phase2.1.md
-git show 4670ec5ca1d70fac50791cd24139c76aaf134747:docs/roadmap/phase0.2.md
-git show 57e3ef3903ab16d41adc544a8651b73979ad7eff:docs/roadmap/phase1.1.md
+git show v1.0.0:src/vla_lego/sim/assets/robots/alex/PROVENANCE.md
+git show v1.0.0:knowledge/repository-cleanup.md
+git show c6f7fe2:src/vla_lego/pretrained/train.py
+git show c6f7fe2:src/vla_lego/pretrained/pilot_training_data.py
 ```
 
-The other detailed plans `phase2.2`, `phase2.3`, `phase3.1`, `phase3.2`, `phase4.1` and `phase4.2` also exist at the baseline under `docs/roadmap/`. The reconciled 22-subphase MuJoCo/Qwen roadmap is recoverable at `445536818b399f456a38aea16e788c3d94da59de:knowledge/wiki/implementation_phases/`. The [current nine-phase roadmap](implementation_phases/index.md) replaces that sequence rather than preserving its numbering or completion labels. Draft layouts, tuning procedures and obsolete recipes are not copied into a second archive.
+The former 22-subphase roadmap is available at `v1.0.0:knowledge/wiki/implementation_phases/`; the [nine-phase roadmap](implementation_phases/index.md) supersedes its numbering and completion labels. Earlier assessments/contact reports are recoverable at `c8e0bcd:docs/`. Do not restore run-specific code, permissions or stale operating instructions as current requirements.

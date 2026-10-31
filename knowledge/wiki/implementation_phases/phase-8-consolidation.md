@@ -15,7 +15,7 @@ Finish replacement-dependent cleanup from Phase 0. Preserve essential attributio
 - Deliver the working task/printed catalog, calibration, collection/adaptation method and selected policy with its complete deployment contract.
 - Provide the data or permitted access/generation route, training/deployment requirements, qualification outcomes and known limits.
 - Make setup, episode preparation, execution, stopping and between-episode reset reproducible by another operator.
-- Retire superseded MuJoCo, copied robot assets, custom model experiments and unused orchestration once their maintained roles are replaced.
+- Verify that retired software remains recoverable through the fixed v1 baseline/Git and that the active package contains only maintained task, data, learning and evaluation workflows.
 - Record an optional progression: gravity walls/bridges, then large tolerant male–female insertions, then LEGO. Each extension needs its own physical task, data and qualification design.
 
 ## Expected result
