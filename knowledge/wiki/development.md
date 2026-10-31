@@ -24,7 +24,7 @@ make package
 
 The maintained suite protects recording masks, train/development separation, control/planning constraints, task decisions, evaluation accounting, checkpoint retention and offline reporting. Small doubles isolate these contracts; they do not establish physical execution or model behavior. FFmpeg is required for the lossless RGB roundtrip test; an unavailable codec is reported as a skip. Meaningful model/renderer checks use the actual GPU and compatible native environment.
 
-The package check builds an sdist, builds its wheel, installs outside the checkout and compares the complete runtime/asset inventory against `src/`. It checks installed imports, block geometry, licenses, task construction and maintained module help. It reuses caller runtime dependencies and does not claim fresh dependency resolution or native simulation qualification.
+The package check builds an sdist, builds its wheel, installs outside the checkout and compares the complete runtime/asset inventory against `src/`. It checks installed imports, block geometry, licenses, task construction and maintained module help. It reuses caller runtime dependencies, preserves the interpreter build and forces installation even when the parent has the same package version. It does not claim fresh dependency resolution or native simulation qualification.
 
 ## Layout and changes
 

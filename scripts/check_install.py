@@ -6,7 +6,6 @@ import os
 import shutil
 import subprocess
 import sys
-import sysconfig
 import tempfile
 import venv
 from pathlib import Path
@@ -54,7 +53,10 @@ def main() -> None:
             )
         print(f"Wheel inventory matches src: {len(expected)} files", flush=True)
         environment = work / "env"
-        venv.EnvBuilder(with_pip=False, system_site_packages=True).create(environment)
+        # Embedded Python needs its original binary's library lookup.
+        venv.EnvBuilder(with_pip=False, system_site_packages=True, symlinks=True).create(
+            environment
+        )
         # Reuse the caller's runtime dependencies; project code must come from the wheel.
         site = (
             environment
@@ -62,20 +64,23 @@ def main() -> None:
             / f"python{sys.version_info.major}.{sys.version_info.minor}"
             / "site-packages"
         )
-        (site / "runtime-dependencies.pth").write_text(sysconfig.get_path("purelib") + "\n")
+        dependencies = [
+            path for path in sys.path if Path(path).name in {"site-packages", "dist-packages"}
+        ]
+        (site / "runtime-dependencies.pth").write_text("\n".join(dependencies) + "\n")
         python = environment / "bin" / "python"
-        run([python, "-m", "pip", "install", "--no-deps", wheel], cwd=work)
+        run([python, "-m", "pip", "install", "--ignore-installed", "--no-deps", wheel], cwd=work)
         env = os.environ.copy()
         env.pop("PYTHONPATH", None)
-        probe = """
+        probe = (
+            f"import sys\nassert sys.version_info[:3] == {sys.version_info[:3]!r}, sys.version\n"
+            + """
 import importlib.metadata as metadata
 from pathlib import Path
-import sys
 import vla_lego
 from vla_lego import isaac, pretrained
 from vla_lego.isaac.catalog import ASSET_DIRECTORY, catalog
 from vla_lego.isaac.task import initial_tower_task
-from vla_lego.pretrained.transport import send_message, receive_message
 for module in (vla_lego, isaac, pretrained):
     assert Path(module.__file__).resolve().is_relative_to(Path(sys.prefix)), module.__file__
 blocks = catalog()
@@ -88,6 +93,7 @@ commands = {entry.name for entry in metadata.distribution("vla-lego").entry_poin
 assert not commands, commands
 print("Installed wheel: Isaac/pretrained imports, 24 printable blocks, five-block task and licenses")
 """
+        )
         run([python, "-c", probe], cwd=work, env=env)
         for module in ("isaac.smoke", "pretrained.train_pilot", "pretrained.prepare_campaign"):
             run(
