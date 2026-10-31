@@ -24,6 +24,7 @@ from vla_lego.pretrained.campaign_evaluation import (
     run_case_once,
     total_probe_ticks,
 )
+from vla_lego.pretrained.decisions import DECISION_NAMES
 from vla_lego.pretrained.pilot_campaign import write_json
 
 
@@ -34,7 +35,8 @@ def main() -> None:
     parser.add_argument("--campaign-cases", type=Path, required=True)
     parser.add_argument("--corpus", type=Path, required=True)
     parser.add_argument("--checkpoint", type=Path, required=True)
-    parser.add_argument("--decision-checkpoint", type=Path, required=True)
+    parser.add_argument("--decision-checkpoint", type=Path)
+    parser.add_argument("--historical-reference", action="store_true")
     parser.add_argument("--lerobot-python", type=Path, required=True)
     parser.add_argument("--cache-dir", type=Path, required=True)
     parser.add_argument("--results-cache", type=Path, required=True)
@@ -48,6 +50,13 @@ def main() -> None:
     parser.add_argument("--runtime-evidence", type=Path, required=True)
     parser.add_argument("--write-control-gate", type=Path)
     args = parser.parse_args()
+    if args.historical_reference:
+        if args.panel != "final_confirmation" or args.decision_checkpoint:
+            parser.error(
+                "The historical reference is final-comparison only, with embedded decisions"
+            )
+    elif args.decision_checkpoint is None:
+        parser.error("Current campaign candidates require their separate decision checkpoint")
     if args.write_control_gate and args.panel != "single_block_control":
         parser.error("Only the single-block control can write its advancement gate")
     entries = admitted_entries(args.corpus)
@@ -59,6 +68,13 @@ def main() -> None:
         if any(entry[key] != row[key] for key in ("partition", "category", "recording")):
             raise ValueError("The physical panel differs from the admitted source")
     root = Path(__file__).resolve().parents[1]
+    if args.historical_reference:
+        weights = args.checkpoint.resolve()
+        if (weights / "pretrained_model").is_dir():
+            weights /= "pretrained_model"
+        interface = json.loads((weights / "alex_interface.json").read_text())
+        if interface.get("task_decision_names") != list(DECISION_NAMES):
+            raise ValueError("The historical reference must declare its two embedded decisions")
     binding = execution_binding(
         root, args.checkpoint.resolve(), args.decision_checkpoint, args.protocol
     )
@@ -66,9 +82,10 @@ def main() -> None:
     for name in ("ISAAC_SIM_DIR", "ISAAC_LAB_DIR", "ALEX_ASSETS_ROOT"):
         native[name] = str(Path(os.environ[name]).resolve(strict=True))
     binding.update(native_environment=native, runtime_evidence=file_digest(args.runtime_evidence))
-    identity = (
-        file_digest(args.decision_checkpoint)[:12] + "-" + binding["motor/model.safetensors"][:12]
+    head_identity = (
+        file_digest(args.decision_checkpoint)[:12] if args.decision_checkpoint else "legacy"
     )
+    identity = head_identity + "-" + binding["motor/model.safetensors"][:12]
     cache = args.results_cache.resolve() / identity
     args.output_dir.mkdir(parents=True, exist_ok=True)
     with (
@@ -129,8 +146,6 @@ def main() -> None:
                             "tower",
                             "--checkpoint",
                             str(args.checkpoint.resolve()),
-                            "--decision-checkpoint",
-                            str(args.decision_checkpoint.resolve()),
                             "--lerobot-python",
                             str(args.lerobot_python.absolute()),
                             "--cache-dir",
@@ -157,9 +172,16 @@ def main() -> None:
                             "--seed",
                             str(case["seed"]),
                         ]
+                        if args.decision_checkpoint:
+                            command += [
+                                "--decision-checkpoint",
+                                str(args.decision_checkpoint.resolve()),
+                            ]
                         # Never retry an existing directory, even after setup or process failure.
                         run_case_once(directory, command)
-                    rows.append(outcome(case, directory))
+                    rows.append(
+                        outcome(case, directory, historical_reference=args.historical_reference)
+                    )
                     write_json(args.output_dir / "panel-results.json", rows)
             finally:
                 write_json(
@@ -173,6 +195,7 @@ def main() -> None:
                         "automatic_retries": 0,
                         "categories": panel_summary(rows),
                         "qualification": False,
+                        "historical_reference": args.historical_reference,
                     },
                 )
             if args.write_control_gate:

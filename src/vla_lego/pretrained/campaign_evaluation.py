@@ -9,6 +9,8 @@ import subprocess
 from collections import Counter
 from pathlib import Path
 
+from vla_lego.pretrained.decisions import DECISION_NAMES
+
 PANEL_COUNTS = {
     "single_block_control": {"single_block": 10},
     "intermediate_calibration": {"single_block": 2, "tower": 2, "recovery": 1, "stop": 1},
@@ -64,7 +66,7 @@ def total_probe_ticks(case: dict) -> int:
     return int(case["autonomous_tick_budget"] + case["teacher_recovery_prefix_ticks"] + 40)
 
 
-def execution_binding(root: Path, checkpoint: Path, decision: Path, protocol: Path) -> dict:
+def execution_binding(root: Path, checkpoint: Path, decision: Path | None, protocol: Path) -> dict:
     """A cached reference is reusable only with identical model, head and runtime."""
     weights = (
         checkpoint / "pretrained_model"
@@ -79,7 +81,7 @@ def execution_binding(root: Path, checkpoint: Path, decision: Path, protocol: Pa
         for path in sorted(weights.rglob("*"))
         if path.is_file()
     }
-    files["decision"] = file_digest(decision)
+    files["decision"] = file_digest(decision) if decision else "historical_embedded_decisions"
     files["panel_protocol"] = file_digest(protocol)
     for path in sorted((root / "src/vla_lego").rglob("*.py")):
         files[str(path.relative_to(root))] = file_digest(path)
@@ -114,7 +116,7 @@ def run_case_once(directory: Path, command: list[str]) -> None:
             (directory / "report.json").write_text(json.dumps({"error": error}) + "\n")
 
 
-def trace_progress(directory: Path, task: dict) -> dict:
+def trace_progress(directory: Path, task: dict, *, historical_reference=False) -> dict:
     """Evaluator-only acquisition/release events; these never replace task scoring."""
     from vla_lego.isaac.catalog import BlockSpec
     from vla_lego.isaac.environment import TABLE_TOP
@@ -151,7 +153,8 @@ def trace_progress(directory: Path, task: dict) -> dict:
             command_rows += "tick" in row
             if "tick" in row:
                 action = row.get("learned_action", [])
-                finite_motor_trace &= len(action) == 16 and all(math.isfinite(v) for v in action)
+                width = 18 if historical_reference else 16
+                finite_motor_trace &= len(action) == width and all(math.isfinite(v) for v in action)
             blocks, robot = row["blocks"], row["robot"]
             paths = robot["robot_contact_paths"]
             if sum(path.rsplit("/", 1)[-1] == "HEAD_LINK" for path in paths) != 1:
@@ -271,7 +274,7 @@ def _read_report(path: Path) -> dict:
         return {"error": str(error)}
 
 
-def outcome(case: dict, directory: Path) -> dict:
+def outcome(case: dict, directory: Path, *, historical_reference=False) -> dict:
     """A terminal word or teacher prefix alone never establishes learned success."""
     report_path = directory / "rollout/report.json"
     result = _read_report(report_path)
@@ -292,9 +295,16 @@ def outcome(case: dict, directory: Path) -> dict:
         and (not conditional or result.get("recovery_fault_present") is True)
         and result.get("teacher_prefix_ticks", 0) == case["teacher_recovery_prefix_ticks"]
     )
-    valid_interface = result.get("separate_categorical_decisions") is True
+    separate_decisions = result.get("separate_categorical_decisions") is True
+    valid_interface = separate_decisions or (
+        historical_reference
+        and result.get("separate_categorical_decisions") is False
+        and result.get("task_decision_names") == list(DECISION_NAMES)
+    )
     try:
-        progress = trace_progress(directory, result.get("task", {}))
+        progress = trace_progress(
+            directory, result.get("task", {}), historical_reference=historical_reference
+        )
     except (OSError, ValueError, KeyError, TypeError, IndexError) as error:
         progress = {"available": False, "error": str(error)}
     executed = result.get("executed_ticks", 0)
@@ -329,7 +339,9 @@ def outcome(case: dict, directory: Path) -> dict:
         "teacher_assisted": conditional,
         "teacher_prefix_ticks": result.get("teacher_prefix_ticks"),
         "initialization_matches_protocol": valid_start,
-        "separate_categorical_decisions": valid_interface,
+        "separate_categorical_decisions": separate_decisions,
+        "historical_reference": historical_reference,
+        "decision_interface_valid": valid_interface,
         "terminal": terminal,
         "false_completion": terminal == "complete" and not physical,
         "false_abstention": terminal == "abstain" and case["category"] != "stop",
@@ -372,7 +384,12 @@ def control_gate(rows: list[dict], checkpoint: Path) -> dict:
     if (
         len(rows) != 10
         or len({row["case"] for row in rows}) != 10
-        or any(row["category"] != "single_block" or row["teacher_assisted"] for row in rows)
+        or any(
+            row["category"] != "single_block"
+            or row["teacher_assisted"]
+            or row.get("historical_reference", False)
+            for row in rows
+        )
         or Counter(row["start"] for row in rows) != {"familiar": 5, "held_out": 5}
         or {row["active_arm"] for row in rows} != {"left", "right"}
         or checkpoint.resolve().name != "020000"

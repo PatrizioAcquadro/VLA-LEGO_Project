@@ -188,3 +188,38 @@ def test_control_gate_keeps_all_ten_denominators_and_actual_checkpoint_step(tmp_
     (checkpoint / "state.json").write_text(json.dumps({"step": 10}))
     with pytest.raises(ValueError, match="20k"):
         control_gate(rows, checkpoint)
+
+
+def test_historical_reference_is_explicit_and_cannot_open_control_gate(tmp_path):
+    value = report(tmp_path)
+    value.update(
+        separate_categorical_decisions=False, task_decision_names=["TASK_COMPLETE", "TASK_ABSTAIN"]
+    )
+    (tmp_path / "rollout/report.json").write_text(json.dumps(value))
+    trace = tmp_path / "rollout/trace.jsonl"
+    rows = [json.loads(line) for line in trace.read_text().splitlines()]
+    for row in rows:
+        if "tick" in row:
+            row["learned_action"] += [1.0, 0.0]
+    trace.write_text("".join(json.dumps(row) + "\n" for row in rows))
+    assert not outcome(case(), tmp_path)["physical_success"]
+    reference = outcome(case(), tmp_path, historical_reference=True)
+    assert reference["physical_success"] and reference["historical_reference"]
+    assert not reference["separate_categorical_decisions"]
+    checkpoint = tmp_path / "020000"
+    checkpoint.mkdir()
+    (checkpoint / "state.json").write_text(json.dumps({"step": 20000}))
+    panel = [
+        {
+            **reference,
+            "case": str(i),
+            "start": "familiar" if i < 5 else "held_out",
+            "active_arm": "left" if i % 2 else "right",
+        }
+        for i in range(10)
+    ]
+    with pytest.raises(ValueError, match="20k"):
+        control_gate(panel, checkpoint)
+    value["evaluation"]["passed"] = False
+    (tmp_path / "rollout/report.json").write_text(json.dumps(value))
+    assert not outcome(case(), tmp_path, historical_reference=True)["physical_success"]
