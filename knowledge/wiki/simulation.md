@@ -39,7 +39,7 @@ result = evaluate_goal(episode, goal)
 assert result.success
 ```
 
-`load_scene("alex_upper_body")` returns an `MjModel`; construct `MjData(model)` separately. Asset paths resolve from the installed package, including external working directories. Preserve the [robot provenance](../../src/vla_lego/sim/assets/robots/alex/PROVENANCE.md).
+`load_scene("alex_upper_body")` returns an `MjModel`; construct `MjData(model)` separately. Asset paths resolve from the installed package, including external working directories. Preserve the [robot provenance](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/blob/v1.0.0/src/vla_lego/sim/assets/robots/alex/PROVENANCE.md).
 
 ## Focused diagnostics
 

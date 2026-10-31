@@ -12,7 +12,7 @@ The target is an ordered five-block tower built by **Alex003**, selecting the re
 
 | Alex in MuJoCo | Lightweight-brick tower |
 |:---:|:---:|
-| ![Alex upper body and two EZGrippers in the MuJoCo scene](knowledge/media/alex-mujoco.png) | ![Three lightweight cuboids stacked on the simulation table](knowledge/media/brick-tower.png) |
+| ![Alex upper body and two EZGrippers in the MuJoCo scene](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/blob/v1.0.0/knowledge/media/alex-mujoco.png) | ![Three lightweight cuboids stacked on the simulation table](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/blob/v1.0.0/knowledge/media/brick-tower.png) |
 
 *Actual frames from `vla-demo`. The tower is initialized in its target layout for a physics diagnostic; it is not assembled by the robot.*
 
@@ -93,6 +93,6 @@ The phase plans define completion gates and dependencies. This collection assign
 
 ## License and attribution
 
-Project code is available under the [MIT license](LICENSE). Robot asset sources, upstream terms and modifications are documented in [asset provenance](src/vla_lego/sim/assets/robots/alex/PROVENANCE.md). Pretrained models retain their upstream licenses; model and research sources are listed in [references](knowledge/wiki/references.md).
+Project code is available under the [MIT license](LICENSE). Robot asset sources, upstream terms and modifications are documented in [asset provenance](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/blob/v1.0.0/src/vla_lego/sim/assets/robots/alex/PROVENANCE.md). Pretrained models retain their upstream licenses; model and research sources are listed in [references](knowledge/wiki/references.md).
 
 For reproducible bugs or scoped proposals, [open an issue](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/issues) with the relevant command, environment and observed behavior.

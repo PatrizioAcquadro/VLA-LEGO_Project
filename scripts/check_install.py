@@ -72,39 +72,30 @@ import importlib.metadata as metadata
 from pathlib import Path
 import sys
 import vla_lego
-from vla_lego import configs, models, sim, tracking
-from hydra import compose, initialize_config_module
-from vla_lego.sim.asset_loader import SCENES_DIR, load_scene
-from vla_lego.sim.bricks.episode import EpisodeManager
-from vla_lego.sim.bricks.task import make_goal, evaluate_goal
-for module in (vla_lego, configs, models, sim, tracking):
+from vla_lego import isaac, pretrained
+from vla_lego.isaac.catalog import ASSET_DIRECTORY, catalog
+from vla_lego.isaac.task import initial_tower_task
+from vla_lego.pretrained.transport import send_message, receive_message
+for module in (vla_lego, isaac, pretrained):
     assert Path(module.__file__).resolve().is_relative_to(Path(sys.prefix)), module.__file__
-with initialize_config_module(config_module="vla_lego.configs", version_base=None):
-    cfg = compose(config_name="config")
-assert cfg.model.action_head.action_dim == 17
-scenes = sorted(SCENES_DIR.glob("*.xml"))
-assert len(scenes) >= 4
-for scene in scenes:
-    load_scene(scene.name)
-episode = EpisodeManager()
-goal = make_goal(episode.bricks)
-episode.reset(layout=goal)
-assert evaluate_goal(episode, goal).success
+blocks = catalog()
+assert len(blocks) == 24
+assert all(min(block.dimensions_m) > 0 and block.mass_kg > 0 for block in blocks)
+assert (ASSET_DIRECTORY / "PROVENANCE.md").is_file()
+assert (ASSET_DIRECTORY / "LICENSE_RGB_OBJECTS.txt").is_file()
+assert len(initial_tower_task().targets) == 5
 commands = {entry.name for entry in metadata.distribution("vla-lego").entry_points}
-assert commands == {"vla-viewer", "vla-lint-assets", "vla-gen-bricks", "vla-demo", "vla-validate-model"}, commands
-print(f"Installed wheel: {len(scenes)} scenes, configuration, tracking, brick physics and five CLIs")
+assert not commands, commands
+print("Installed wheel: Isaac/pretrained imports, 24 printable blocks, five-block task and licenses")
 """
         run([python, "-c", probe], cwd=work, env=env)
-        for name in ("vla-viewer", "vla-gen-bricks", "vla-demo", "vla-validate-model"):
+        for module in ("isaac.smoke", "pretrained.train_pilot", "pretrained.prepare_campaign"):
             run(
-                [environment / "bin" / name, "--help"], cwd=work, env=env, stdout=subprocess.DEVNULL
+                [python, "-m", "vla_lego." + module, "--help"],
+                cwd=work,
+                env=env,
+                stdout=subprocess.DEVNULL,
             )
-        run([environment / "bin" / "vla-lint-assets"], cwd=work, env=env)
-        run(
-            [environment / "bin" / "vla-gen-bricks", "--output-dir", work / "bricks"],
-            cwd=work,
-            env=env,
-        )
 
 
 if __name__ == "__main__":

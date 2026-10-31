@@ -49,7 +49,7 @@ The sections below describe the retained implementation only. They remain useful
 
 ### Robot and control
 
-Alex has a fixed base at world `(0,0,1)` m, 15 spine/arm joints and eight coupled finger joints, with 17 actuators. World axes are X forward, Y left, Z up. Quaternions use MuJoCo `wxyz`; tool poses are in the world frame. Source asset provenance remains [beside the robot](../../src/vla_lego/sim/assets/robots/alex/PROVENANCE.md).
+Alex has a fixed base at world `(0,0,1)` m, 15 spine/arm joints and eight coupled finger joints, with 17 actuators. World axes are X forward, Y left, Z up. Quaternions use MuJoCo `wxyz`; tool poses are in the world frame. Source asset provenance remains [beside the robot](https://github.com/PatrizioAcquadro/VLA-LEGO_Project/blob/v1.0.0/src/vla_lego/sim/assets/robots/alex/PROVENANCE.md).
 
 The normalized action is 17-D: spine; seven left-arm joints; seven right-arm joints; left gripper; right gripper. Arm values lie in `[-1,1]` and represent scaled joint increments; grippers use `[0,1]`, closed to open. Canonical arm ordering follows `ARM_ACTUATOR_NAMES` in `src/vla_lego/sim/action_space.py`: spine, shoulder Y/X/Z, elbow Y, wrist Z/X, gripper Z for each arm.
 

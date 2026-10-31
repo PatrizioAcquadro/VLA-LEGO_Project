@@ -1,6 +1,0 @@
-# Dependency-only context; source, evidence and credentials stay outside the image.
-**
-!pyproject.toml
-!scripts/
-!scripts/container_dependencies.py
-!scripts/container-entrypoint.sh
