@@ -4,6 +4,8 @@
 
 Turn the selected pretrained VLA and initial Phase 4 corpus into an autonomous assembly candidate, then improve it through actual rollout errors and targeted corrections.
 
+The expanded 620-episode corpus and 30 actual-policy corrections are admitted. The separate temporal classifier has completed its bounded 20k updates but failed calibration; confirmation predictions remain unexposed. An independent 20k motor positive-control worker now starts on Blackwell. The failed decision objective, actual ten-case physical control and final comparison remain open; [Models](../models.md#expanded-corpus-learning-assignment--october-26-2026) owns the current learning results and limits.
+
 ## Design choices
 
 Use the selected model's supported adaptation path. Start with the least expensive adaptation scope that can learn the task; widen capacity only for an observed limitation. Use deliberate source/case weights, preserving useful nominal behavior while adding recovery and real adaptation later.
