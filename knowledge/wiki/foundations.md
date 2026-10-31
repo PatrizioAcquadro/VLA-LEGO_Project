@@ -25,6 +25,8 @@ bash scripts/isaac-run.sh -m vla_lego.isaac.tower_reference --help
 
 For declared expanded cases, provide `--campaign-cases`, `--case`, a fresh output directory, cache directory, `--record` and optionally `--rgb-storage ffv1`. The case defines family/partition, instruction, variation and correction mechanism. Historical CSV cases and exact-prefix continuation remain supported where required by existing evidence. `pilot_stop`/`stop_reference` represent justified inability without replacing a missing requested piece with an easier task.
 
+Policy correction windows retain both the requested mechanism and the physically observed error. An actual bilateral lift of another piece remains a wrong-piece event even when a missed grasp was requested. Released prefix loss requires settled evidence before rebuilding. Recovery uses measured source poses, admits displaced-piece approaches and empty-hand retirement before motion, and withdraws the stabilizer before rebuilding. These maintained paths and their regression tests do not grant new corpus admission or whole-task qualification.
+
 Admit a recording only after physical completion, full sensor/action/mask readback and image review. Keep the exact executed generator with each attempt. A component repair, reset-state diagnostic or successful over-quota attempt does not promote a source revision or fill a different case. [Data](data.md#teacher-and-demonstration-generation) owns corpus admission and coverage.
 
 ## Replay and independent review

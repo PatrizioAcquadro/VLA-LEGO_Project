@@ -11,7 +11,7 @@
 | Final physical simulation comparison | Current 0/20; historical reference 0/20; all forty attempts executed once | No qualified best; confirmation predictions are exposed and models/thresholds remain frozen |
 | Software | Isaac collection/readers, replay, learning, inference, evaluation and portable checks maintained | Software tests do not qualify native physics or learned task behavior |
 
-[Data](data.md) owns the 2,528,001-frame corpus, all 122 collection failures and admission boundaries. [Models](models.md) owns training, calibration and physical comparison results. Teacher prefixes and conditional corrections receive no autonomous-from-start credit. Accepted frozen collection runtimes do not automatically validate every later source variant; unpromoted source integration remains separate.
+[Data](data.md) owns the 2,528,001-frame corpus, all 122 collection failures and admission boundaries. [Models](models.md) owns training, calibration and physical comparison results. Teacher prefixes and conditional corrections receive no autonomous-from-start credit. Recovery handoffs and route planning are integrated into maintained source and covered by software regression checks. Accepted frozen collection runtimes do not establish whole-task physical success for the current source.
 
 ## Phase status
 
