@@ -69,6 +69,42 @@ def released_prefix(task, states, *, held_index=None, supported_contacts=()):
     return count
 
 
+def _jaw_contact_indices(paths):
+    jaws = {
+        side: [
+            i
+            for i, path in enumerate(paths)
+            if path.rsplit("/", 1)[-1]
+            in (f"{side}_WSG32_NEGATIVE_JAW_LINK", f"{side}_WSG32_POSITIVE_JAW_LINK")
+        ]
+        for side in ("left", "right")
+    }
+    if any(len(ids) != 2 for ids in jaws.values()):
+        raise ValueError("Wrong-piece detection requires both actual named jaws")
+    return jaws
+
+
+def _wrong_piece_lift(task, index, initial, states, jaws):
+    for i, state in enumerate(states):
+        if (
+            task.placements[i].spec == task.placements[index].spec
+            or state["block_pose_w"][2] - initial[i]["block_pose_w"][2] < 0.07
+        ):
+            continue
+        for side, ids in jaws.items():
+            forces = [
+                math.sqrt(sum(v * v for v in state["robot_contact_forces_n"][j])) for j in ids
+            ]
+            if min(forces) > CONTACT_ZERO_N and sum(forces) > 0.5:
+                return {
+                    "object_index": i,
+                    "side": side,
+                    "return_source_xy_m": initial[i]["block_pose_w"][:2],
+                    "lift_m": state["block_pose_w"][2] - initial[i]["block_pose_w"][2],
+                }
+    return None
+
+
 class PolicyIntervention:
     """The teacher may observe errors, but cannot assist while policy commands run."""
 
@@ -261,6 +297,7 @@ class PolicyIntervention:
         initial = [env.task_truth(i) for i in range(len(env.blocks))]
         if released_prefix(task, initial) != case.error_level:
             raise ValueError("Missed-grasp window lacks its supported nominal prefix")
+        jaws = _jaw_contact_indices(env.contact_robot_paths)
         attempts = {}
         acquired = False
         progressed = False
@@ -268,6 +305,9 @@ class PolicyIntervention:
 
         def observe(states):
             nonlocal acquired, progressed
+            wrong = _wrong_piece_lift(task, index, initial, states, jaws)
+            if wrong is not None:
+                return {"observed_mechanism": "wrong_piece", **wrong}
             try:
                 progressed |= released_prefix(task, states) > case.error_level
             except ValueError:
@@ -309,6 +349,30 @@ class PolicyIntervention:
             return None
 
         source, _, after, _ = self._window(reference, task, index, ticks=ticks, stop_when=observe)
+        error = source.get("observed_error")
+        if error and error.get("observed_mechanism") == "wrong_piece":
+            if (
+                source["executed_motor_commands"] < 1
+                or released_prefix(task, after, held_index=error["object_index"])
+                != case.error_level
+            ):
+                raise RuntimeError("Actual wrong-piece lift lacks its recoverable supported prefix")
+            source.update(
+                physically_verified=True,
+                requested_mechanism="missed_grasp",
+                observed_mechanism="wrong_piece",
+                error_basis="actual_bilateral_wrong_piece_lift",
+            )
+            recorder.admit_policy_intervention(source)
+            return {
+                "type": "wrong_piece",
+                "teacher_induced": False,
+                "physically_verified": True,
+                "target_level": case.error_level + 1,
+                "error_end_s": env.time,
+                "policy_source": source,
+                **error,
+            }
         interruption = self._pick_interruption(
             reference, case, task, source, after, acquired=acquired, progressed=progressed
         )
@@ -396,40 +460,15 @@ class PolicyIntervention:
         initial = [env.task_truth(i) for i in range(len(env.blocks))]
         if released_prefix(task, initial) != case.error_level:
             raise ValueError("Wrong-piece window lacks its supported nominal prefix")
-        jaws = {
-            side: [
-                i
-                for i, path in enumerate(env.contact_robot_paths)
-                if path.rsplit("/", 1)[-1]
-                in (f"{side}_WSG32_NEGATIVE_JAW_LINK", f"{side}_WSG32_POSITIVE_JAW_LINK")
-            ]
-            for side in ("left", "right")
-        }
-        if any(len(ids) != 2 for ids in jaws.values()):
-            raise ValueError("Wrong-piece detection requires both actual named jaws")
+        jaws = _jaw_contact_indices(env.contact_robot_paths)
 
         acquired, progressed = False, False
 
         def observe(states):
             nonlocal acquired, progressed
-            for i, state in enumerate(states):
-                if (
-                    task.placements[i].spec == task.placements[index].spec
-                    or state["block_pose_w"][2] - initial[i]["block_pose_w"][2] < 0.07
-                ):
-                    continue
-                for side, ids in jaws.items():
-                    forces = [
-                        math.sqrt(sum(v * v for v in state["robot_contact_forces_n"][j]))
-                        for j in ids
-                    ]
-                    if min(forces) > CONTACT_ZERO_N and sum(forces) > 0.5:
-                        return {
-                            "object_index": i,
-                            "side": side,
-                            "return_source_xy_m": initial[i]["block_pose_w"][:2],
-                            "lift_m": state["block_pose_w"][2] - initial[i]["block_pose_w"][2],
-                        }
+            wrong = _wrong_piece_lift(task, index, initial, states, jaws)
+            if wrong is not None:
+                return wrong
             try:
                 progressed |= released_prefix(task, states) > case.error_level
             except ValueError:
@@ -682,7 +721,11 @@ class PolicyIntervention:
                     prefix = released_prefix(task, states, supported_contacts=allowed)
                 except ValueError:
                     prefix = -1
-                if 1 <= prefix <= case.error_level:
+                settled_prefix_loss = prefix > 0 or all(
+                    math.hypot(*states[i]["block_velocity_w"][:3]) < 0.02
+                    for i in indices[: case.error_level + 1]
+                )
+                if 0 <= prefix <= case.error_level and settled_prefix_loss:
                     released_quiet += 1
                     if released_quiet >= 3:
                         return {

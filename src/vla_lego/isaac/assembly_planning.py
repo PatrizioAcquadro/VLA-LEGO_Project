@@ -7,20 +7,63 @@ import math
 from vla_lego.isaac.environment import TABLE_TOP
 
 
-def pick_route(task, level, block, build_xy, side, cooperative_level, *, grasp_height=0.06):
+def lift_route(block, build_xy, side, *, grasp_height=0.06, displaced=False):
+    """Extract a displaced piece away from the prefix before a high cross-body lift."""
+    lift = block[2] + grasp_height + 0.10
+    if not displaced:
+        return [("lift", [block[0], block[1], lift])]
+    extract = block[2] + grasp_height + 0.04
+    forward = max(block[0], 0.49)
+    outward = build_xy[1] + (0.20 if side == "left" else -0.20)
+    return [
+        ("lift", [block[0], block[1], extract]),
+        ("extract_forward", [forward, block[1], extract]),
+        ("extract_outward", [forward, outward, extract]),
+        ("lift_clear", [forward, outward, lift]),
+    ]
+
+
+def source_route(block, build_xy, side, *, grasp_height=0.06, displaced=False):
+    """Approach a displaced source through the same low corridor used for extraction."""
+    edge = ("edge", [0.40, 0.40 if side == "left" else -0.40, 1.05])
+    approach = ("approach", [block[0], block[1], block[2] + grasp_height + 0.04])
+    descend = ("descend", [block[0], block[1], block[2] + grasp_height])
+    if not displaced:
+        return [edge, ("source_high", [block[0], block[1], 1.02]), approach, descend]
+    low = approach[1][2]
+    forward, outward, _ = lift_route(
+        block, build_xy, side, grasp_height=grasp_height, displaced=True
+    )[2][1]
+    return [
+        edge,
+        ("outward_high", [forward, outward, 1.02]),
+        ("outward_low", [forward, outward, low]),
+        ("source_front", [forward, block[1], low]),
+        approach,
+        descend,
+    ]
+
+
+def pick_route(
+    task, level, block, build_xy, side, cooperative_level, *, grasp_height=0.06, displaced=False
+):
     bottom = TABLE_TOP + sum(target.dimensions_m[2] for target in task.targets[:level])
     height = task.targets[level].dimensions_m[2]
     release = bottom + height / 2 + grasp_height
-    lift = block[2] + grasp_height + 0.10
+    lifting = lift_route(block, build_xy, side, grasp_height=grasp_height, displaced=displaced)
+    raised = lifting[-1][1]
+    lift = raised[2]
     carry = max(lift, release + 0.030)
     retreat = max(release + height / 2 + 0.025, 1.02)
     return [
-        [0.40, 0.40 if side == "left" else -0.40, 1.05],
-        [block[0], block[1], 1.02],
-        [block[0], block[1], block[2] + grasp_height + 0.04],
-        [block[0], block[1], block[2] + grasp_height],
-        [block[0], block[1], lift],
-        [block[0], block[1], carry],
+        *(
+            point
+            for _, point in source_route(
+                block, build_xy, side, grasp_height=grasp_height, displaced=displaced
+            )
+        ),
+        *(point for _, point in lifting),
+        [raised[0], raised[1], carry],
         *(
             [
                 [build_xy[0], build_xy[1] + (y if side == "left" else -y), carry]

@@ -648,6 +648,29 @@ def main() -> None:
                     from vla_lego.isaac.campaign_faults import upright_released_prism
 
                     upright_released_prism(reference, task, index, side)
+                if (
+                    policy_intervention is not None
+                    and "fault" in report
+                    and level > cooperative_level
+                    and not evaluator.result()["cooperation_events"]
+                ):
+                    from vla_lego.isaac.stabilizer_planning import stabilized_level
+
+                    cooperative_level = level
+                    placer_side = side
+                    stabilizer_side = "right" if side == "left" else "left"
+                    stabilizer_y = 0.20 if stabilizer_side == "left" else -0.20
+                    stabilizer_exit_y = 0.40 if stabilizer_side == "left" else -0.40
+                    stabilizer_level = stabilized_level(task, cooperative_level)
+                    report.setdefault("recovery_cooperation", []).append(
+                        {
+                            "placement_level": level + 1,
+                            "stabilized_layer": stabilizer_level + 1,
+                            "stabilizer": stabilizer_side,
+                            "placer": placer_side,
+                            "reason": "no_prior_functional_cooperation",
+                        }
+                    )
                 if level == cooperative_level:
                     stabilizer_withdraw = engage_stabilizer()
                 block = env.task_truth(index)["block_pose_w"][:3]
@@ -664,8 +687,15 @@ def main() -> None:
                         yaw += resting_yaw(env.task_truth(index)["block_pose_w"], target)
                     else:
                         yaw += task.placements[index].yaw_deg
-                    from vla_lego.isaac.assembly_planning import pick_route
+                    from vla_lego.isaac.assembly_planning import pick_route, source_route
 
+                    approach_route = source_route(
+                        block,
+                        build_xy,
+                        side,
+                        grasp_height=grasp_height,
+                        displaced=index in displaced_sources,
+                    )
                     yaw = reference.grasp_yaw(
                         side,
                         yaw,
@@ -677,49 +707,72 @@ def main() -> None:
                             side,
                             cooperative_level,
                             grasp_height=grasp_height,
+                            displaced=index in displaced_sources,
                         ),
                         object_index=index,
+                        grasp_index=len(approach_route) - 1,
+                        linear_from=1 if index in displaced_sources else 2,
                     )
-                for stage, xyz in (
-                    ("edge", [0.40, 0.40 if side == "left" else -0.40, 1.05]),
-                    (
-                        "source_high",
-                        [block[0], block[1], 1.02],
-                    ),
-                    ("approach", [block[0], block[1], block[2] + grasp_height + 0.04]),
-                    ("descend", [block[0], block[1], block[2] + grasp_height]),
-                ):
+                else:
+                    approach_route = [
+                        ("edge", [0.40, 0.40 if side == "left" else -0.40, 1.05]),
+                        (
+                            "source_high",
+                            [block[0], block[1], 1.02],
+                        ),
+                        ("approach", [block[0], block[1], block[2] + grasp_height + 0.04]),
+                        ("descend", [block[0], block[1], block[2] + grasp_height]),
+                    ]
+                for stage, xyz in approach_route:
                     reference.move(
                         f"{prefix}_{stage}",
                         side,
                         xyz,
                         yaw,
-                        linear=pilot_case is not None and stage in ("approach", "descend"),
+                        linear=pilot_case is not None
+                        and (
+                            stage in ("approach", "descend")
+                            or (index in displaced_sources and stage != "edge")
+                        ),
                     )
-                    if stage == "source_high":
+                    if stage == "source_high" or (index in displaced_sources and stage == "edge"):
                         # A policy prefix may leave the jaws closed before the next pick.
                         reference.grip(f"{prefix}_open", side, None)
                 reference.grip(f"{prefix}_grip", side, target.dimensions_m[1])
                 release_z = bottom + target.dimensions_m[2] / 2 + grasp_height
-                lift_z = block[2] + grasp_height + 0.10
+                from vla_lego.isaac.assembly_planning import lift_route
+
+                lifting = lift_route(
+                    block,
+                    build_xy,
+                    side,
+                    grasp_height=grasp_height,
+                    displaced=index in displaced_sources,
+                )
+                lift_z = lifting[-1][1][2]
+                carry_xy = lifting[-1][1][:2]
                 transit_z = release_z + 0.025
-                lift_xyz = [block[0], block[1], lift_z]
-                lift_plan = reference.lift_orientation(side, lift_xyz, yaw) if pilot_case else None
+                lift_plan = (
+                    reference.lift_orientation(side, lifting[-1][1], yaw)
+                    if pilot_case and index not in displaced_sources
+                    else None
+                )
                 if lift_plan:
                     report.setdefault("loaded_lift_replans", {})[prefix] = lift_plan
-                reference.move(
-                    f"{prefix}_lift",
-                    side,
-                    lift_xyz,
-                    yaw,
-                    quaternion_xyzw=lift_plan["quaternion_xyzw"] if lift_plan else None,
-                    linear=pilot_case is not None,
-                    linear_step_m=0.02,
-                )
+                for stage, xyz in lifting:
+                    reference.move(
+                        f"{prefix}_{stage}",
+                        side,
+                        xyz,
+                        yaw,
+                        quaternion_xyzw=lift_plan["quaternion_xyzw"] if lift_plan else None,
+                        linear=pilot_case is not None,
+                        linear_step_m=0.02,
+                    )
                 if env.task_truth(index)["block_pose_w"][2] < block[2] + 0.07:
                     raise RuntimeError(f"No verified contact-only lift at {prefix}")
                 if lift_plan:
-                    reference.move(f"{prefix}_lift_align", side, lift_xyz, yaw)
+                    reference.move(f"{prefix}_lift_align", side, lifting[-1][1], yaw)
                 if (
                     args.campaign_cases
                     and pilot_case
@@ -761,6 +814,7 @@ def main() -> None:
                         yaw = recover_dropped(reference, task, index, side, yaw, replan=True)
                         block = report["fault"]["recovery_source_pose_w"][:3]
                         lift_z = block[2] + grasp_height + 0.10
+                        carry_xy = block[:2]
                     else:
                         report["fault"] = drop_and_recover(
                             reference, pilot_case, task, index, side, yaw
@@ -790,7 +844,7 @@ def main() -> None:
                         reference.move(
                             f"{prefix}_carry_raise",
                             side,
-                            [block[0], block[1], carry_z],
+                            [*carry_xy, carry_z],
                             yaw,
                             linear=True,
                         )
@@ -851,7 +905,11 @@ def main() -> None:
                         )
                         report["correction_source"] = recorder.correction_source
                         recovery_mode = report["fault"].get("recovery_mode")
-                        if recovery_mode == "return_held_then_rebuild":
+                        rebuilding = recovery_mode in (
+                            "rebuild_released_prefix",
+                            "return_held_then_rebuild",
+                        )
+                        if rebuilding:
                             from vla_lego.isaac.campaign_faults import return_held_piece
 
                             if level == cooperative_level:
@@ -864,26 +922,34 @@ def main() -> None:
                                     env.robot.data.joint_pos.torch[0, joint_ids].tolist()
                                 )
                                 stabilizer_grip_floor = None
-                            return_held_piece(reference, task, report["fault"])
+                            if recovery_mode == "return_held_then_rebuild":
+                                return_held_piece(reference, task, report["fault"])
                             if level == cooperative_level:
                                 reference.grip(
                                     "placement_correction_stabilizer_open", stabilizer_side, None
                                 )
                                 reference.hold_targets.pop(stabilizer_side, None)
                                 reference.hold_postures.pop(stabilizer_side, None)
-                                tool = reference.ctrl.pose(stabilizer_side)[0].tolist()
-                                reference.move(
-                                    "placement_correction_stabilizer_clear",
-                                    stabilizer_side,
-                                    [*tool[:2], max(tool[2] + 0.06, stabilizer_clear_z)],
-                                    quaternion_xyzw=tool[3:],
-                                    linear=True,
+                                from vla_lego.isaac.stabilizer_planning import (
+                                    plan_stabilizer_disengagement,
                                 )
-                            verify_support(level - 1, "held placement returned to source")
-                        if recovery_mode in (
-                            "rebuild_released_prefix",
-                            "return_held_then_rebuild",
-                        ):
+
+                                route, rotation = plan_stabilizer_disengagement(
+                                    reference, task, stabilizer_side, stabilizer_clear_z
+                                )
+                                for name, xyz in route:
+                                    reference.move(
+                                        f"placement_correction_stabilizer_{name}",
+                                        stabilizer_side,
+                                        xyz,
+                                        quaternion_xyzw=rotation,
+                                        linear=True,
+                                    )
+                            verify_support(
+                                report["fault"]["completed_levels"] - 1,
+                                "placement recovery retains its supported prefix",
+                            )
+                        if rebuilding:
                             completed = report["fault"]["completed_levels"]
                             # Re-execute the same physical assembly primitives from the loss.
                             remaining = list(enumerate(plan))[completed : level + 1] + remaining
@@ -1010,15 +1076,23 @@ def main() -> None:
                         linear=True,
                         linear_step_m=0.02,
                     )
-                pending_progress_handoff = (
+                pending_policy_handoff = (
                     policy_intervention is not None
                     and pilot_case is not None
-                    and pilot_case.row["mechanism"] == "interrupted_progress"
-                    and level == pilot_case.error_level
                     and "fault" not in report
+                    and (
+                        (
+                            pilot_case.row["mechanism"] == "interrupted_progress"
+                            and level == pilot_case.error_level
+                        )
+                        or (
+                            pilot_case.row["mechanism"] in ("missed_grasp", "wrong_piece")
+                            and level + 1 == pilot_case.error_level
+                        )
+                    )
                 )
                 # Hand over after release/clearance, without an artificial outward park.
-                if not pending_progress_handoff:
+                if not pending_policy_handoff:
                     reference.move(
                         f"{prefix}_exit", side, [0.40, 0.40 if side == "left" else -0.40, 1.05], yaw
                     )

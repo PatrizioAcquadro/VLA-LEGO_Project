@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from vla_lego.isaac.assembly_planning import choose_build_site, pick_route
+from vla_lego.isaac.assembly_planning import choose_build_site, lift_route, pick_route, source_route
 from vla_lego.isaac.campaign import load_campaign
 from vla_lego.isaac.campaign_design import build_declaration
 from vla_lego.isaac.catalog import BlockSpec
@@ -113,3 +113,36 @@ def test_a_shallower_pinch_preserves_lift_and_placement_geometry():
     assert route[4][2] - route[3][2] == pytest.approx(0.10)
     assert route[-3][2] == pytest.approx(TABLE_TOP + 3 * 0.04 + 0.02 + 0.075)
     assert all(p[2] >= route[-3][2] + 0.025 for p in route[5:-3])
+
+
+def test_displaced_pick_plans_the_same_low_escape_before_its_high_carry():
+    prism = BlockSpec("prism", "large", "red")
+    cube = BlockSpec("cube", "large", "blue")
+    task = SimpleNamespace(targets=(prism, prism, cube, cube, cube))
+    block, build = [0.4046, 0.1013, 0.825], [0.4078, 0.0498]
+    lifting = lift_route(block, build, "right", displaced=True)
+    planned = pick_route(task, 3, block, build, "right", 3, displaced=True)
+    approach_length = len(source_route(block, build, "right", displaced=True))
+    assert planned[approach_length : approach_length + len(lifting)] == [
+        point for _, point in lifting
+    ]
+    # Clear the nearby prefix laterally while the carried cube is still below its top.
+    horizontal = lifting[1:3]
+    assert all(point[2] < lifting[-1][1][2] for _, point in horizontal)
+    assert horizontal[-1][1][0] > block[0] + 0.07
+    assert horizontal[-1][1][1] < build[1] - 0.10
+    assert lifting[-1][1][2] - (block[2] + 0.06) == pytest.approx(0.10)
+    assert planned[approach_length + len(lifting)][:2] == lifting[-1][1][:2]
+
+
+@pytest.mark.parametrize("side, sign", [("left", 1), ("right", -1)])
+def test_displaced_approach_reverses_the_low_escape_before_regrasp(side, sign):
+    block, build = [0.4459, -sign * 0.1066, 0.825], [0.4075, -sign * 0.0483]
+    approach = source_route(block, build, side, displaced=True)
+    lifting = lift_route(block, build, side, displaced=True)
+    assert [point for _, point in approach[2:5]] == [point for _, point in reversed(lifting[:3])]
+    assert approach[1][1][:2] == approach[2][1][:2]
+    assert approach[-1][1] == [block[0], block[1], block[2] + 0.06]
+    task = SimpleNamespace(targets=(BlockSpec("cube", "large", "blue"),) * 5)
+    planned = pick_route(task, 3, block, build, side, 3, displaced=True)
+    assert planned[: len(approach)] == [point for _, point in approach]

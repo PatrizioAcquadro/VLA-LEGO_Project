@@ -137,3 +137,72 @@ def test_checked_park_refuses_before_motion_when_native_path_is_obstructed(
         with pytest.raises(RuntimeError, match="Other jaw obstructs park"):
             reference.park("right", check_clearance=True)
         assert calls == ["preflight"]
+
+
+@pytest.mark.parametrize("side", ["left", "right"])
+@pytest.mark.parametrize("route", ["direct", "rearward", "outward", "blocked", "oom"])
+def test_empty_hand_route_checks_both_segments_and_restores_solver(monkeypatch, side, route):
+    import sys
+    from types import SimpleNamespace
+
+    from vla_lego.isaac import clearance
+
+    monkeypatch.setitem(sys.modules, "isaaclab.utils.math", SimpleNamespace(quat_from_matrix=None))
+    joints = torch.zeros(1, 7)
+    pose = torch.tensor([[0.3, 0.0, 0.9, 0.0, 0.0, 0.0, 1.0]])
+    goal = torch.ones(7)
+    env = SimpleNamespace(
+        robot=SimpleNamespace(data=SimpleNamespace(joint_pos=SimpleNamespace(torch=joints)))
+    )
+    ctrl = SimpleNamespace(frames={side: (None, list(range(7)), None)}, pose=lambda _: pose)
+    previous = object()
+    targets, segments = [], []
+
+    def solve(target, seed):
+        assert solver.configuration_admission is not previous
+        assert torch.equal(seed, joints[0])
+        targets.append(target.clone())
+        if route == "oom":
+            raise torch.cuda.OutOfMemoryError("allocator unavailable")
+        if route == "outward" and len(targets) == 1:
+            raise RuntimeError("Rearward IK refused")
+        return torch.full((7,), len(targets) / 10)
+
+    solver = SimpleNamespace(
+        bounds=torch.tensor([[-2.0, 2.0]] * 7), configuration_admission=previous, solve=solve
+    )
+
+    def admit(env, ctrl, solver, side, end, *, start=None):
+        segments.append((end.clone(), None if start is None else start.clone()))
+        if len(segments) == 1 and route != "direct":
+            raise RuntimeError("Direct route obstructed")
+        if start is not None:
+            assert torch.equal(start, segments[-2][0])
+            if route == "blocked":
+                raise RuntimeError("Final segment obstructed")
+        return 0.02 if start is None else 0.01
+
+    monkeypatch.setattr(clearance, "admit_empty_hand_path", admit)
+    monkeypatch.setattr(clearance, "arm_clearance", lambda *args: object())
+    monkeypatch.setattr(clearance, "source_grasp_clearance", lambda *args, **kwargs: object())
+    if route == "oom":
+        with pytest.raises(torch.cuda.OutOfMemoryError, match="allocator unavailable"):
+            clearance.plan_empty_hand_path(env, ctrl, solver, side, goal)
+        assert len(targets) == 1
+    elif route == "blocked":
+        with pytest.raises(RuntimeError, match="outward: Final segment obstructed"):
+            clearance.plan_empty_hand_path(env, ctrl, solver, side, goal)
+        assert len(targets) == 2 and len(segments) == 5
+    else:
+        goals, minimum = clearance.plan_empty_hand_path(env, ctrl, solver, side, goal)
+        assert len(goals) == (1 if route == "direct" else 2)
+        assert torch.equal(goals[-1], goal)
+        assert minimum == (0.02 if route == "direct" else 0.01)
+        if route != "direct":
+            assert targets[0][0] == pytest.approx(0.22)
+        if route == "outward":
+            assert targets[1][0] == pose[0, 0]
+            assert targets[1][1] == pytest.approx(0.18 if side == "left" else -0.18)
+    assert solver.configuration_admission is previous
+    assert torch.equal(joints, torch.zeros_like(joints))
+    assert torch.equal(pose, torch.tensor([[0.3, 0.0, 0.9, 0.0, 0.0, 0.0, 1.0]]))

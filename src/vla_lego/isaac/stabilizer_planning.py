@@ -207,6 +207,54 @@ def plan_stabilizer(reference, task, indices, cooperative_level, stabilizer_side
     return selected, selected_cost, failures
 
 
+def plan_stabilizer_disengagement(reference, task, side, clear_z):
+    """Withdraw the open jaws from current upper pieces before rising."""
+    from isaaclab.utils.math import quat_apply
+
+    from vla_lego.isaac.clearance import _jaw_geometry
+
+    env = reference.env
+    pose = reference.ctrl.pose(side)[0]
+    finger = quat_apply(pose[3:], env.target.new_tensor([1.0, 0, 0]))
+    horizontal = float(finger[:2].norm())
+    if horizontal < 1e-6:
+        raise RuntimeError("No defined horizontal stabilizer withdrawal")
+    direction = finger[:2] / horizontal
+    jaws = [
+        quat_apply(pose[3:].expand(len(points), -1), points) + pose[:3]
+        for points, _, _ in _jaw_geometry(env, reference.ctrl, side)
+    ]
+    front = max(float((points[:, :2] @ direction).max()) for points in jaws)
+    lowest = min(float(points[:, 2].min()) for points in jaws)
+    obstacles = []
+    for index, placement in enumerate(task.placements):
+        corners = _corners(placement.spec.dimensions_m, env.task_truth(index)["block_pose_w"])
+        if max(point[2] for point in corners) >= lowest:
+            obstacles.extend(corners)
+    near = min(
+        (sum(point[i] * float(direction[i]) for i in (0, 1)) for point in obstacles),
+        default=front,
+    )
+    distance = max(0.0, front - near + 0.006) if obstacles else 0.0
+    retract = [float(pose[i] - distance * direction[i]) for i in (0, 1)] + [float(pose[2])]
+    route = [
+        ("retract", retract),
+        ("clear", [*retract[:2], max(clear_z, float(pose[2]) + 0.06)]),
+    ]
+    reference.admit_stabilizer_clearance(side)
+    _, ids, _ = reference.ctrl.frames[side]
+    seed = env.robot.data.joint_pos.torch[0, ids]
+    start = pose[:3].tolist()
+    for _, goal in route:
+        for fraction in (0.25, 0.5, 0.75, 1.0):
+            xyz = [a + (b - a) * fraction for a, b in zip(start, goal, strict=True)]
+            seed = reference.solvers[side].solve(
+                env.target.new_tensor([*xyz, *pose[3:].tolist()]), seed
+            )
+        start = goal
+    return route, pose[3:].tolist()
+
+
 def plan_released_rotation(reference, side, quaternion_xyzw):
     """Preflight small wrist turns at the measured position after jaw release."""
     import torch

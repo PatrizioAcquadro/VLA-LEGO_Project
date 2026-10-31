@@ -72,6 +72,8 @@ class PhysicalReference:
         waypoints: list[list[float]],
         *,
         object_index: int | None = None,
+        grasp_index: int = 3,
+        linear_from: int = 2,
     ) -> float:
         """Choose a physically fitting source grasp with a reachable carry route."""
         self.admit_stabilizer_clearance(side)
@@ -90,7 +92,7 @@ class PhysicalReference:
                     (
                         clear(
                             self.env.target.new_tensor(
-                                [*waypoints[3], *self.orientation(side, yaw).tolist()]
+                                [*waypoints[grasp_index], *self.orientation(side, yaw).tolist()]
                             )
                         ),
                         yaw,
@@ -114,14 +116,18 @@ class PhysicalReference:
                     for step, xyz in enumerate(waypoints):
                         points = (
                             [xyz]
-                            if step < 2
+                            if step < linear_from
                             else [point for point, _ in _linear_profile(waypoints[step - 1], xyz)]
                         )
                         for point in points:
                             pose = self.env.target.new_tensor(
                                 [*point, *self.orientation(side, yaw).tolist()]
                             )
-                            if clear is not None and step in (2, 3) and clear(pose) <= 0:
+                            if (
+                                clear is not None
+                                and step in (grasp_index - 1, grasp_index)
+                                and clear(pose) <= 0
+                            ):
                                 raise RuntimeError("Open jaws intersect along the source approach")
                             seed = self.solvers[side].solve(pose, seed)
                     return yaw

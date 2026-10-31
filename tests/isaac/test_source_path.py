@@ -11,7 +11,8 @@ from vla_lego.isaac import reference as module
 
 
 @pytest.mark.parametrize("diagonal", [False, True])
-def test_full_open_jaw_approach_rejects_obstruction_before_motion(diagonal, monkeypatch):
+@pytest.mark.parametrize("displaced", [False, True])
+def test_full_open_jaw_approach_rejects_obstruction_before_motion(diagonal, displaced, monkeypatch):
     root = next(p for p in Path(__file__).resolve().parents if (p / "pyproject.toml").is_file())
     assert Path(module.__file__).resolve().is_relative_to(root / "src")
     checked = []
@@ -41,11 +42,17 @@ def test_full_open_jaw_approach_rejects_obstruction_before_motion(diagonal, monk
         [0.51865, -0.41872, 0.8825],
         [0.51865, -0.41872, 0.9825],
     ]
-    assert clear(torch.tensor([*points[3], 0, 0, 0, 1])) > 0
+    if displaced:
+        points[1:1] = [[0.49, -0.20, 1.02], [0.49, -0.20, 0.9225]]
+    grasp_index = 5 if displaced else 3
+    assert clear(torch.tensor([*points[grasp_index], 0, 0, 0, 1])) > 0
+    checked.clear()
+    options = {"object_index": 0, "grasp_index": grasp_index, "linear_from": 1 if displaced else 2}
     if diagonal:
         with pytest.raises(RuntimeError, match="Open jaws intersect along"):
-            ref.grasp_yaw("right", 0, points, object_index=0)
+            ref.grasp_yaw("right", 0, points, **options)
         assert any(0.49 < xyz[0] < 0.515 and 0.93 < xyz[2] < 0.99 for xyz in checked)
     else:
-        assert ref.grasp_yaw("right", 0, points, object_index=0) == 0
+        assert ref.grasp_yaw("right", 0, points, **options) == 0
         assert len(checked) > 20
+    assert checked[0] == pytest.approx(points[grasp_index])

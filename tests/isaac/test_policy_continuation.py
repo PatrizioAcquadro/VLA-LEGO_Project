@@ -191,6 +191,11 @@ def test_only_a_physical_empty_close_and_lift_qualifies_as_a_miss(behavior):
     admitted = []
     env = SimpleNamespace(
         blocks=states,
+        contact_robot_paths=[
+            f"/{side}_WSG32_{jaw}_JAW_LINK"
+            for side in ("left", "right")
+            for jaw in ("NEGATIVE", "POSITIVE")
+        ],
         task_truth=lambda i: states[i],
         time=10,
         recorder=SimpleNamespace(admit_policy_intervention=admitted.append),
@@ -301,6 +306,8 @@ def test_wrong_piece_intervention_requires_the_actual_incorrect_bilateral_lift(b
         "failed_transfer",
         "released_misplacement",
         "released_stabilized_misplacement",
+        "collapsed_prefix",
+        "moving_collapse",
         "premature_completion_after_placement",
         "held_below_support",
         "brief_below_support",
@@ -376,7 +383,13 @@ def test_placement_failure_excludes_transport_pauses_and_supported_placements(be
         if behavior in (
             "released_misplacement",
             "released_stabilized_misplacement",
+            "collapsed_prefix",
+            "moving_collapse",
         ):
+            if behavior in ("collapsed_prefix", "moving_collapse"):
+                states[0]["block_pose_w"][0] += 0.20
+                if behavior == "moving_collapse":
+                    states[0]["block_velocity_w"][0] = 0.1
             states[1]["block_pose_w"][2] = TABLE_TOP + task.targets[1].dimensions_m[2] / 2
             states[1]["robot_contact_force_n"] = 0
             states[1]["robot_contact_forces_n"] = [[0.0] * 3 for _ in range(4)]
@@ -456,6 +469,8 @@ def test_placement_failure_excludes_transport_pauses_and_supported_placements(be
         if behavior in (
             "released_misplacement",
             "released_stabilized_misplacement",
+            "collapsed_prefix",
+            "moving_collapse",
         ):
             env.time += 0.05
             event = stop_when(states)
@@ -479,6 +494,7 @@ def test_placement_failure_excludes_transport_pauses_and_supported_placements(be
         "failed_transfer",
         "released_misplacement",
         "released_stabilized_misplacement",
+        "collapsed_prefix",
         "premature_completion_after_placement",
         "held_below_support",
         "held_edge_stall",
@@ -517,9 +533,10 @@ def test_placement_failure_excludes_transport_pauses_and_supported_placements(be
         elif behavior in (
             "released_misplacement",
             "released_stabilized_misplacement",
+            "collapsed_prefix",
         ):
             assert event["recovery_mode"] == "rebuild_released_prefix"
-            assert event["completed_levels"] == 1
+            assert event["completed_levels"] == (0 if behavior == "collapsed_prefix" else 1)
         elif behavior == "held_below_support":
             assert event["recovery_mode"] == "return_held_then_rebuild"
             assert event["completed_levels"] == 1
@@ -692,4 +709,107 @@ def test_pick_window_interruption_preserves_the_requested_mechanism(
     else:
         with pytest.raises((ValueError, RuntimeError)):
             getattr(intervention, mechanism)(reference, case, task, 1)
+        assert not admitted
+
+
+@pytest.mark.parametrize(
+    "behavior",
+    [
+        "wrong_bilateral",
+        "wrong_unilateral",
+        "correct_piece",
+        "no_commands",
+        "prefix_lost",
+        "second_held",
+        "short_lift",
+    ],
+)
+def test_missed_grasp_window_returns_an_observed_wrong_piece_without_relabeling(behavior):
+    from copy import deepcopy
+    from types import SimpleNamespace
+
+    from vla_lego.isaac.policy_continuation import PolicyIntervention
+
+    task = initial_tower_task()
+    states = [
+        {
+            "block_pose_w": [*p.xy_m, TABLE_TOP + p.spec.dimensions_m[2] / 2, 0, 0, 0, 1],
+            "block_velocity_w": [0.0] * 6,
+            "robot_contact_force_n": 0.0,
+            "robot_contact_forces_n": [[0.0] * 3 for _ in range(4)],
+            "nonrobot_contact_force_n": 0.3,
+            "block_contact_forces_n": [[0.0] * 3 for _ in task.placements],
+        }
+        for p in task.placements
+    ]
+    states[0]["block_pose_w"][:2] = list(task.assembly_xy_m)
+    initial = deepcopy(states)
+    admitted = []
+    env = SimpleNamespace(
+        blocks=states,
+        task_truth=lambda i: deepcopy(states[i]),
+        time=10.0,
+        recorder=SimpleNamespace(admit_policy_intervention=admitted.append),
+        contact_robot_paths=[
+            f"/{side}_WSG32_{jaw}_JAW_LINK"
+            for side in ("left", "right")
+            for jaw in ("NEGATIVE", "POSITIVE")
+        ],
+        robot=SimpleNamespace(
+            data=SimpleNamespace(
+                joint_names=["left_WSG32_JAW_OPENING", "right_WSG32_JAW_OPENING"],
+                joint_pos=SimpleNamespace(torch=np.array([[0.034, 0.034]])),
+            )
+        ),
+    )
+    reference = SimpleNamespace(
+        env=env, ctrl=SimpleNamespace(pose=lambda side: np.array([[0.4, 0.4, 1.05]]))
+    )
+    case = SimpleNamespace(
+        row={"correction_origin": "policy", "mechanism": "missed_grasp", "partition": "train"},
+        error_level=1,
+        cooperative_level=3,
+    )
+    intervention = PolicyIntervention.__new__(PolicyIntervention)
+
+    def window(*args, stop_when, **kwargs):
+        assert stop_when(states) is None
+        lifted = 1 if behavior == "correct_piece" else 2
+        states[lifted]["block_pose_w"][2] += 0.069 if behavior == "short_lift" else 0.08
+        states[lifted]["robot_contact_force_n"] = 1.2
+        states[lifted]["robot_contact_forces_n"][0][0] = 0.6
+        if behavior != "wrong_unilateral":
+            states[lifted]["robot_contact_forces_n"][1][0] = 0.6
+        states[lifted]["nonrobot_contact_force_n"] = 0.0
+        if behavior == "prefix_lost":
+            states[0]["block_pose_w"][0] += 0.2
+        if behavior == "second_held":
+            states[3]["robot_contact_force_n"] = 1.0
+        error = stop_when(states)
+        env.time += 0.05
+        return (
+            {
+                "executed_motor_commands": 0 if behavior == "no_commands" else 1,
+                "observed_error": error,
+                "source_terminal_decision": "physical_intervention" if error else "budget",
+                "start_time_s": 10.0,
+            },
+            initial,
+            states,
+            False,
+        )
+
+    intervention._window = window
+    if behavior == "wrong_bilateral":
+        event = intervention.missed_grasp(reference, case, task, 1)
+        assert event["type"] == "wrong_piece" and not event["teacher_induced"]
+        assert event["object_index"] == 2 and event["side"] == "left"
+        assert event["return_source_xy_m"] == initial[2]["block_pose_w"][:2]
+        assert event["policy_source"]["requested_mechanism"] == "missed_grasp"
+        assert event["policy_source"]["observed_mechanism"] == "wrong_piece"
+        assert event["policy_source"]["error_basis"] == "actual_bilateral_wrong_piece_lift"
+        assert len(admitted) == 1 and case.row["mechanism"] == "missed_grasp"
+    else:
+        with pytest.raises((ValueError, RuntimeError)):
+            intervention.missed_grasp(reference, case, task, 1)
         assert not admitted

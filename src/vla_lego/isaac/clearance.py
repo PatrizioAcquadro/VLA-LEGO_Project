@@ -204,20 +204,22 @@ def admit_empty_hand_path(env, controller, solver, side: str, goal, *, start=Non
 
 
 def plan_empty_hand_path(env, controller, solver, side: str, goal):
-    """Admit the whole retirement before moving, including a rearward fallback."""
+    """Admit the whole retirement before moving, trying rearward then outward."""
     import torch
     from isaaclab.utils.math import quat_from_matrix
 
     try:
         return [goal], admit_empty_hand_path(env, controller, solver, side, goal)
-    except RuntimeError:
+    except torch.cuda.OutOfMemoryError:
+        raise
+    except RuntimeError as error:
         if bool(((goal < solver.bounds[:, 0]) | (goal > solver.bounds[:, 1])).any()):
             raise
+        failures = [f"direct: {error}"]
 
     _, ids, _ = controller.frames[side]
     start = env.robot.data.joint_pos.torch[0, ids].clone()
     pose = controller.pose(side)[0].clone()
-    pose[0] -= 0.08
     native = arm_clearance(env, solver, side)
     clear = source_grasp_clearance(env, controller, side, None, other_hand=True)
 
@@ -233,12 +235,24 @@ def plan_empty_hand_path(env, controller, solver, side: str, goal):
     previous = solver.configuration_admission
     solver.configuration_admission = admissible
     try:
-        waypoint = solver.solve(pose, start)
+        for name, offset in (
+            ("rearward", (-0.08, 0, 0)),
+            ("outward", (0, 0.18 if side == "left" else -0.18, 0)),
+        ):
+            target = pose.clone()
+            target[:3] += target.new_tensor(offset)
+            try:
+                waypoint = solver.solve(target, start)
+                first = admit_empty_hand_path(env, controller, solver, side, waypoint)
+                second = admit_empty_hand_path(env, controller, solver, side, goal, start=waypoint)
+                return [waypoint, goal], min(first, second)
+            except torch.cuda.OutOfMemoryError:
+                raise
+            except RuntimeError as error:
+                failures.append(f"{name}: {error}")
     finally:
         solver.configuration_admission = previous
-    first = admit_empty_hand_path(env, controller, solver, side, waypoint)
-    second = admit_empty_hand_path(env, controller, solver, side, goal, start=waypoint)
-    return [waypoint, goal], min(first, second)
+    raise RuntimeError("No admissible empty-hand retirement: " + "; ".join(failures))
 
 
 def plan_released_retreat(env, controller, solver, side: str, goal):
