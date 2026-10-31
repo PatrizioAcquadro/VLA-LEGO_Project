@@ -9,7 +9,7 @@ import time
 import traceback
 from fractions import Fraction
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from vla_lego.pretrained.transport import receive_message, send_message
 
@@ -201,7 +201,9 @@ def main() -> None:
                 mode="w",
                 options={"movflags": "faststart"},
             )
-            video_stream = video.add_stream("h264_nvenc", rate=Fraction(20, horizon))
+            video_stream = cast(
+                "av.VideoStream", video.add_stream("h264_nvenc", rate=Fraction(20, horizon))
+            )
             video_stream.width, video_stream.height = 960, 600
             video_stream.pix_fmt = "yuv420p"
             video_stream.time_base = Fraction(horizon, 20)

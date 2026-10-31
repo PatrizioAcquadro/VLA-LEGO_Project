@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import cast
 
 
 class RGBVideoWriter:
@@ -119,7 +120,10 @@ def read_rgb_frame(path: Path, index: int, *, fps: int = 20):
             return np.asarray(source.convert("RGB")).copy()
     with av.open(str(path)) as container:
         stream = container.streams.video[0]
-        container.seek(round(index / fps / stream.time_base), stream=stream, backward=True)
+        time_base = stream.time_base
+        if time_base is None:
+            raise ValueError("Recorded RGB video lacks a time base")
+        container.seek(round(index / fps / time_base), stream=stream, backward=True)
         for frame in container.decode(stream):
             actual = round(float(frame.time) * fps)
             if actual == index:
@@ -151,9 +155,9 @@ def _encode(path: Path, width: int, height: int, fps: int):
     if path.exists():
         raise FileExistsError(path)
     with av.open(str(path), "w") as container:
-        stream = container.add_stream("ffv1", rate=fps)
+        stream = cast("av.VideoStream", container.add_stream("ffv1", rate=fps))
         stream.width, stream.height, stream.pix_fmt = width, height, "bgr0"
-        stream.codec_context.gop_size = 1
+        cast("av.VideoCodecContext", stream.codec_context).gop_size = 1
         stream.codec_context.thread_count = 2
         stream.options = {"level": "3"}
         count, size = 0, width * height * 3

@@ -22,7 +22,7 @@ make package
 
 `make check` runs Ruff, Black, mypy and local Markdown-link checks. Set `PYTHON=.venv/bin/python` when the environment is not activated. In a sandbox that blocks formatter workers, run the same check with host access; `BLACK_NUM_WORKERS=1` limits formatting parallelism.
 
-The maintained suite protects recording masks, train/development separation, control/planning constraints, task decisions, evaluation accounting, checkpoint retention and offline reporting. Small doubles isolate these contracts; they do not establish physical execution or model behavior. FFmpeg is required for the lossless RGB roundtrip test; an unavailable codec is reported as a skip. Meaningful model/renderer checks use the actual GPU and compatible native environment.
+The maintained suite protects recording masks, train/development separation, control/planning constraints, task decisions, evaluation accounting, checkpoint retention and offline reporting. Small doubles isolate these contracts; they do not establish physical execution or model behavior. Lossless RGB roundtrip tests exercise FFmpeg and PyAV independently when available; missing codec backends are reported as skips. Meaningful model/renderer checks use the actual GPU and compatible native environment.
 
 The package check builds an sdist, builds its wheel, installs outside the checkout and compares the complete runtime/asset inventory against `src/`. It checks installed imports, block geometry, licenses, task construction and maintained module help. It reuses caller runtime dependencies, preserves the interpreter build and forces installation even when the parent has the same package version. It does not claim fresh dependency resolution or native simulation qualification.
 
