@@ -1,4 +1,4 @@
-"""Global training schedule, resumable checkpoints and bounded stopping decisions."""
+"""Global motor schedule and resumable checkpoints."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import json
 import math
 import os
 import shutil
-import statistics
 import time
 from pathlib import Path
 
@@ -22,81 +21,6 @@ def learning_rate_factor(step: int, maximum: int = 100_000) -> float:
         return (step + 1) / 1_000
     progress = min(1.0, (step - 1_000) / (maximum - 1_000))
     return 0.025 + 0.975 * (1 + math.cos(math.pi * progress)) / 2
-
-
-def stopping_reason(history: list[dict]) -> str | None:
-    if not history or history[-1]["step"] < 30_000:
-        return None
-    end = history[-1]["step"]
-    older = [row for row in history if row["step"] <= end - 15_000][-3:]
-    recent = history[-3:]
-    if len(older) != 3 or len(recent) != 3:
-        return None
-
-    def median(rows, split, key):
-        return statistics.median(row[split][key] for row in rows)
-
-    for key in ("motor_mae_normalized", "jaw_mae_m"):
-        before, after = median(older, "development", key), median(recent, "development", key)
-        if after < before * 0.98:
-            return None
-    if median(recent, "development", "decision_correct") > (
-        median(older, "development", "decision_correct") + 0.02
-    ):
-        return None
-    train_before = median(older, "train", "motor_mae_normalized")
-    train_after = median(recent, "train", "motor_mae_normalized")
-    return (
-        "generalization_stagnation"
-        if train_after < train_before * 0.98
-        else "optimization_stagnation"
-    )
-
-
-def persistent_deterioration(history: list[dict]) -> bool:
-    """Flag a large held-out regression sustained for at least 5k updates."""
-    if len(history) < 10 or history[-1]["step"] < 10_000:
-        return False
-    recent, earlier = history[-6:], history[:-6]
-    if recent[-1]["step"] - recent[0]["step"] < 5_000:
-        return False
-    reference = min(
-        (earlier[i - 2 : i + 1] for i in range(2, len(earlier))),
-        key=lambda rows: statistics.median(r["development"]["motor_mae_normalized"] for r in rows),
-    )
-    dev = statistics.median(r["development"]["motor_mae_normalized"] for r in reference)
-    train = statistics.median(r["train"]["motor_mae_normalized"] for r in reference)
-    decisions = statistics.median(r["development"]["decision_correct"] for r in reference)
-    return bool(
-        all(r["development"]["motor_mae_normalized"] > dev * 1.10 for r in recent)
-        and statistics.median(r["train"]["motor_mae_normalized"] for r in recent[-3:])
-        < train * 0.95
-        and statistics.median(r["development"]["decision_correct"] for r in recent[-3:])
-        < decisions + 0.05
-    )
-
-
-def better_candidate(current: dict, previous: dict | None) -> bool:
-    """Screen offline candidates without trading away task-decision reliability.
-
-    This shortlist does not select a physically qualified policy. Autonomous
-    development outcomes own the final candidate decision.
-    """
-    if previous is None:
-        return True
-    if current["decision_correct"] < previous["decision_correct"] - 0.02:
-        return False
-    for name, accuracy in previous.get("decision_accuracy_by_class", {}).items():
-        if current.get("decision_accuracy_by_class", {}).get(name, 0.0) < accuracy - 0.02:
-            return False
-    motor, old = current["motor_mae_normalized"], previous["motor_mae_normalized"]
-    return bool(
-        motor < old * 0.98
-        or (
-            motor <= old * 1.02
-            and current["decision_correct"] > previous["decision_correct"] + 0.02
-        )
-    )
 
 
 def save_checkpoint(policy, preprocessor, postprocessor, optimizer, scheduler, directory, state):

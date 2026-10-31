@@ -55,7 +55,7 @@ def main():
     import torch
     from torch.utils.data import default_collate
 
-    policy, pre, _post = load_policy(args.model, statistics, motor_only=True)
+    policy, pre, _post = load_policy(args.model, statistics)
     policy.eval()
     tokenizer = policy.model.vlm_with_expert.processor.tokenizer
     index = []

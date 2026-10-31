@@ -13,7 +13,22 @@ from torch.utils.data import Dataset
 
 from vla_lego.isaac.campaign import CONDITION, EXPECTED, RECOVERIES
 from vla_lego.pretrained.pilot_dataset import PilotEpisode
-from vla_lego.pretrained.pilot_training_data import phase
+
+
+def phase(stage: str) -> str:
+    if "park" in stage:
+        return "park"
+    if any(word in stage for word in ("stabil", "restrain", "cooper")):
+        return "cooperation"
+    if "release" in stage:
+        return "release"
+    if any(word in stage for word in ("retreat", "exit", "withdraw")):
+        return "withdraw"
+    if any(word in stage for word in ("place", "support")):
+        return "place"
+    if "grip" in stage:
+        return "grasp"
+    return "move"
 
 
 def motor_phase(stage: str) -> str:
