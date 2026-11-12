@@ -69,6 +69,7 @@ class EpisodeRecorder:
         png_compress_level: int = 1,
         min_free_bytes: int = 0,
         image_storage: str = "png",
+        physics_profile: str | None = None,
     ):
         if not family or split not in ("train", "development"):
             raise ValueError(
@@ -107,6 +108,7 @@ class EpisodeRecorder:
         self.task_decision = "continue"
         self.count = 0
         self.closed = False
+        self.physics_profile = physics_profile
         self.state_names: tuple[str, ...] | None = None
         self.action_names: tuple[str, ...] | None = None
         self.start_time: float | None = None
@@ -294,6 +296,8 @@ class EpisodeRecorder:
             "privileged_policy_inputs": False,
             "control_clock_enforced": True,
         }
+        if self.physics_profile is not None:
+            metadata["physics_profile"] = self.physics_profile
         if self.correction_source is not None:
             metadata["correction_source"] = self.correction_source
         if self.collection_case is not None:

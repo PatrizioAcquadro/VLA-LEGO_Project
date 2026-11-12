@@ -45,12 +45,14 @@ def main() -> None:
         env = AssemblyEnvironment(
             args.cache_dir.resolve(), placements=task.placements, assembly_xy_m=task.assembly_xy_m
         )
+        report["physics_profile"] = env.physics_profile
         env.step(400)
         recorder = EpisodeRecorder(
             args.output_dir / "recording",
             task.instruction,
             family=args.family,
             split=args.split,
+            physics_profile=env.physics_profile,
             task_decisions=True,
         )
         recorder.task_decision = "abstain"

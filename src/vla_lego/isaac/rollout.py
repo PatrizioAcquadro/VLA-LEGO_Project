@@ -48,6 +48,7 @@ def main() -> None:
 
         connection.connect(str(args.socket))
         env = AssemblyEnvironment(args.cache_dir.resolve())
+        report["physics_profile"] = env.physics_profile
         env.step(400)
         report["robot_joint_names"] = env.robot.data.joint_names
         action_names = (*ARM_JOINTS, *JAW_JOINTS)

@@ -8,6 +8,8 @@ import time
 import traceback
 from pathlib import Path
 
+from vla_lego.isaac.physics import PHYSX
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -39,6 +41,10 @@ def main() -> None:
         from vla_lego.isaac.environment import ARM_JOINTS, JAW_JOINTS, AssemblyEnvironment
 
         env = AssemblyEnvironment(args.cache_dir.resolve())
+        report.update(
+            physics_profile=env.physics_profile,
+            source_physics_profile=metadata.get("physics_profile", PHYSX),
+        )
         if metadata["action_names"] != [*ARM_JOINTS, *JAW_JOINTS]:
             raise ValueError("Recorded commands use a different joint interface.")
         env.step(round(metadata["start_time_s"] / 0.005))

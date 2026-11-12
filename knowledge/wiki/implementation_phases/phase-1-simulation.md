@@ -10,6 +10,9 @@ Use the shared fixed-base Alex003, measured pedestal, WSG32/UMI grippers and hea
 
 Use the [block/task definition](../bricks.md), including the initial print sample and genuine stabilize–place cooperation. All manipulation uses robot contact under gravity. A reference controller may use simulation truth; the eventual policy may not.
 
+[Isaac operations](../foundations.md#physics-profiles) documents the default
+Steel runtime and paired single-block evidence.
+
 ## Conceptual activities
 
 - Align robot, table, tool and camera frames with the physical setup.

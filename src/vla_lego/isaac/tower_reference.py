@@ -265,6 +265,7 @@ def main() -> None:
                 task.instruction,
                 family=args.family,
                 split=args.split,
+                physics_profile=env.physics_profile,
                 task_decisions=True,
                 collection_case=pilot_case.row if pilot_case else None,
                 collection_condition=collection_condition if pilot_case else None,

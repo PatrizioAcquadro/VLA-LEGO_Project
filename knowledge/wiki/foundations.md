@@ -52,16 +52,21 @@ The MuJoCo/Qwen runtime and its five CLI commands are retired from main. [Histor
 
 ## Physics profiles
 
-The native launcher defaults new declared single-block references to the
-shared `newton_steel` profile on hosts with its runtime installed. The
-`isaacsim_physx` profile is used for replay, policy, and other task entry
-points unless overridden. Set `ISAAC_PHYSICS_PROFILE=isaacsim_physx` to run
-an explicit baseline or `ISAAC_PHYSICS_PROFILE=newton_steel` to request Steel.
-`ISAAC_PHYSICS_PROFILE_ROOT` points to the shared profile checkout (the sibling
-`AlexDoor-XAS` by default). `NEWTON_SITE` points to the validated isolated
-Newton/Warp wheel site, provisioned under that checkout's ignored runtime output
-on the workstation. An unavailable runtime is logged when selecting PhysX for
-an automatic launch. An explicit Steel request requires its runtime.
+All native VLA-LEGO simulation entry points use the shared `newton_steel`
+profile with CUDA Graph by default. Set `ISAAC_PHYSICS_PROFILE=isaacsim_physx`
+to run a PhysX baseline or reconstruct an exact historical PhysX prefix.
+The launcher needs the shared profile and wheel site for Steel.
+`ISAAC_PHYSICS_PROFILE_ROOT` points to the shared checkout (the sibling
+`AlexDoor-XAS` by default). `NEWTON_SITE` points to the isolated Newton/Warp
+wheel site, provisioned under that checkout's ignored runtime output on the
+workstation.
+
+Native reports and episode metadata identify the backend. Exact tower parity
+requires matching backend, solver iterations and observed state. A tower replay
+across engines can report the new evaluator result. Policy-prefix reconstruction
+requires the source engine. Reports from before backend tagging use PhysX as
+their source engine. The campaign evaluator binds and caches results per
+physics profile.
 
 The Steel profile uses the same Alex003, WSG32, ZED RGB and task controller,
 with solved normal-force readback and a Fabric bridge for the head camera.
@@ -78,7 +83,7 @@ On November 12, 2026, both backends passed all five evaluator checks for
 `TR-P04-00-0` with event settling. Steel completed the recorded task in 85.86 s
 with 50.20 simulated seconds. Native PhysX took 152.56 s with 50.35 simulated
 seconds on the same RTX 4090. The launcher then selected Steel automatically
-and passed the same evaluator again in 88.94 s. The left-hand `TR-P01-00-1` reference was refused
-by released-hand retreat planning on both engines, including with event
-settling. This comparison supports the single-block reference default and
-leaves the wider tower, replay, learned and physical results as separate work.
+and passed the same evaluator again in 88.94 s. Released-hand retreat planning
+refused the left-hand `TR-P01-00-1` reference on both engines, including with
+event settling. The matched timing and completion evidence covers the
+single-block reference. Full tower and learned Steel evaluations remain open.

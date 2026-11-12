@@ -149,6 +149,7 @@ def test_tower_policy_replay_uses_applied_commands_and_rejects_teacher_initializ
     import torch
 
     from vla_lego.isaac.environment import ARM_JOINTS, JAW_JOINTS
+    from vla_lego.isaac.physics import PHYSX, STEEL
     from vla_lego.isaac.policy_replay import replay_prefix
 
     task = PilotCase(case_row(), 0).task()
@@ -161,6 +162,7 @@ def test_tower_policy_replay_uses_applied_commands_and_rejects_teacher_initializ
     truth = {"block_pose_w": [0.4, 0.0, 0.82, 0.0, 0.0, 0.0, 1.0]}
 
     class Environment:
+        physics_profile = PHYSX
         robot = SimpleNamespace(data=data)
         placements = task.placements
         blocks = list(range(len(task.placements)))
@@ -210,6 +212,10 @@ def test_tower_policy_replay_uses_applied_commands_and_rejects_teacher_initializ
     result = replay_prefix(Environment(), tmp_path, 2)
     assert result["exact_native_parity"] and not result["object_state_writes"]
     assert result["prefix_ticks"] == 2
+    env = Environment()
+    env.physics_profile = STEEL
+    with pytest.raises(ValueError, match=f"ISAAC_PHYSICS_PROFILE={PHYSX}"):
+        replay_prefix(env, tmp_path, 2)
     metadata["teacher_prefix_ticks"] = 1
     (tmp_path / "report.json").write_text(json.dumps(metadata))
     with pytest.raises(ValueError, match="autonomous-from-start"):

@@ -48,6 +48,7 @@ def main() -> None:
         from vla_lego.isaac.recording import EpisodeRecorder
 
         env = AssemblyEnvironment(args.cache_dir.resolve())
+        report["physics_profile"] = env.physics_profile
         ctrl = ToolController(env)
         env.step(400)
         initial = {side: ctrl.pose(side)[0].tolist() for side in ("left", "right")}
@@ -71,6 +72,7 @@ def main() -> None:
                 "Pick up the small red cube and place it back on the table in the open space to the left.",
                 family=args.family,
                 split=args.split,
+                physics_profile=env.physics_profile,
                 correction_source=correction_source,
             )
             env.recorder = recorder

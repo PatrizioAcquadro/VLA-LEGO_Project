@@ -56,12 +56,14 @@ def main() -> None:
             assembly_xy_m=None if task.build_region_xy_m is not None else task.assembly_xy_m,
             appearance=case.appearance,
         )
+        report["physics_profile"] = env.physics_profile
         env.step(400)
         recorder = EpisodeRecorder(
             args.output_dir / "recording",
             task.instruction,
             family=args.family,
             split=args.split,
+            physics_profile=env.physics_profile,
             task_decisions=True,
             collection_case=case.row,
             collection_condition="marker_free_continuous_site_v1",

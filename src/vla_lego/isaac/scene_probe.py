@@ -31,6 +31,7 @@ def main() -> None:
         env = AssemblyEnvironment(
             args.cache_dir.resolve(), placements=task.placements, assembly_xy_m=task.assembly_xy_m
         )
+        report["physics_profile"] = env.physics_profile
         env.step(600)
         for _ in range(8):
             env.step(1, render=True)

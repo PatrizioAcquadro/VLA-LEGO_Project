@@ -82,6 +82,7 @@ def replay_prefix(env: Any, source: Path, ticks: int) -> dict:
     import numpy as np
 
     from vla_lego.isaac.environment import ARM_JOINTS, JAW_JOINTS
+    from vla_lego.isaac.physics import PHYSX
 
     metadata = json.loads((source / "report.json").read_text())
     if (
@@ -91,6 +92,9 @@ def replay_prefix(env: Any, source: Path, ticks: int) -> dict:
         or metadata.get("robot_joint_names") != env.robot.data.joint_names
     ):
         raise ValueError("Replay needs a named, autonomous native source with no teacher.")
+    source_profile = metadata.get("physics_profile", PHYSX)
+    if env.physics_profile != source_profile:
+        raise ValueError(f"Exact prefix replay requires ISAAC_PHYSICS_PROFILE={source_profile}")
     if ticks < 1 or ticks > metadata["executed_ticks"]:
         raise ValueError("Prefix must fit the actually executed source attempt.")
     tower = metadata.get("kind") == "autonomous_tower_diagnostic"
@@ -210,6 +214,7 @@ def main() -> None:
         from vla_lego.isaac.environment import AssemblyEnvironment
 
         env = AssemblyEnvironment(args.cache_dir.resolve())
+        report["physics_profile"] = env.physics_profile
         env.step(400)
         result = replay_prefix(env, args.source_run, args.prefix_ticks)
         env.capture()

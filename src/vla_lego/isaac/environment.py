@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import math
-import os
 from pathlib import Path
 
 from vla_lego.isaac.catalog import BlockPlacement, BlockSpec
+from vla_lego.isaac.physics import PHYSX, STEEL, default_solver_iterations, physics_profile
 from vla_lego.isaac.recording import EpisodeRecorder
 
 ARM_JOINTS = tuple(
@@ -40,7 +40,7 @@ class AssemblyEnvironment:
         mass_scale: float = 1.0,
         friction: tuple[float, float] = (0.6, 0.5),
         assembly_xy_m: tuple[float, float] | None = None,
-        solver_iterations: tuple[int, int] = (8, 4),
+        solver_iterations: tuple[int, int] | None = None,
         measure_pose_motion: bool = False,
         appearance: str = "legacy",
         parked_start: bool = False,
@@ -78,6 +78,12 @@ class AssemblyEnvironment:
             raise ValueError("Mass scale must be positive and finite.")
         if len(friction) != 2 or any(not math.isfinite(v) or v < 0 for v in friction):
             raise ValueError("Static/dynamic friction must be finite and non-negative.")
+        self.physics_profile = physics_profile()
+        self.steel = self.physics_profile == STEEL
+        defaults = default_solver_iterations(self.physics_profile)
+        solver_iterations = defaults if solver_iterations is None else solver_iterations
+        if self.steel and solver_iterations != defaults:
+            raise ValueError("The shared Steel profile uses 16 position and 4 velocity iterations")
         if (
             len(solver_iterations) != 2
             or any(not isinstance(v, int) for v in solver_iterations)
@@ -86,9 +92,7 @@ class AssemblyEnvironment:
         ):
             raise ValueError("PhysX solver iterations require position 1..255 and velocity 0..255.")
         self.solver_iterations = solver_iterations
-        self.physics_profile = os.environ.get("ISAAC_PHYSICS_PROFILE", "isaacsim_physx")
-        self.steel = self.physics_profile == "newton_steel"
-        if self.physics_profile == "isaacsim_physx":
+        if self.physics_profile == PHYSX:
             physics = PhysxCfg(
                 solver_type=1,
                 solve_articulation_contact_last=True,
@@ -97,9 +101,8 @@ class AssemblyEnvironment:
                 min_velocity_iteration_count=solver_iterations[1],
             )
         else:
-            from isaac_physics_profile import selected_profile, steel_config
+            from isaac_physics_profile import steel_config
 
-            selected_profile()
             # Match the metric PhysX default when the USD collider has no explicit gap.
             physics = steel_config(("/World/envs/env_0",), rigid_gap=0.02)
         self.sim = sim_utils.SimulationContext(
@@ -368,6 +371,8 @@ class AssemblyEnvironment:
             self.robot.set_joint_effort_target_index(target=gravity, joint_ids=driven)
             self.scene.write_data_to_sim()
             self.sim.step(render=render and tick == count - 1)
+            if self.steel and self.physics_step == 0 and self.sim.physics_manager._graph is None:
+                raise RuntimeError("Steel CUDA Graph was not captured")
             self.scene.update(DT)
             for sensor in self.block_contacts:
                 sensor.update(DT)

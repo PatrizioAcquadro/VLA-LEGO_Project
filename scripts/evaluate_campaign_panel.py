@@ -11,6 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from vla_lego.isaac.physics import STEEL, physics_profile
 from vla_lego.pretrained.campaign_data import admitted_entries
 from vla_lego.pretrained.campaign_evaluation import (
     PANEL_COUNTS,
@@ -81,12 +82,27 @@ def main() -> None:
     native = {}
     for name in ("ISAAC_SIM_DIR", "ISAAC_LAB_DIR", "ALEX_ASSETS_ROOT"):
         native[name] = str(Path(os.environ[name]).resolve(strict=True))
-    binding.update(native_environment=native, runtime_evidence=file_digest(args.runtime_evidence))
+    profile = physics_profile()
+    if profile == STEEL:
+        shared = Path(os.environ.get("ISAAC_PHYSICS_PROFILE_ROOT") or root.parent / "AlexDoor-XAS")
+        native["ISAAC_PHYSICS_PROFILE_ROOT"] = str(shared.resolve(strict=True))
+        site = Path(
+            os.environ.get("NEWTON_SITE") or shared / "outputs/generated/isaac-steel-runtime/site"
+        )
+        native["NEWTON_SITE"] = str(site.resolve(strict=True))
+        for path in sorted((shared / "src/isaac_physics_profile").glob("*")):
+            if path.suffix in (".py", ".sh"):
+                binding[f"isaac_physics_profile/{path.name}"] = file_digest(path)
+    binding.update(
+        native_environment=native,
+        physics_profile=profile,
+        runtime_evidence=file_digest(args.runtime_evidence),
+    )
     head_identity = (
         file_digest(args.decision_checkpoint)[:12] if args.decision_checkpoint else "legacy"
     )
     identity = head_identity + "-" + binding["motor/model.safetensors"][:12]
-    cache = args.results_cache.resolve() / identity
+    cache = args.results_cache.resolve() / identity / profile
     args.output_dir.mkdir(parents=True, exist_ok=True)
     with (
         (args.output_dir / ".panel.lock").open("a") as panel_lock,

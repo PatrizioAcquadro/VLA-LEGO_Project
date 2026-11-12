@@ -8,13 +8,15 @@ import time
 import traceback
 from pathlib import Path
 
+from vla_lego.isaac.physics import PHYSX, default_solver_iterations, physics_profile
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-run", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--cache-dir", type=Path, required=True)
-    parser.add_argument("--solver-iterations", type=int, nargs=2, default=(8, 4))
+    parser.add_argument("--solver-iterations", type=int, nargs=2)
     parser.add_argument("--baseline-replay", type=Path)
     parser.add_argument("--record", action="store_true")
     parser.add_argument(
@@ -28,11 +30,20 @@ def main() -> None:
         raise ValueError("Tower replay requires causal physical reference commands.")
     # Historical native references explicitly used 8 position / 4 velocity iterations.
     source_iterations = tuple(source.get("physics_solver_iterations", (8, 4)))
-    iterations = tuple(args.solver_iterations)
-    same_physics = iterations == source_iterations
+    profile = physics_profile()
+    source_profile = source.get("physics_profile", PHYSX)
+    iterations = (
+        tuple(args.solver_iterations)
+        if args.solver_iterations
+        else default_solver_iterations(profile)
+    )
+    same_profile = profile == source_profile
+    same_physics = same_profile and iterations == source_iterations
     source_measurement = source.get("motion_measurement", "solver_velocity")
     motion_measurement = args.motion_measurement or source_measurement
-    if not same_physics or motion_measurement != source_measurement:
+    if (
+        args.solver_iterations is not None and not same_physics
+    ) or motion_measurement != source_measurement:
         if args.baseline_replay is None:
             parser.error("An intervention requires --baseline-replay with exact native parity.")
         baseline = json.loads((args.baseline_replay / "report.json").read_text())
@@ -52,6 +63,8 @@ def main() -> None:
         "source_passed": source["passed"],
         "source_outcome_preserved": True,
         "source_physics_unchanged": same_physics,
+        "source_physics_profile": source_profile,
+        "physics_profile": profile,
         "source_solver_iterations": list(source_iterations),
         "physics_solver_iterations": list(iterations),
         "task": source["task"],
@@ -127,6 +140,7 @@ def main() -> None:
                 metadata["instruction"],
                 family=metadata["generation_family"],
                 split=metadata["split"],
+                physics_profile=env.physics_profile,
             )
             env.recorder = recorder
         with (

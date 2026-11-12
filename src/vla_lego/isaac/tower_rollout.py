@@ -135,6 +135,7 @@ def main() -> None:
             appearance=assumptions.get("table_lighting", "legacy"),
             parked_start=campaign_case is not None,
         )
+        report["physics_profile"] = env.physics_profile
         env.step(400)
         connection.connect(str(args.socket))
         report.update(task=asdict(task), robot_joint_names=env.robot.data.joint_names)
