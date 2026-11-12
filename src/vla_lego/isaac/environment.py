@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import os
 from pathlib import Path
 
 from vla_lego.isaac.catalog import BlockPlacement, BlockSpec
@@ -85,18 +86,25 @@ class AssemblyEnvironment:
         ):
             raise ValueError("PhysX solver iterations require position 1..255 and velocity 0..255.")
         self.solver_iterations = solver_iterations
+        self.physics_profile = os.environ.get("ISAAC_PHYSICS_PROFILE", "isaacsim_physx")
+        self.steel = self.physics_profile == "newton_steel"
+        if self.physics_profile == "isaacsim_physx":
+            physics = PhysxCfg(
+                solver_type=1,
+                solve_articulation_contact_last=True,
+                enable_external_forces_every_iteration=True,
+                min_position_iteration_count=solver_iterations[0],
+                min_velocity_iteration_count=solver_iterations[1],
+            )
+        else:
+            from isaac_physics_profile import selected_profile, steel_config
+
+            selected_profile()
+            # Match the metric PhysX default when the USD collider has no explicit gap.
+            physics = steel_config(("/World/envs/env_0",), rigid_gap=0.02)
         self.sim = sim_utils.SimulationContext(
             sim_utils.SimulationCfg(
-                dt=DT,
-                device="cuda:0",
-                gravity=(0.0, 0.0, -9.81),
-                physics=PhysxCfg(
-                    solver_type=1,
-                    solve_articulation_contact_last=True,
-                    enable_external_forces_every_iteration=True,
-                    min_position_iteration_count=solver_iterations[0],
-                    min_velocity_iteration_count=solver_iterations[1],
-                ),
+                dt=DT, device="cuda:0", gravity=(0.0, 0.0, -9.81), physics=physics
             )
         )
         cfg = make_purdue_alex003_reference_scene_cfg()
@@ -207,9 +215,11 @@ class AssemblyEnvironment:
                 ),
             )
             setattr(cfg, name, block_cfg)
-        cfg.zed_model, camera_cfg, _ = make_zed_x_mini_cfgs(
+        zed_model, camera_cfg, _ = make_zed_x_mini_cfgs(
             "{ENV_REGEX_NS}/ZED_X_Mini", resolution="SVGA"
         )
+        if not self.steel:
+            cfg.zed_model = zed_model
         camera_cfg.data_types = ["rgb"]
         cfg.key_light = AssetBaseCfg(
             prim_path="/World/KeyLight",
@@ -248,33 +258,53 @@ class AssemblyEnvironment:
         # URDF nests link prims, so each link must be activated explicitly.
         for body_path in self.contact_robot_paths:
             sim_utils.activate_contact_sensors(body_path, stage=self.stage)
-        self.block_contacts = tuple(
-            ContactSensor(
-                ContactSensorCfg(
-                    prim_path=path,
-                    filter_prim_paths_expr=[*self.contact_robot_paths, *self.block_paths],
-                    update_period=0.0,
-                    history_length=1,
+        self.block_contacts = (
+            ()
+            if self.steel
+            else tuple(
+                ContactSensor(
+                    ContactSensorCfg(
+                        prim_path=path,
+                        filter_prim_paths_expr=[*self.contact_robot_paths, *self.block_paths],
+                        update_period=0.0,
+                        history_length=1,
+                    )
                 )
+                for path in self.block_paths
             )
-            for path in self.block_paths
         )
-        self.block_contact = self.block_contacts[0]
-        author_alex_purdue_zed_x_mini_mount(
-            self.stage, "/World/envs/env_0/Robot", "/World/envs/env_0/ZED_X_Mini"
-        )
+        if self.block_contacts:
+            self.block_contact = self.block_contacts[0]
+        zed_path = "/World/envs/env_0/ZED_X_Mini"
+        if self.steel:
+            zed_model.spawn.func(
+                zed_path,
+                zed_model.spawn,
+                translation=zed_model.init_state.pos,
+                orientation=zed_model.init_state.rot,
+            )
+        author_alex_purdue_zed_x_mini_mount(self.stage, "/World/envs/env_0/Robot", zed_path)
         camera_cfg.prim_path = camera_cfg.prim_path.replace(
-            "{ENV_REGEX_NS}", self.scene.env_regex_ns
+            "{ENV_REGEX_NS}", "/World/envs/env_0" if self.steel else self.scene.env_regex_ns
         )
         self.camera = Camera(camera_cfg)
-        self.sim.reset()
-        from isaaclab_physx.physics import PhysxManager
+        if self.steel:
+            from isaac_physics_profile.camera import SteelMountedCamera
+            from isaac_physics_profile.feedback import SteelContactReader
 
-        self.robot_contact_view = PhysxManager.get_physics_sim_view().create_rigid_contact_view(
-            self.contact_robot_paths, filter_patterns=[[] for _ in self.contact_robot_paths]
-        )
-        if self.robot_contact_view.sensor_count != len(self.contact_robot_paths):
-            raise RuntimeError("Incomplete native robot contact reporting.")
+            self.mounted_camera = SteelMountedCamera(self.sim, self.robot, self.camera, zed_path)
+        self.sim.reset()
+        if self.steel:
+            self.mounted_camera.bind()
+            self.steel_contacts = SteelContactReader(self.sim)
+            solver = self.sim.physics_manager._solver
+            self.solver_iterations = (solver.iterations, solver.velocity_iterations)
+        else:
+            self.robot_contact_view = self.sim.physics_sim_view.create_rigid_contact_view(
+                self.contact_robot_paths, filter_patterns=[[] for _ in self.contact_robot_paths]
+            )
+            if self.robot_contact_view.sensor_count != len(self.contact_robot_paths):
+                raise RuntimeError("Incomplete native robot contact reporting.")
         self.scene.reset()
         self.target = self.robot.data.default_joint_pos.torch.clone()
         self.requested_target = self.target.clone()
@@ -353,7 +383,10 @@ class AssemblyEnvironment:
             self.capture()
 
     def capture(self) -> None:
-        self.sim.forward()
+        if self.steel:
+            self.mounted_camera.sync()
+        else:
+            self.sim.forward()
         self.sim.render_context.update_transforms(self.sim.get_physics_step_count())
         elapsed = DT if self.image_time is None else max(DT, self.time - self.image_time)
         self.camera.update(elapsed, force_recompute=True)
@@ -376,9 +409,19 @@ class AssemblyEnvironment:
 
     def task_truth(self, block_index: int = 0) -> dict:
         """Privileged diagnostic/evaluator channel, excluded from observe()."""
-        sensor = self.block_contacts[block_index]
         block = self.blocks[block_index]
-        matrix = sensor.data.force_matrix_w.torch[0, 0]
+        if self.steel:
+            import torch
+
+            path = self.block_paths[block_index]
+            matrix = torch.from_numpy(
+                self.steel_contacts.pairs(path, [*self.contact_robot_paths, *self.block_paths])
+            )
+            net = torch.from_numpy(self.steel_contacts.net([path])[0])
+        else:
+            sensor = self.block_contacts[block_index]
+            matrix = sensor.data.force_matrix_w.torch[0, 0]
+            net = sensor.data.net_forces_w.torch[0, 0]
         robot_forces = matrix[: len(self.contact_robot_paths)]
         result = {
             "block_pose_w": block.data.root_pose_w.torch[0].tolist(),
@@ -388,9 +431,7 @@ class AssemblyEnvironment:
             "block_contact_forces_n": matrix[len(self.contact_robot_paths) :].tolist(),
             # PhysX GPU filters cannot target the static table. Retain the residual
             # as environmental contact, with geometry establishing table support.
-            "nonrobot_contact_force_n": float(
-                (sensor.data.net_forces_w.torch[0, 0] - matrix.sum(dim=0)).norm()
-            ),
+            "nonrobot_contact_force_n": float((net - matrix.sum(dim=0)).norm()),
         }
         if self.motion is not None:
             result["motion_speed_max"] = self.motion.peaks[block_index].tolist()
@@ -401,7 +442,11 @@ class AssemblyEnvironment:
         """Control/contact evidence; never supplied as hidden task decisions."""
         import warp as wp
 
-        forces = wp.to_torch(self.robot_contact_view.get_net_contact_forces(dt=DT)).reshape(-1, 3)
+        forces = (
+            self.steel_contacts.net(self.contact_robot_paths)
+            if self.steel
+            else wp.to_torch(self.robot_contact_view.get_net_contact_forces(dt=DT)).reshape(-1, 3)
+        )
         return {
             "joint_position": self.robot.data.joint_pos.torch[0].tolist(),
             "applied_joint_effort": self.robot.data.applied_torque.torch[0].tolist(),

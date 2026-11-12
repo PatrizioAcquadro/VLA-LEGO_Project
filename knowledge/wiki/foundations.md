@@ -49,3 +49,36 @@ The worker consumes only the [declared observations](contracts.md), checks check
 Current object masses/friction and table dimensions are simulation assumptions. Contact readback activates nested articulated links; unsupported static-table GPU pair filtering is not reported as measured table-only force. TCP geometry, IK/FK checks and collision admission protect executed motion, while full-task source acceptance requires the original physical sequence and data review. Follow [validation](validation.md) for hard limits, empirical calibration and task-success interpretation.
 
 The MuJoCo/Qwen runtime and its five CLI commands are retired from main. [History](history.md) identifies their fixed release and attribution; all original native failures, recordings and frozen producer sources remain preserved.
+
+## Physics profiles
+
+The native launcher defaults new declared single-block references to the
+shared `newton_steel` profile on hosts with its runtime installed. The
+`isaacsim_physx` profile is used for replay, policy, and other task entry
+points unless overridden. Set `ISAAC_PHYSICS_PROFILE=isaacsim_physx` to run
+an explicit baseline or `ISAAC_PHYSICS_PROFILE=newton_steel` to request Steel.
+`ISAAC_PHYSICS_PROFILE_ROOT` points to the shared profile checkout (the sibling
+`AlexDoor-XAS` by default). `NEWTON_SITE` points to the validated isolated
+Newton/Warp wheel site, provisioned under that checkout's ignored runtime output
+on the workstation. An unavailable runtime is logged when selecting PhysX for
+an automatic launch. An explicit Steel request requires its runtime.
+
+The Steel profile uses the same Alex003, WSG32, ZED RGB and task controller,
+with solved normal-force readback and a Fabric bridge for the head camera.
+It retains explicit USD contact margins and uses the metric PhysX default
+for unspecified collider gaps.
+
+The single-block comparison uses `tower_reference`, the original
+`PickPlaceEvaluator`, and the same FFV1 recording configuration for both
+backends. `physics_profile`, `physics_cuda_graph`, and the task-plus-recording
+wall time after initial settling are recorded in the report. A planner
+exception before the released dwell remains a failed attempt.
+
+On November 12, 2026, both backends passed all five evaluator checks for
+`TR-P04-00-0` with event settling. Steel completed the recorded task in 85.86 s
+with 50.20 simulated seconds. Native PhysX took 152.56 s with 50.35 simulated
+seconds on the same RTX 4090. The launcher then selected Steel automatically
+and passed the same evaluator again in 88.94 s. The left-hand `TR-P01-00-1` reference was refused
+by released-hand retreat planning on both engines, including with event
+settling. This comparison supports the single-block reference default and
+leaves the wider tower, replay, learned and physical results as separate work.

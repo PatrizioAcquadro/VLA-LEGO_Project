@@ -76,10 +76,12 @@ def main() -> None:
     policy_intervention = None
     cooperation: list[dict] = []
     started = time.monotonic()
+    task_started = None
     try:
         from isaaclab.app import AppLauncher
 
         app = AppLauncher(headless=True, device="cuda:0", enable_cameras=True).app
+        import torch
         from PIL import Image
 
         from vla_lego.isaac.environment import TABLE_TOP, AssemblyEnvironment
@@ -219,7 +221,13 @@ def main() -> None:
             appearance=pilot_case.appearance if pilot_case else "legacy",
             parked_start=bool(args.campaign_cases),
         )
+        report["physics_profile"] = env.physics_profile
         env.step(400)
+        torch.cuda.synchronize()
+        report["physics_cuda_graph"] = getattr(env.sim.physics_manager, "_graph", None) is not None
+        if env.steel and not report["physics_cuda_graph"]:
+            raise RuntimeError("Steel CUDA Graph was not captured")
+        task_started = time.monotonic()
         if args.policy_socket:
             from vla_lego.isaac.policy_continuation import PolicyIntervention
 
@@ -1225,6 +1233,10 @@ def main() -> None:
             report["stages"] = reference.stages
             report["max_native_limit_projection_rad"] = reference.max_limit_projection
         report["cooperation_samples"] = cooperation
+        if task_started is not None:
+            torch.cuda.synchronize()
+            report["wall_seconds_task_and_recording"] = time.monotonic() - task_started
+            report["simulated_task_seconds"] = env.time - 400 * env.sim.get_physics_dt()
         report["wall_seconds_before_app_close"] = time.monotonic() - started
         (args.output_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         if app is not None:
