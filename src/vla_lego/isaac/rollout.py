@@ -38,9 +38,9 @@ def main() -> None:
     connection.settimeout(120)
     started = time.monotonic()
     try:
-        from isaaclab.app import AppLauncher
+        from vla_lego.isaac.physics import close_runtime, launch_runtime
 
-        app = AppLauncher(headless=True, device="cuda:0", enable_cameras=True).app
+        app = launch_runtime()
         import numpy as np
         from PIL import Image
 
@@ -198,7 +198,7 @@ def main() -> None:
             flush=True,
         )
         if app is not None:
-            app.close(exit_code=0 if report["passed"] else 1)
+            close_runtime(app, 0 if report["passed"] else 1)
 
 
 if __name__ == "__main__":

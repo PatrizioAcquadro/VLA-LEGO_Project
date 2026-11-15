@@ -32,9 +32,9 @@ def main() -> None:
     started = time.monotonic()
     report: dict = {"kind": "native_joint_replay", "learned": False, "passed": False}
     try:
-        from isaaclab.app import AppLauncher
+        from vla_lego.isaac.physics import close_runtime, launch_runtime
 
-        app = AppLauncher(headless=True, device="cuda:0", enable_cameras=True).app
+        app = launch_runtime()
         import numpy as np
         from PIL import Image
 
@@ -146,7 +146,7 @@ def main() -> None:
         (args.output_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(report), flush=True)
         if app is not None:
-            app.close(exit_code=0 if report["passed"] else 1)
+            close_runtime(app, 0 if report["passed"] else 1)
 
 
 if __name__ == "__main__":

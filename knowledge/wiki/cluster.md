@@ -10,7 +10,7 @@ Keep simulation, training and onboard environments separate. The executed Blackw
 | Isaac Lab | `ffff603eafc6b74264a5261cc0183d6a65390d78` |
 | Shared Alex assets | `9ac4bd45c779d3f73d61f5b144cd1bb76dc8607b` |
 | LeRobot | `f9e9d739ea7055b282ea1b165e8785412a674693`; separate Python 3.12.13, PyTorch 2.11.0+cu128 |
-| Native launch inputs | `ISAAC_SIM_DIR`, `ISAAC_LAB_DIR`, `ALEX_ASSETS_ROOT`; optional verified `VLA_ISAAC_PYTHON` and `VLA_VIDEO_PYTHON` |
+| Native launch inputs | [Isaac operations](foundations.md) documents `ISAAC_NATIVE_RUNTIME`, Alex assets and the optional video interpreter |
 
 The environment record is `outputs/data-expansion-20261026/physical-native-environment-1765.json`; it identifies exact installations and frozen source. These are executed-revision facts, not permission to upgrade a host or a guarantee for another installed version. Core package installation does not provision Isaac or LeRobot. Existing model weights and upstream source are reused without Hub uploads.
 

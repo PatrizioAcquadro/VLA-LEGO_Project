@@ -18,9 +18,9 @@ def main() -> None:
     report: dict = {"kind": "loose_scene_probe", "assembly_success": None}
     app = None
     try:
-        from isaaclab.app import AppLauncher
+        from vla_lego.isaac.physics import close_runtime, launch_runtime
 
-        app = AppLauncher(headless=True, device="cuda:0", enable_cameras=True).app
+        app = launch_runtime()
         from PIL import Image
         from pxr import UsdPhysics
 
@@ -80,7 +80,7 @@ def main() -> None:
         (args.output_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(report), flush=True)
         if app is not None:
-            app.close(exit_code=0 if report.get("passed") else 1)
+            close_runtime(app, 0 if report.get("passed") else 1)
 
 
 if __name__ == "__main__":

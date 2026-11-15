@@ -20,15 +20,9 @@ def main() -> None:
     report: dict = {"kind": "native_foundation_probe", "assembly_success": None}
     app = None
     try:
-        from isaaclab.app import AppLauncher
+        from vla_lego.isaac.physics import close_runtime, launch_runtime
 
-        app = AppLauncher(
-            headless=True,
-            device="cuda:0",
-            enable_cameras=True,
-            width=960,
-            height=600,
-        ).app
+        app = launch_runtime()
         import carb
         import numpy as np
         import torch
@@ -86,6 +80,10 @@ def main() -> None:
         }
         env.stage.GetRootLayer().Export(str(args.output_dir.resolve() / "scene.usda"))
         report.update(
+            physics_cuda_graph=env.physics_cuda_graph,
+            physics_solver=type(env.sim.backend_manager.backend.solver_ops).__name__
+            if env.steel
+            else "PhysX",
             checks=checks,
             passed=all(checks.values()),
             device=torch.cuda.get_device_name(),
@@ -120,7 +118,7 @@ def main() -> None:
         (args.output_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(report), flush=True)
         if app is not None:
-            app.close(exit_code=0 if report.get("passed") else 1)
+            close_runtime(app, 0 if report.get("passed") else 1)
     if not report["passed"]:
         raise SystemExit(1)
 

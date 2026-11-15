@@ -36,9 +36,9 @@ def main() -> None:
         "target_integration": True,
     }
     try:
-        from isaaclab.app import AppLauncher
+        from vla_lego.isaac.physics import close_runtime, launch_runtime
 
-        app = AppLauncher(headless=True, device="cuda:0", enable_cameras=True).app
+        app = launch_runtime()
         import torch
         from PIL import Image
 
@@ -79,7 +79,7 @@ def main() -> None:
         report["initial_tool_poses_xyzw"] = initial
         solvers = {
             side: ArmKinematics(
-                Path(env.robot.cfg.spawn.asset_path),
+                env.robot_urdf_path,
                 side,
                 env.robot.data.root_pose_w.torch[0],
                 "cuda:0",
@@ -263,7 +263,7 @@ def main() -> None:
         report["wall_seconds_before_app_close"] = time.monotonic() - started
         (args.output_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         if app is not None:
-            app.close(exit_code=0 if report.get("passed") else 1)
+            close_runtime(app, 0 if report.get("passed") else 1)
 
 
 if __name__ == "__main__":

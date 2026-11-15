@@ -40,9 +40,9 @@ def main() -> None:
     }
     app = recorder = None
     try:
-        from isaaclab.app import AppLauncher
+        from vla_lego.isaac.physics import close_runtime, launch_runtime
 
-        app = AppLauncher(headless=True, device="cuda:0", enable_cameras=True).app
+        app = launch_runtime()
         from PIL import Image
 
         from vla_lego.isaac.environment import TABLE_TOP, AssemblyEnvironment
@@ -111,7 +111,7 @@ def main() -> None:
             )
         (args.output_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         if app is not None:
-            app.close(exit_code=0 if report["passed"] else 1)
+            close_runtime(app, 0 if report["passed"] else 1)
 
 
 if __name__ == "__main__":

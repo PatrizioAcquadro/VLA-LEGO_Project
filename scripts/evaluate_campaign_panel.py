@@ -11,7 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from vla_lego.isaac.physics import STEEL, physics_profile
+from vla_lego.isaac.physics import physics_profile
 from vla_lego.pretrained.campaign_data import admitted_entries
 from vla_lego.pretrained.campaign_evaluation import (
     PANEL_COUNTS,
@@ -79,20 +79,16 @@ def main() -> None:
     binding = execution_binding(
         root, args.checkpoint.resolve(), args.decision_checkpoint, args.protocol
     )
-    native = {}
-    for name in ("ISAAC_SIM_DIR", "ISAAC_LAB_DIR", "ALEX_ASSETS_ROOT"):
-        native[name] = str(Path(os.environ[name]).resolve(strict=True))
+    runtime = Path(
+        os.environ.get("ISAAC_NATIVE_RUNTIME", Path.home() / ".local/share/isaac-steel-rtx")
+    )
+    alex = Path(os.environ.get("ALEX_ASSETS_ROOT", root.parent / "Alex"))
+    native = {
+        "ISAAC_NATIVE_RUNTIME": str(runtime.resolve(strict=True)),
+        "ALEX_ASSETS_ROOT": str(alex.resolve(strict=True)),
+    }
+    binding["isaaclab/uv.lock"] = file_digest(runtime / "IsaacLab/uv.lock")
     profile = physics_profile()
-    if profile == STEEL:
-        shared = Path(os.environ.get("ISAAC_PHYSICS_PROFILE_ROOT") or root.parent / "AlexDoor-XAS")
-        native["ISAAC_PHYSICS_PROFILE_ROOT"] = str(shared.resolve(strict=True))
-        site = Path(
-            os.environ.get("NEWTON_SITE") or shared / "outputs/generated/isaac-steel-runtime/site"
-        )
-        native["NEWTON_SITE"] = str(site.resolve(strict=True))
-        for path in sorted((shared / "src/isaac_physics_profile").glob("*")):
-            if path.suffix in (".py", ".sh"):
-                binding[f"isaac_physics_profile/{path.name}"] = file_digest(path)
     binding.update(
         native_environment=native,
         physics_profile=profile,

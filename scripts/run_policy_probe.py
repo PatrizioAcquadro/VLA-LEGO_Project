@@ -117,9 +117,6 @@ def main() -> int:
     }
     code = 1
     try:
-        for name in ("ISAAC_SIM_DIR", "ISAAC_LAB_DIR", "ALEX_ASSETS_ROOT"):
-            if not os.environ.get(name):
-                raise ValueError(f"Required native environment variable: {name}")
         worker_env = dict(os.environ, PYTHONPATH=str(root / "src"))
         with tempfile.TemporaryDirectory(prefix="vla-lego-policy-") as temporary:
             socket_path = Path(temporary) / "policy.sock"

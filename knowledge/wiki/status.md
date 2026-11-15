@@ -4,7 +4,7 @@
 
 | Capability | Current evidence | Limit |
 |---|---|---|
-| Native Isaac/Alex003 foundation | CUDA physics/rendering, shared WSG32/UMI and ZED assets, physical contact-based teacher demonstrations | Print/contact calibration and physical WSG32 integration are unqualified |
+| Native Isaac/Alex003 foundation | Native Steel with CUDA Graph and Isaac RTX, shared WSG32/UMI and ZED assets, contact-based teacher demonstrations | Print/contact calibration and physical WSG32 integration are unqualified |
 | Corpus | 620 admitted episodes, 500 TRAIN / 60 calibration / 60 confirmation; 30 actual-policy-state corrections | Admission concerns simulation data, not learned behavior or physical transfer |
 | Decision learning | 20k classifier updates and complete causal feature preparation | Calibration fails; gated sixty-sequence offline confirmation was not run |
 | Motor learning | 20k updates from robot-pretrained SmolVLA | Unassisted control 0/10; full-task extension did not cross the failed gate |

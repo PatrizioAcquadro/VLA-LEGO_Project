@@ -78,9 +78,9 @@ def main() -> None:
     started = time.monotonic()
     task_started = None
     try:
-        from isaaclab.app import AppLauncher
+        from vla_lego.isaac.physics import close_runtime, launch_runtime
 
-        app = AppLauncher(headless=True, device="cuda:0", enable_cameras=True).app
+        app = launch_runtime()
         import torch
         from PIL import Image
 
@@ -224,7 +224,7 @@ def main() -> None:
         report["physics_profile"] = env.physics_profile
         env.step(400)
         torch.cuda.synchronize()
-        report["physics_cuda_graph"] = getattr(env.sim.physics_manager, "_graph", None) is not None
+        report["physics_cuda_graph"] = env.physics_cuda_graph
         if env.steel and not report["physics_cuda_graph"]:
             raise RuntimeError("Steel CUDA Graph was not captured")
         task_started = time.monotonic()
@@ -1241,7 +1241,7 @@ def main() -> None:
         report["wall_seconds_before_app_close"] = time.monotonic() - started
         (args.output_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         if app is not None:
-            app.close(exit_code=0 if report.get("passed") else 1)
+            close_runtime(app, 0 if report.get("passed") else 1)
 
 
 if __name__ == "__main__":

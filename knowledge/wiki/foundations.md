@@ -4,7 +4,26 @@
 
 Use Isaac Sim/Lab with shared Alex assets for the fixed-base Purdue Alex003, pedestal, WSG32/UMI grippers and head ZED. This repository owns task scenes, teachers, control adaptation, recording and evaluation. Do not copy shared robot assets into another authority. [Architecture](architecture.md) owns hardware responsibilities; [compute](cluster.md#native-environments) identifies validated revisions.
 
-Set `ISAAC_SIM_DIR`, `ISAAC_LAB_DIR` and `ALEX_ASSETS_ROOT` to their compatible installations. Set `VLA_ISAAC_PYTHON` only when the verified native environment uses a separate interpreter. `scripts/isaac-run.sh` exposes this checkout, the shared Alex package and Lab extensions before executing Isaac's Python launcher. LeRobot runs in its own environment; `VLA_VIDEO_PYTHON` may select that environment for the existing PyAV encoder when FFmpeg is unavailable.
+Use NVIDIA Isaac Lab at `67fe12806afbdb8bf8e125866661dd201088a54d` in a
+dedicated Python 3.12 environment. Use the AlexDoor lock correction for the
+NumPy/Numba pair. Install the upstream `isaacsim` extra in that environment
+to retain the RTX camera renderer. The following command uses a dedicated
+Isaac Lab checkout with the corrected lock already applied.
+
+```bash
+runtime="$HOME/.local/share/isaac-steel-rtx"
+UV_PROJECT_ENVIRONMENT="$runtime/.venv" uv --directory "$runtime/IsaacLab" \
+  sync --locked --python python3.12 --extra isaacsim
+```
+
+Follow the [pinned checkout and lock setup](https://github.com/PatrizioAcquadro/AlexDoor-XAS/blob/main/scripts/install-isaac-native.sh)
+for the Isaac Lab source. `ISAAC_NATIVE_RUNTIME` selects another installation.
+The launchers use the sibling `Alex` checkout unless `ALEX_ASSETS_ROOT` is set.
+The Alex package must include support for Isaac Lab's native actuator limits
+and the official ZED asset.
+
+LeRobot runs in its own environment. `VLA_VIDEO_PYTHON` can select the
+PyAV encoder environment when FFmpeg is unavailable.
 
 ## Native foundation probe
 
@@ -52,28 +71,13 @@ The MuJoCo/Qwen runtime and its five CLI commands are retired from main. [Histor
 
 ## Physics profiles
 
-All native VLA-LEGO simulation entry points use the shared `newton_steel`
-profile with CUDA Graph by default. Set `ISAAC_PHYSICS_PROFILE=isaacsim_physx`
-to run a PhysX baseline or reconstruct an exact historical PhysX prefix.
-The launcher needs the shared profile and wheel site for Steel.
-`ISAAC_PHYSICS_PROFILE_ROOT` points to the shared checkout (the sibling
-`AlexDoor-XAS` by default). `NEWTON_SITE` points to the isolated Newton/Warp
-wheel site, provisioned under that checkout's ignored runtime output on the
-workstation.
+The Isaac workflows use NVIDIA's `NewtonCfg` with `SteelSolverCfg` and
+CUDA Graph. New runs record `newton_steel_native` in their metadata.
+The RGB camera uses Isaac RTX and contact readback uses Isaac Lab sensors.
+Set `ISAAC_PHYSICS_PROFILE=isaacsim_physx` for the maintained PhysX path.
+Historical recordings retain their original backend identity and replay gates.
 
-Native reports and episode metadata identify the backend. Exact tower parity
-requires matching backend, solver iterations and observed state. A tower replay
-across engines can report the new evaluator result. Policy-prefix reconstruction
-requires the source engine. Reports from before backend tagging use PhysX as
-their source engine. The campaign evaluator binds and caches results per
-physics profile.
-
-The Steel profile uses the same Alex003, WSG32, ZED RGB and task controller,
-with solved normal-force readback and a Fabric bridge for the head camera.
-It retains explicit USD contact margins and uses the metric PhysX default
-for unspecified collider gaps.
-
-The single-block comparison uses `tower_reference`, the original
+The earlier compatibility-profile comparison used `tower_reference`, the original
 `PickPlaceEvaluator`, and the same FFV1 recording configuration for both
 backends. `physics_profile`, `physics_cuda_graph`, and the task-plus-recording
 wall time after initial settling are recorded in the report. A planner

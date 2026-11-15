@@ -43,7 +43,7 @@ class PhysicalReference:
         }
         self.solvers = {
             side: ArmKinematics(
-                Path(env.robot.cfg.spawn.asset_path),
+                env.robot_urdf_path,
                 side,
                 env.robot.data.root_pose_w.torch[0],
                 "cuda:0",
