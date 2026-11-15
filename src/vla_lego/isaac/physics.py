@@ -16,7 +16,7 @@ def physics_profile() -> str:
 
 
 def default_solver_iterations(profile: str) -> tuple[int, int]:
-    return (16, 4) if profile == STEEL else (8, 4)
+    return (16, 0) if profile == STEEL else (8, 4)
 
 
 def steel_physics():
@@ -25,7 +25,7 @@ def steel_physics():
 
     return NewtonCfg(
         solver_cfg=SteelSolverCfg(
-            iterations=16,
+            iterations=default_solver_iterations(STEEL)[0],
             enable_joint_limits=True,
             enable_joint_velocity_limits=True,
             articulation_constraint_max=512,

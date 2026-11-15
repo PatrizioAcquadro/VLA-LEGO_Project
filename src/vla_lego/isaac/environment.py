@@ -92,7 +92,7 @@ class AssemblyEnvironment:
         defaults = default_solver_iterations(self.physics_profile)
         solver_iterations = defaults if solver_iterations is None else solver_iterations
         if self.steel and solver_iterations != defaults:
-            raise ValueError("The shared Steel profile uses 16 position and 4 velocity iterations")
+            raise ValueError("Native Steel uses 16 PGS sweeps and no velocity-only sweeps.")
         if (
             len(solver_iterations) != 2
             or any(not isinstance(v, int) for v in solver_iterations)
@@ -335,6 +335,8 @@ class AssemblyEnvironment:
             )[None]
         self.sim.reset()
         if self.steel:
+            solver = self.sim.backend_manager.backend.solver
+            self.solver_iterations = (solver.iterations, solver.velocity_iterations)
             self.head_index = self.robot.body_names.index("HEAD_LINK")
             names = [
                 path.rsplit("/", 1)[1] for path in (*self.contact_robot_paths, *self.block_paths)
