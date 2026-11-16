@@ -82,9 +82,9 @@ def main() -> None:
         report.update(
             physics_cuda_graph=env.physics_cuda_graph,
             physics_solver_iterations=env.solver_iterations,
-            physics_solver=type(env.sim.backend_manager.backend.solver_ops).__name__
-            if env.steel
-            else "PhysX",
+            physics_solver=(
+                type(env.sim.backend_manager.backend.solver_ops).__name__ if env.steel else "PhysX"
+            ),
             checks=checks,
             passed=all(checks.values()),
             device=torch.cuda.get_device_name(),

@@ -146,9 +146,7 @@ class AssemblyEnvironment:
                     diffuse_color=(
                         (0.72, 0.72, 0.70)
                         if appearance == "neutral_side"
-                        else (0.67, 0.56, 0.43)
-                        if appearance == "light_wood"
-                        else (0.4, 0.35, 0.3)
+                        else (0.67, 0.56, 0.43) if appearance == "light_wood" else (0.4, 0.35, 0.3)
                     ),
                     roughness=0.9,
                 ),
