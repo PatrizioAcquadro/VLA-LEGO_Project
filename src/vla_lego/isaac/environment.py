@@ -8,7 +8,6 @@ from pathlib import Path
 from vla_lego.isaac.catalog import BlockPlacement, BlockSpec
 from vla_lego.isaac.physics import (
     PHYSX,
-    STEEL,
     default_solver_iterations,
     physics_profile,
     steel_physics,
@@ -88,7 +87,7 @@ class AssemblyEnvironment:
         if len(friction) != 2 or any(not math.isfinite(v) or v < 0 for v in friction):
             raise ValueError("Static/dynamic friction must be finite and non-negative.")
         self.physics_profile = physics_profile()
-        self.steel = self.physics_profile == STEEL
+        self.steel = self.physics_profile != PHYSX
         defaults = default_solver_iterations(self.physics_profile)
         solver_iterations = defaults if solver_iterations is None else solver_iterations
         if self.steel and solver_iterations != defaults:
@@ -110,7 +109,7 @@ class AssemblyEnvironment:
                 min_velocity_iteration_count=solver_iterations[1],
             )
         else:
-            physics = steel_physics()
+            physics = steel_physics(self.physics_profile)
         self.sim = sim_utils.SimulationContext(
             sim_utils.SimulationCfg(
                 dt=DT, device="cuda:0", gravity=(0.0, 0.0, -9.81), physics=physics

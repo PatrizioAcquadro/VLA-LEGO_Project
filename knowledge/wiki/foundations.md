@@ -72,10 +72,18 @@ The MuJoCo/Qwen runtime and its five CLI commands are retired from main. [Histor
 ## Physics profiles
 
 The Isaac workflows use NVIDIA's `NewtonCfg` with `SteelSolverCfg` and
-CUDA Graph. New runs record `newton_steel_native` in their metadata.
+CUDA Graph. The default uses Newton Steel's persistent friction patches
+(`friction_anchor_beta=0.2`) and records `newton_steel_native_patch_friction`.
 The RGB camera uses Isaac RTX and contact readback uses Isaac Lab sensors.
-Set `ISAAC_PHYSICS_PROFILE=isaacsim_physx` for the maintained PhysX path.
-Historical recordings retain their original backend identity and replay gates.
+Set `ISAAC_PHYSICS_PROFILE=newton_steel_native` to replay the earlier native
+Steel recordings with point friction, or `ISAAC_PHYSICS_PROFILE=isaacsim_physx`
+for PhysX. Replay gates continue to require the recorded physics profile.
+
+In the second pickup of `TR-T22-04-1`, the green cube slid through the WSG32
+jaws and fell despite the wrist reaching the requested lift pose. With the
+same jaw target and recorded approach, persistent patches retained the cube
+97.6 mm above its resting height after a one-second hold; point friction
+returned it to the table. Greater jaw closure did not correct the slip.
 
 The earlier compatibility-profile comparison used `tower_reference`, the original
 `PickPlaceEvaluator`, and the same FFV1 recording configuration for both
@@ -90,4 +98,14 @@ seconds on the same RTX 4090. The launcher then selected Steel automatically
 and passed the same evaluator again in 88.94 s. Released-hand retreat planning
 refused the left-hand `TR-P01-00-1` reference on both engines, including with
 event settling. The matched timing and completion evidence covers the
-single-block reference. Full tower and learned Steel evaluations remain open.
+single-block reference.
+
+On November 15, 2026, the default persistent-friction profile passed the
+existing evaluator on the complete `TR-T22-04-1` five-block reference on
+the elab2 RTX 4090. The launcher used Alex003, WSG32 and the head ZED RGB
+stream at 20 Hz, with CUDA Graph and no physics override. The evaluator
+accepted the ordered, supported tower with both hands withdrawn and
+confirmed functional cooperation. During the final released dwell, the
+largest corner displacement across the five pieces was 1.60 mm against
+the existing 3 mm limit. This is a simulated teacher/controller result for
+this nominal case. Learned execution and hardware qualification remain open.

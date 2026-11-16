@@ -3,32 +3,35 @@
 import os
 
 PHYSX = "isaacsim_physx"
-STEEL = "newton_steel_native"
+STEEL = "newton_steel_native_patch_friction"
+STEEL_POINT_FRICTION = "newton_steel_native"
 
 
 def physics_profile() -> str:
     profile = os.environ.get("ISAAC_PHYSICS_PROFILE") or STEEL
     if profile == "newton_steel":
-        return STEEL
-    if profile not in (STEEL, PHYSX):
+        return STEEL_POINT_FRICTION
+    if profile not in (STEEL, STEEL_POINT_FRICTION, PHYSX):
         raise ValueError(f"Unknown Isaac physics profile: {profile}")
     return profile
 
 
 def default_solver_iterations(profile: str) -> tuple[int, int]:
-    return (16, 0) if profile == STEEL else (8, 4)
+    return (16, 0) if profile in (STEEL, STEEL_POINT_FRICTION) else (8, 4)
 
 
-def steel_physics():
+def steel_physics(profile: str):
     from isaaclab_newton.physics import NewtonCfg, SteelSolverCfg
     from isaaclab_newton.physics.newton_manager_cfg import NewtonShapeCfg
 
     return NewtonCfg(
         solver_cfg=SteelSolverCfg(
-            iterations=default_solver_iterations(STEEL)[0],
+            iterations=default_solver_iterations(profile)[0],
             enable_joint_limits=True,
             enable_joint_velocity_limits=True,
             articulation_constraint_max=512,
+            # Use Newton Steel's native patch-friction default for sustained grasps.
+            friction_anchor_beta=0.2 if profile == STEEL else 0.0,
         ),
         default_shape_cfg=NewtonShapeCfg(gap=0.02),
         use_cuda_graph=True,
@@ -39,7 +42,8 @@ def launch_runtime():
     from isaaclab.app import launch_simulation
     from isaaclab_physx.physics import PhysxCfg
 
-    physics = steel_physics() if physics_profile() == STEEL else PhysxCfg()
+    profile = physics_profile()
+    physics = PhysxCfg() if profile == PHYSX else steel_physics(profile)
     runtime = launch_simulation(
         physics,
         {"headless": True, "device": "cuda:0", "enable_cameras": True, "require_kit": True},

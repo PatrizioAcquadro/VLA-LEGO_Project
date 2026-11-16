@@ -18,7 +18,7 @@
 | Phase | Position |
 |---|---|
 | 0 — Foundations | Native environments and ownership established; legacy software retired from main |
-| 1 — Simulation | Cooperative teacher evidence exists; complete current-source and physical calibration questions remain |
+| 1 — Simulation | The nominal five-block teacher reference passed with native Steel and CUDA Graph; physical calibration remains open |
 | 2 — VLA feasibility | SmolVLA interface exercised; Orin feasibility and final model handoff open |
 | 3 — Data/teachers | Alex teacher/pilot and grouped admission implemented; no foreign-robot actions admitted as Alex labels |
 | 4 — Collection | Expanded corpus delivered; this does not waive model or calibration gates |
